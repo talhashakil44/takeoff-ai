@@ -111,6 +111,37 @@ describe('wall takeoff', () => {
     expect(res.unmatched).toHaveLength(0);
   });
 
+  it('reads a boxed tag set beside its wall with a short tick across it, not the cabinet beyond', () => {
+    // A box below the top wall of the L, its tick from the middle of its top side up across the wall.
+    const [x, y] = [2.5, 0.8];
+    const box = poly(0.25, [x - 0.4, y - 0.15], [x + 0.4, y - 0.15], [x + 0.4, y + 0.15], [x - 0.4, y + 0.15], [x - 0.4, y - 0.15]);
+    const tick = poly(0.8, [x, y - 0.15], [x, -0.25]);
+    // A square of millwork (0.4 m) drawn against the far side of the wall: a short thick "wall".
+    const cabinet = [...wall([2.3, -0.02], [2.3, -0.42], [2.7, -0.42], [2.7, -0.02])];
+    const text: TagText = { code: 'WP1', cx: pt(x), cy: pt(y), w: 9, h: 4.9, generic: true };
+    const res = wallTakeoff([...lShape(), ...cabinet], [...lShape(), ...cabinet, ...box, ...tick], [text], MPP);
+    expect(res.tags[0].tick).toBe(true);
+    expect(lengthsByType(res.runs, MPP).get('WP1')?.length).toBeCloseTo(9 - T, 2);
+  });
+
+  it('keeps a new wall type off the existing (solid) walls it runs into', () => {
+    // A new partition (outlined) along the top turns a corner into an existing wall drawn
+    // solid (poché), which runs 6 m down the right side.
+    const [a, b, c, d]: [number, number][] = [
+      [pt(4), pt(0)],
+      [pt(4 + T), pt(0)],
+      [pt(4 + T), pt(6)],
+      [pt(4), pt(6)],
+    ];
+    const solid: Segment[] = [a, b, c, d].map((p, i, all) => ({ x1: p[0], y1: p[1], x2: all[(i + 1) % 4][0], y2: all[(i + 1) % 4][1], width: 0, filled: true }));
+    const lines = [...wall([0, 0], [4, 0]), ...wall([0, T], [4, T]), ...wall([0, 0], [0, T]), ...solid];
+    const t = tag('WP1', 2, 1.5, [2, T]);
+    const res = wallTakeoff(lines, [...lines, ...t.segs], [{ ...t.text, generic: true }], MPP);
+    const len = lengthsByType(res.runs, MPP).get('WP1')?.length ?? 0;
+    expect(len).toBeGreaterThan(3.9);
+    expect(len).toBeLessThan(4.2);
+  });
+
   it('reports tags that point at no wall', () => {
     const t = tag('EW3A', 2.5, 8, [2.5, 7]);
     const res = wallTakeoff(lShape(), [...lShape(), ...t.segs], [t.text], MPP);

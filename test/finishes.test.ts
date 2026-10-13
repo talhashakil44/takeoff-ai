@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFinishSchedule, roomNumbersOf } from '../src/finishSchedule';
+import { codesInside, readFinishSchedule, readFinishTags, roomNumbersOf, sameCode } from '../src/finishSchedule';
 import { finishType, newProject, type Measurement, type Sheet, defaultTypes } from '../src/model';
 import type { PageText } from '../src/pageText';
 import { typeTotals } from '../src/quantities';
@@ -59,6 +59,9 @@ describe('room finish schedule', () => {
     expect(roomNumbersOf('112 RECEIVING & GEN. STORAGE')).toEqual(['112']);
     expect(roomNumbersOf('100 / 101 LOBBY')).toEqual(['100', '101']);
     expect(roomNumbersOf('Lobby')).toEqual([]);
+    // Lettered corridors.
+    expect(roomNumbersOf('A / 101 CORRIDOR / RECEPTION')).toEqual(['A', '101']);
+    expect(roomNumbersOf('C STAFF CORRIDOR')).toEqual(['C']);
   });
 });
 
@@ -118,5 +121,28 @@ describe('room finish quantities', () => {
     expect(at(walls.id).vars.A).toBeCloseTo(18 * 2.7 - 0.9 * 2.1);
     const trim = at(ceiling.id).items.find((it) => it.name === 'Perimeter trim')!;
     expect(trim.value).toBeCloseTo(18);
+  });
+});
+
+describe('finishes tagged on the drawings', () => {
+  const t = (str: string, cx: number, cy: number): PageText => ({ str, cx, cy, w: str.length * 3.3, h: 5.6 });
+  it('reads the floor code boxed under each room tag of a finish plan', () => {
+    const texts = [t('WC', 668, 466), t('112', 668, 481), t('EP1', 668, 498), t('LOCKER ROOM', 900, 470), t('114', 900, 481), t('CPT-1', 900, 498), t('PT-1', 668, 560)];
+    const rows = readFinishTags(texts, [
+      { number: '112', box: [656, 474, 681, 489] },
+      { number: '114', box: [888, 474, 912, 489] },
+      { number: '115' },
+    ]);
+    expect(rows.map((r) => [r.number, r.finishes.floor])).toEqual([
+      ['112', 'EP1'],
+      ['114', 'CPT-1'],
+    ]);
+  });
+
+  it('reads the ceiling tagged inside a room on a ceiling plan', () => {
+    const texts = [t('2667', 50, 40), t('(CA1)', 50, 48), t('(CA2)', 300, 48), t('WP1', 60, 60)];
+    const inRoom = (x: number, y: number) => x > 0 && x < 100 && y > 0 && y < 100;
+    expect(codesInside(texts, inRoom, (c) => ['CA1', 'CA2'].includes(c))).toEqual(['CA1']);
+    expect(sameCode('EP1', 'EP-1')).toBe(true);
   });
 });

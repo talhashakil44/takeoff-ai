@@ -110,9 +110,43 @@ export function readFinishSchedule(texts: PageText[]): FinishSchedule | null {
   return best;
 }
 
-/** The room numbers a room takeoff's label starts with, e.g. "100 / 101 LOBBY" → 100, 101. */
+/** The room numbers a room takeoff's label starts with, e.g. "100 / 101 LOBBY" → 100, 101; "A / 101" (a lettered corridor) too. */
 export function roomNumbersOf(label: string | undefined): string[] {
   if (!label) return [];
-  const m = /^\s*([A-Z]?\d{2,4}[A-Z]?(?:\s*\/\s*[A-Z]?\d{2,4}[A-Z]?)*)/.exec(label);
+  const m = /^\s*((?:[A-Z]?\d{2,4}[A-Z]?|[A-Z])(?:\s*\/\s*(?:[A-Z]?\d{2,4}[A-Z]?|[A-Z]))*)(?=\s|$)/.exec(label);
   return m ? m[1].split('/').map((s) => s.trim()) : [];
+}
+
+/** A finish code as printed in a tag: EP1, CPT-1, CT-2, (CA1). */
+const FINISH_CODE = /^\(?([A-Z]{1,4}-?\d{1,2}[A-Z]?)\)?$/;
+
+/** A finish code with or without its dash, for matching EP1 to EP-1. */
+export const sameCode = (a: string, b: string) => a.replace(/-/g, '').toUpperCase() === b.replace(/-/g, '').toUpperCase();
+
+/**
+ * Floor finishes tagged on a finish plan: the code in a box just under each room's
+ * number tag (EP1 under 112). `labels` are the plan's room tags, with their boxes.
+ */
+export function readFinishTags(texts: PageText[], labels: { number: string; box?: [number, number, number, number] }[]): ScheduleRow[] {
+  const rows: ScheduleRow[] = [];
+  for (const l of labels) {
+    if (!l.box) continue;
+    const [x0, y0, x1, y1] = l.box;
+    const h = y1 - y0;
+    const code = texts
+      .filter((t) => FINISH_CODE.test(t.str.trim()) && t.cy > y1 && t.cy < y1 + 2.5 * h && Math.abs(t.cx - (x0 + x1) / 2) < (x1 - x0))
+      .sort((a, b) => a.cy - b.cy)[0];
+    if (code) rows.push({ number: l.number, name: '', finishes: { floor: FINISH_CODE.exec(code.str.trim())![1] } });
+  }
+  return rows;
+}
+
+/** The finish codes tagged inside an outline (a ceiling plan's "(CA1)" tags over a room), deduplicated. */
+export function codesInside(texts: PageText[], inside: (x: number, y: number) => boolean, accept: (code: string) => boolean): string[] {
+  const out = new Set<string>();
+  for (const t of texts) {
+    const m = FINISH_CODE.exec(t.str.trim());
+    if (m && accept(m[1]) && inside(t.cx, t.cy)) out.add(m[1]);
+  }
+  return [...out];
 }
