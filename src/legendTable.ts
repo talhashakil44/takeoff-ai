@@ -45,10 +45,15 @@ function lines(texts: PageText[], x0: number, x1: number, y0: number, y1: number
   });
 }
 
-/** Horizontal lines drawn across x, sorted by y: the table's row lines. */
-function rowLines(segs: Segment[], x: number): number[] {
+/**
+ * Horizontal lines drawn right across a column, sorted by y: the table's row lines (not a
+ * title's underline, which spans only its text).
+ */
+function rowLines(segs: Segment[], x0: number, x1: number): number[] {
+  const span = (x1 - x0) * 0.8;
+  const mid = (x0 + x1) / 2;
   const ys = segs
-    .filter((s) => Math.abs(s.y1 - s.y2) < 0.5 && Math.min(s.x1, s.x2) <= x && Math.max(s.x1, s.x2) >= x && Math.abs(s.x2 - s.x1) > 20)
+    .filter((s) => Math.abs(s.y1 - s.y2) < 0.5 && Math.min(s.x1, s.x2) <= mid && Math.max(s.x1, s.x2) >= mid && Math.abs(s.x2 - s.x1) >= span)
     .map((s) => (s.y1 + s.y2) / 2)
     .sort((a, b) => a - b);
   return ys.filter((y, i) => i === 0 || y - ys[i - 1] > 1);
@@ -80,7 +85,8 @@ function dotBefore(segs: Segment[], x0: number, cy: number, h: number): boolean 
 export function measures(text: string): { thickness_mm: number | null; spacing_mm: number | null } {
   const t = text.toUpperCase();
   let spacing: number | null = null;
-  const sp = /(?:@|\bAT\b)\s*(?:MAX\.?\s*)?(\d+(?:\.\d+)?)\s*(MM|"|IN\.?|INCH(?:ES)?)?\s*(?:O\.?\s*C\.?|C\/C|CENTRES?|CENTERS?)/.exec(t);
+  // "@ 610mm O.C.", "AT MAX 610 O.C.", and "@ 610mm FRAMING O.C." (a word between).
+  const sp = /(?:@|\bAT\b)\s*(?:MAX\.?\s*)?(\d+(?:\.\d+)?)\s*(MM|"|IN\.?|INCH(?:ES)?)?(?:\s+[A-Z]+){0,2}\s*(?:O\.?\s*C\.?|C\/C|CENTRES?|CENTERS?)/.exec(t);
   if (sp) spacing = sp[2] && !/MM/.test(sp[2]) ? Math.round(Number(sp[1]) * 25.4) : Number(sp[1]);
   let thickness: number | null = null;
   const mm = /(\d+(?:\.\d+)?)\s*MM\b/.exec(t);
@@ -99,9 +105,11 @@ export function measures(text: string): { thickness_mm: number | null; spacing_m
 /** What a layer is, from the words in it. */
 export function roleOf(text: string): ExtractedLayer['role'] {
   const t = text.toUpperCase();
-  if (/AIR\s*SPACE|CAVITY|AIR\s*GAP/.test(t)) return 'air_space';
+  if (/AIR\s*SPACE|AIR\s*GAP/.test(t)) return 'air_space';
   if (/\bSTUDS?\b|JOISTS?|GIRTS?|FURRING|\bTRACK\b|C-H|\bZ-|FRAMING|RUNNERS?|CHANNELS?|PURLINS?/.test(t)) return 'framing';
   if (/INSULATION|\bBATTS?\b|MINERAL WOOL|ROCKWOOL|SPRAY FOAM|\bEPS\b|\bXPS\b|POLYISO|R-?\d/.test(t)) return 'insulation';
+  // "Fill cavity with batt" is insulation (above); a bare cavity is an air space.
+  if (/CAVITY/.test(t)) return 'air_space';
   if (/SHEATHING|PLYWOOD|\bOSB\b/.test(t)) return 'sheathing';
   if (/MEMBRANE|VAPOU?R|AIR BARRIER|WATERPROOF|DAMPPROOF|\bPOLY\b|\bWRB\b|BUILDING PAPER/.test(t)) return 'membrane';
   if (/GYPSUM|\bGWB\b|DRYWALL|SHAFT\s*LINER|CEMENT BOARD|\bBOARD\b|ACOUSTIC (?:TILE|PANEL)/.test(t)) return 'board';
@@ -133,7 +141,8 @@ export function readCell(cell: Line[]): { title: string; layers: ExtractedLayer[
   let title = '';
   let inNotes = false;
   for (const l of cell) {
-    const bulleted = l.dot || /^[•·●▪◦]/.test(l.text) || (/^[-–—*]\s/.test(l.text) && !/^-?\d/.test(l.text.replace(BULLET, '')));
+    // A dash or star followed by a space is a bullet; "-30mm" (no space) is not.
+    const bulleted = l.dot || /^[•·●▪◦]/.test(l.text) || /^[-–—*]\s/.test(l.text);
     const text = norm(l.text.replace(BULLET, ''));
     if (!text) continue;
     const last = layers[layers.length - 1];
@@ -194,7 +203,7 @@ export function readAssemblyTable(texts: PageText[], segs: Segment[]): Extractio
     const tags = texts
       .filter((t) => TAG.test(t.str.trim()) && t.cx > tx0 && t.cx < tx1 && t.cy > head.cy + head.h)
       .sort((a, b) => a.cy - b.cy);
-    const ys = rowLines(lineSegs, (dx0 + dx1) / 2);
+    const ys = rowLines(lineSegs, dx0, dx1);
     tags.forEach((tag, i) => {
       // The tag's row: between the row lines either side of it, or halfway to its neighbours.
       const top = Math.max(...ys.filter((y) => y < tag.cy), i ? (tags[i - 1].cy + tag.cy) / 2 : head.cy + head.h);

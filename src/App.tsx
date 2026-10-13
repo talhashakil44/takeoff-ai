@@ -43,7 +43,6 @@ import { readProjectFiles, writeBackup, writeProjectFile } from './projectFile';
 import { canUseServiceWorker, isInstalled, onLaunchFiles, promptInstall, registerServiceWorker } from './pwa';
 import { ringArea } from './geometry';
 import { scoringOn, setScoringOn } from './scoring';
-import { getApiKey } from './ai/claude';
 import { desktopApi, folderLabel } from './desktop';
 import { FolderSync, type PullResult } from './folderSync';
 import { linesIn, onSheet, readNumber, readTitle, relativeBox, type Box } from './sheetNumbers';
@@ -2237,10 +2236,7 @@ export function App() {
                 id: 'assemblies' as const,
                 icon: 'sparkle' as const,
                 title: sheet.aiAssemblies ? 'Assembly types (saved)' : 'Read assembly types',
-                text:
-                  isHosted || getApiKey()
-                    ? 'On a legend sheet: Claude reads every wall, floor, roof and ceiling type into takeoff types with their materials.'
-                    : 'On a legend sheet: Claude reads every wall, floor and ceiling type. Needs a Claude API key (More › AI settings).',
+                text: 'On an assembly schedule sheet: every wall, floor, roof and ceiling type becomes a takeoff type with its materials.',
                 ready: !!page,
               },
               {
