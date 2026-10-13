@@ -107,7 +107,7 @@ export function findDoorTags(texts: PageText[], segs: Segment[]): DoorTag[] {
   const out: DoorTag[] = [];
   const seen = new Set<string>();
   for (const t of texts) {
-    if (!/^[A-Z]?\d{3,4}[A-Z]?$/.test(t.str) || seen.has(t.str)) continue;
+    if (!/^[A-Z]?\d{3,4}[A-Za-z]?$/.test(t.str) || seen.has(t.str)) continue;
     const r = Math.max(t.w, t.h) * 0.5 + 14;
     const local = dedupe(index.query(t.cx - r, t.cy - r, t.cx + r, t.cy + r).map((i) => lines[i]));
     const inside = (x: number, y: number) => Math.hypot(x - t.cx, y - t.cy) <= r;
@@ -118,8 +118,9 @@ export function findDoorTags(texts: PageText[], segs: Segment[]): DoorTag[] {
         t.cx,
         t.cy,
       );
-      // Ovals and circles come as many chords, hexagons as six sides; rectangles are rooms.
-      if (loop.length < 5) continue;
+      // Ovals and circles come as many chords, hexagons as six sides; rectangles (drawn
+      // single or double) are rooms.
+      if (loop.length < 5 || loop.every((s) => Math.abs(s.x1 - s.x2) < 0.2 || Math.abs(s.y1 - s.y2) < 0.2)) continue;
       seen.add(t.str);
       out.push({ number: t.str, at: [t.cx, t.cy] });
       break;

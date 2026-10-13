@@ -202,11 +202,16 @@ function surrounding(segs: Segment[], x: number, y: number): Segment[] {
   }
   return groups
     .filter((g) => {
-      // A ray to the right crosses an enclosing loop an odd number of times.
-      let crossings = 0;
+      // A ray to the right crosses an enclosing loop an odd number of times. A symbol drawn
+      // twice over itself crosses twice in one place: that counts once.
+      const xs: number[] = [];
       for (const s of g) {
-        if (s.y1 > y !== s.y2 > y && x < ((s.x2 - s.x1) * (y - s.y1)) / (s.y2 - s.y1) + s.x1) crossings++;
+        if (s.y1 > y === s.y2 > y) continue;
+        const cx = ((s.x2 - s.x1) * (y - s.y1)) / (s.y2 - s.y1) + s.x1;
+        if (x < cx) xs.push(cx);
       }
+      xs.sort((a, b) => a - b);
+      const crossings = xs.filter((v, i) => i === 0 || v - xs[i - 1] > 0.3).length;
       return crossings % 2 === 1;
     })
     .flat();

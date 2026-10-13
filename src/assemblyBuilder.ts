@@ -77,6 +77,17 @@ function layerItems(layer: ExtractedLayer, kind: 'linear' | 'area', units: Units
   }
 }
 
+/** A wall with no framing whose structure is concrete or block is priced there, not with the stud walls. */
+function divisionOf(a: ExtractedAssembly): string | undefined {
+  const wall = a.category === 'interior_wall' || a.category === 'exterior_wall';
+  if (wall && !a.layers.some((l) => l.role === 'framing')) {
+    const structure = a.layers.filter((l) => l.role === 'structure').map((l) => l.material).join(' ');
+    if (/MASONRY|\bCMU\b|\bBLOCK\b|BRICK/i.test(structure)) return '04 Masonry';
+    if (/CONCRETE|\bICF\b/i.test(structure)) return '03 Concrete';
+  }
+  return DIVISION_BY_CATEGORY[a.category];
+}
+
 /** Turns an extracted assembly into a takeoff type with material lines. */
 export function buildTakeoffType(a: ExtractedAssembly, units: Units, index: number, height: number): TakeoffType {
   const kind = a.category === 'interior_wall' || a.category === 'exterior_wall' ? 'linear' : 'area';
@@ -93,7 +104,7 @@ export function buildTakeoffType(a: ExtractedAssembly, units: Units, index: numb
     kind,
     height,
     items: [headline, ...a.layers.flatMap((l) => layerItems(l, kind, units))],
-    division: DIVISION_BY_CATEGORY[a.category],
+    division: divisionOf(a),
     assemblyTitle: [title, ...a.notes.filter((n) => /F\.?R\.?R|STC|ULC|FIRE/i.test(n)).map(clean)].join(' – ') || undefined,
     description: a.layers.map((l) => `• ${clean(l.material)}`).join(' '),
   };

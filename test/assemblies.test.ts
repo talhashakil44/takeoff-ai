@@ -82,6 +82,22 @@ describe('buildTakeoffType', () => {
   });
 });
 
+describe('division', () => {
+  it('prices a concrete foundation wall under concrete, a stud wall under framing', () => {
+    const wall = (material: string, role: 'structure' | 'framing'): ExtractedAssembly => ({
+      code: 'WF1',
+      category: 'exterior_wall',
+      title: 'FOUNDATION WALL TYPE 1',
+      layers: [{ material, role, thickness_mm: null, spacing_mm: null }],
+      total_thickness_mm: null,
+      notes: [],
+    });
+    expect(buildTakeoffType(wall('CAST IN PLACE CONCRETE FOUNDATION WALL', 'structure'), 'metric', 0, 0).division).toBe('03 Concrete');
+    expect(buildTakeoffType(wall('190 CONCRETE BLOCK', 'structure'), 'metric', 0, 0).division).toBe('04 Masonry');
+    expect(buildTakeoffType(wall('38x140 WOOD STUDS @ 406 o.c.', 'framing'), 'metric', 0, 0).division).toBe('06 Wood Framing & Partitions');
+  });
+});
+
 describe('findAssemblyCodes', () => {
   it('finds standalone type tags and ignores other text', () => {
     expect(findAssemblyCodes(['W1', 'EW3C', ' FR1 ', 'W6A', 'TYPE', 'A0.3', 'S-1', '92mm', 'W1'])).toEqual([

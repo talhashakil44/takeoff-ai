@@ -90,7 +90,10 @@ export function WallTakeoffDialog({ page, sheet, units, types, earlier, palette,
         // A code read from this drawing file's schedule first (two buildings can share a code).
         const typeFor = (code: string) =>
           linear.find((t) => codeOf(t.name) === code && t.fromDoc === sheet.docId) ?? linear.find((t) => codeOf(t.name) === code && !t.fromDoc) ?? linear.find((t) => codeOf(t.name) === code);
-        setChoice((prev) => new Map(lines.map((l) => [l.code, prev.get(l.code) ?? typeFor(l.code)?.id ?? NEW])));
+        // A code that is none of the project's wall types (a door tag whose leader touches a
+        // wall) is left out unless picked.
+        const unknown = (code: string) => known.codes.length > 0 && !known.codes.includes(code);
+        setChoice((prev) => new Map(lines.map((l) => [l.code, prev.get(l.code) ?? typeFor(l.code)?.id ?? (unknown(l.code) ? SKIP : NEW)])));
         setState({ phase: 'done', result, lines, ms: Math.round(performance.now() - started) });
       })
       .catch((e) => live && setState({ phase: 'error', message: e instanceof Error ? e.message : String(e) }));

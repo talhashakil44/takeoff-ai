@@ -1280,7 +1280,10 @@ export function App() {
         // door tags. Door numbers follow the room numbers (door 113A by room 113), so only
         // tags in the sheet's room-number range count; other sheets also need a plan's
         // worth of them.
-        const rooms = findRoomLabels(texts, segs).map((r) => parseInt(r.number.replace(/^\D/, ''), 10));
+        // (Lettered rooms, corridor A, have no number to go by.)
+        const rooms = findRoomLabels(texts, segs)
+          .map((r) => parseInt(r.number.replace(/^\D/, ''), 10))
+          .filter((n) => !Number.isNaN(n));
         if (rooms.length) {
           const [lo, hi] = [Math.min(...rooms) - 20, Math.max(...rooms) + 20];
           // On the sheet being counted, doors numbered on their own (D001) are kept; only
