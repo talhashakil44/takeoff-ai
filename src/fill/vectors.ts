@@ -16,6 +16,8 @@ export interface Segment {
   bridge?: boolean;
   /** For a bridge: the opening has glazing along it (a window, where base and walls carry on below). */
   window?: boolean;
+  /** A piece of a curve (a door swing, a round column): walls are straight. */
+  curve?: boolean;
 }
 
 type Matrix = [number, number, number, number, number, number];
@@ -104,11 +106,11 @@ function addPath(d: ArrayLike<number>, m: Matrix, width: number, filled: boolean
   let cy = 0;
   let sx = 0;
   let sy = 0;
-  const push = (x: number, y: number) => {
+  const push = (x: number, y: number, curve = false) => {
     const [a, b] = apply(m, cx, cy);
     const [c, e] = apply(m, x, y);
     // A zero-length stroke is a dot (round caps): kept as a point so stipple patterns count.
-    if (a !== c || b !== e || (!filled && width > 0)) out.push({ x1: a, y1: b, x2: c, y2: e, width, filled, sub: counter.sub });
+    if (a !== c || b !== e || (!filled && width > 0)) out.push({ x1: a, y1: b, x2: c, y2: e, width, filled, sub: counter.sub, ...(curve ? { curve } : {}) });
     cx = x;
     cy = y;
   };
@@ -132,6 +134,7 @@ function addPath(d: ArrayLike<number>, m: Matrix, width: number, filled: boolean
           push(
             u * u * u * x0 + 3 * u * u * t * d[i + 1] + 3 * u * t * t * d[i + 3] + t * t * t * d[i + 5],
             u * u * u * y0 + 3 * u * u * t * d[i + 2] + 3 * u * t * t * d[i + 4] + t * t * t * d[i + 6],
+            true,
           );
         }
         i += 7;
@@ -142,7 +145,7 @@ function addPath(d: ArrayLike<number>, m: Matrix, width: number, filled: boolean
         for (let k = 1; k <= 3; k++) {
           const t = k / 3;
           const u = 1 - t;
-          push(u * u * x0 + 2 * u * t * d[i + 1] + t * t * d[i + 3], u * u * y0 + 2 * u * t * d[i + 2] + t * t * d[i + 4]);
+          push(u * u * x0 + 2 * u * t * d[i + 1] + t * t * d[i + 3], u * u * y0 + 2 * u * t * d[i + 2] + t * t * d[i + 4], true);
         }
         i += 5;
         break;

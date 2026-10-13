@@ -49,6 +49,45 @@ export function openingStrips(bridges: Segment[], maxThickness: number): Pt[][] 
 }
 
 /**
+ * Door leaves: straight lines from a swing's centre (the hinge) to one end of the arc.
+ * Their far end is as far from both ends of the arc (the radius), which a wall line
+ * meeting the arc at the jamb is not.
+ */
+export function doorLeaves(segs: Segment[]): Set<Segment> {
+  const arcs = new Map<number, Segment[]>();
+  for (const s of segs) {
+    if (!s.curve || s.filled || s.sub === undefined) continue;
+    const list = arcs.get(s.sub);
+    if (list) list.push(s);
+    else arcs.set(s.sub, [s]);
+  }
+  const ends: [Pt, Pt][] = [...arcs.values()].map((pieces) => [
+    [pieces[0].x1, pieces[0].y1],
+    [pieces[pieces.length - 1].x2, pieces[pieces.length - 1].y2],
+  ]);
+  const out = new Set<Segment>();
+  if (!ends.length) return out;
+  const d = (p: Pt, q: Pt) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  for (const s of segs) {
+    if (s.curve || s.filled) continue;
+    const p: Pt = [s.x1, s.y1];
+    const q: Pt = [s.x2, s.y2];
+    const len = d(p, q);
+    if (len < 3) continue;
+    for (const [a, b] of ends) {
+      for (const [touch, far] of [
+        [p, q],
+        [q, p],
+      ] as const) {
+        const atA = d(touch, a) < 1 ? b : d(touch, b) < 1 ? a : null;
+        if (atA && Math.abs(d(far, atA) - len) < 0.1 * len) out.add(s);
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Picks the wall linework out of a sheet's segments and closes openings.
  * Wall thickness and the widest opening to close are real-world sizes, so the
  * sheet scale is used when known.
@@ -69,8 +108,12 @@ export function buildWallModel(
     chosen = detectWallPens(stats, [0.5]);
   }
   const wallFill = chosen.includes('fill') ? wallShapedFills(segs, pt(0.06, 1.5), pt(0.7, 20)) : null;
-  // Dots (a carpet stipple in the wall pen) are no part of a wall.
-  const walls = segs.filter((s) => chosen.includes(widthKey(s)) && (!s.filled || wallFill?.has(s)) && Math.hypot(s.x2 - s.x1, s.y2 - s.y1) >= 0.3);
+  // Dots (a carpet stipple in the wall pen) are no part of a wall, and nor are doors: a swing
+  // drawn in the wall pen, and its leaf, would otherwise cut the swing out of the room.
+  const leaves = doorLeaves(segs);
+  const walls = segs.filter(
+    (s) => chosen.includes(widthKey(s)) && !s.curve && !leaves.has(s) && (!s.filled || wallFill?.has(s)) && Math.hypot(s.x2 - s.x1, s.y2 - s.y1) >= 0.3,
+  );
   // Glazing and frames are drawn with lighter pens than walls, but heavier than hatching.
   const wallWidth = Math.min(...chosen.map(Number).filter((n) => !Number.isNaN(n)));
   const glazingLines = segs.filter((s) => !s.filled && !chosen.includes(widthKey(s)) && s.width >= wallWidth * 0.6);

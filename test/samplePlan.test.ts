@@ -172,7 +172,7 @@ describe('sample plan', () => {
   // without lineweights (every line one pen, so room and door tags sit in the wall pen).
   for (const [style, options, tolerance] of [
     ['a sheet saved turned a quarter', { rotate: 90 }, 0],
-    ['a drawing printed without lineweights', { onePen: true }, 0.05],
+    ['a drawing printed without lineweights', { onePen: true }, 0.02],
     ['walls exploded into short pieces', { pieces: 0.5 }, 0],
     ['text written one character at a time', { charByChar: true }, 0],
     ['room numbers printed without a box', { bareRoomNumbers: true }, 0],
@@ -191,8 +191,11 @@ describe('sample plan', () => {
       expect(rooms.map((r) => r.labels[0].number).sort()).toEqual(Object.keys(want));
       for (const r of rooms) {
         const area = ringArea(r.points ?? []) * mpp * mpp;
-        // Door swings drawn in the wall pen come off the room, a few percent.
+        // Door swings in the wall pen no longer come off the room (the lobby, with four, is exact);
+        // a wall tag drawn in the wall pen still takes a little off its room (102, 105).
         expect(Math.abs(area / want[r.labels[0].number] - 1)).toBeLessThanOrEqual(tolerance + 0.002);
+        // The lobby has four doors swinging into it: their swings and leaves stay in the room.
+        if (r.labels[0].number === '101') expect(area).toBeCloseTo(62.89, 1);
       }
       expect(findDoorTags(texts, segs)).toHaveLength(5);
       const sheet = { id: 's', docId: 'd', page: 1, name: 'A1.01', width: vp.width, height: vp.height, metersPerPoint: mpp, scaleLabel: '1:100', scaleSource: 'preset', scaleHints: [] } as Sheet;
