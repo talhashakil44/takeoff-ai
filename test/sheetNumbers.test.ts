@@ -18,6 +18,8 @@ describe('sheet numbers from a box', () => {
     expect(readNumber(linesIn([t('SHEET', 40, 50, 8), t('M2.01', 90, 50, 8)], box))).toBe('M2.01');
     expect(readNumber(linesIn([t('E', 40, 50, 8), t('101', 52, 50, 8)], box))).toBe('E101');
     expect(readNumber(linesIn([], box))).toBe('');
+    // Nothing number-like: nothing, rather than the title block's other words.
+    expect(readNumber(linesIn([t('ISSUED FOR:', 60, 40, 10), t('TMP', 60, 70, 12)], box))).toBe('');
   });
 
   it('reads a title over several lines, captions left out', () => {

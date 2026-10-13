@@ -64,8 +64,9 @@ export function readNumber(lines: Line[]): string {
     const token = l.text.split(' ').find((w) => SHEET_NUMBER.test(w));
     if (token) return token;
   }
-  // No usual pattern: the biggest text that isn't a caption.
-  const text = byHeight.map((l) => uncaption(l.text)).find((t) => t && !ONLY_CAPTION.test(t));
+  // No usual pattern: the biggest text that isn't a caption and has a number in it (a
+  // cover sheet's "ISSUED FOR:" or a drawing's initials are no sheet number).
+  const text = byHeight.map((l) => uncaption(l.text)).find((t) => t && !ONLY_CAPTION.test(t) && /\d/.test(t) && t.length <= 12);
   return text ?? '';
 }
 
