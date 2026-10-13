@@ -13,12 +13,13 @@ export interface ScaleCheck {
   read: number;
 }
 
-/** A dimension value in metres: millimetres (5300) for metric, feet and inches (12'-6") for imperial. */
+/** A dimension value in metres: millimetres (5300, 18,371) for metric, feet and inches (12'-6") for imperial. */
 export function dimensionMeters(str: string, units: Units): number | null {
   const s = str.trim();
   if (units === 'metric') {
-    if (!/^\d{3,5}$/.test(s)) return null;
-    const mm = Number(s);
+    // 5300, or with a thousands separator: 18,371 or 18 371.
+    if (!/^(?:\d{3,5}|\d{1,2}[, ]\d{3})$/.test(s)) return null;
+    const mm = Number(s.replace(/[, ]/, ''));
     return mm >= 300 ? mm / 1000 : null;
   }
   const m = /^(\d{1,3})'\s*-?\s*(\d{1,2}(?:\s+\d\/\d+)?)?(?:"|'')?$/.exec(s);

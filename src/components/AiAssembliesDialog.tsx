@@ -88,14 +88,17 @@ export function AiAssembliesDialog({ page, sheet, units, existingTypes, onApply,
   const existingByCode = new Map(existingTypes.map((t) => [codeOf(t.name), t]));
   const kindOf = (a: ExtractedAssembly) =>
     a.category === 'interior_wall' || a.category === 'exterior_wall' ? 'linear' : 'area';
-  /** An existing type of the same code and kind is updated in place, keeping its measurements and colour. */
+  /**
+   * An existing type of the same code and kind is updated in place, keeping its measurements
+   * and colour: unless it was read from another drawing file (another building's WE1).
+   */
   const replaces = (a: ExtractedAssembly, all: ExtractedAssembly[]) => {
     // A repeated tag is matched by its full name, so each option updates its own type.
     const t =
       all.filter((x) => x.code === a.code).length > 1
         ? existingTypes.find((x) => x.name === `${a.code} – ${a.title}`.replace(/\s+/g, ' ').trim())
-        : existingByCode.get(a.code);
-    return t && t.kind === kindOf(a) ? t : undefined;
+        : (existingTypes.find((x) => codeOf(x.name) === a.code && x.fromDoc === sheet.docId) ?? existingByCode.get(a.code));
+    return t && t.kind === kindOf(a) && (!t.fromDoc || t.fromDoc === sheet.docId) ? t : undefined;
   };
 
   useEffect(() => {
@@ -121,7 +124,10 @@ export function AiAssembliesDialog({ page, sheet, units, existingTypes, onApply,
         });
         return;
       }
-      const printed = findAssemblyCodes(texts.map((t) => t.str));
+      // Tags printed on the sheet: the usual prefixes, and this schedule's own codes wherever
+      // they appear ("WP2b" can be printed only in its title, "... TYPE 2 (WP2b)").
+      const words = new Set(texts.flatMap((t) => t.str.split(/[\s()[\],:;]+/)));
+      const printed = [...new Set([...findAssemblyCodes(texts.map((t) => t.str)), ...assemblies.map((a) => a.code).filter((c) => words.has(c))])];
       setSelected(new Set(assemblies.map((_, i) => i)));
       if (answerKey) scoreWith(answerKey, assemblies);
       const result: SavedLegendRead = {
@@ -171,7 +177,7 @@ export function AiAssembliesDialog({ page, sheet, units, existingTypes, onApply,
     const chosen = state.assemblies.filter((_, i) => selected.has(i));
     onApply(
       chosen.map((a, i) => {
-        const built = buildTakeoffType(a, units, existingTypes.length + i, height);
+        const built = { ...buildTakeoffType(a, units, existingTypes.length + i, height), fromDoc: sheet.docId };
         const old = replaces(a, state.assemblies);
         return old
           ? { ...built, id: old.id, color: old.color, division: old.division ?? built.division, package: old.package }
@@ -347,7 +353,13 @@ export function AiAssembliesDialog({ page, sheet, units, existingTypes, onApply,
                   {replaces(a, state.assemblies) ? (
                     <span className="tag warn-tag">replaces existing {a.code}</span>
                   ) : (
-                    existingByCode.has(a.code) && <span className="tag warn-tag">{a.code} exists; added as new type</span>
+                    existingByCode.has(a.code) && (
+                      <span className="tag warn-tag">
+                        {existingTypes.some((t) => codeOf(t.name) === a.code && t.fromDoc && t.fromDoc !== sheet.docId)
+                          ? `${a.code} from other drawings exists; added as its own type`
+                          : `${a.code} exists; added as new type`}
+                      </span>
+                    )
                   )}
                 </div>
                 <ol className="layers">

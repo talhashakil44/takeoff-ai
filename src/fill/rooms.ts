@@ -41,7 +41,9 @@ export function findRoomLabels(texts: PageText[], segs: Segment[]): RoomLabel[] 
   const index = new SegmentIndex(lines, 16);
   const out: RoomLabel[] = [];
   for (const t of texts) {
-    if (!ROOM_NUMBER.test(t.str)) continue;
+    // A corridor can be lettered (A, C) rather than numbered: boxed, with its name above.
+    const lettered = /^[A-Z]$/.test(t.str);
+    if (!ROOM_NUMBER.test(t.str) && !lettered) continue;
     const r = Math.max(t.w, t.h) * 0.5 + 14;
     const local = dedupe(index.query(t.cx - r, t.cy - r, t.cx + r, t.cy + r).map((i) => lines[i]));
     const inside = (x: number, y: number) => Math.hypot(x - t.cx, y - t.cy) <= r;
@@ -53,7 +55,8 @@ export function findRoomLabels(texts: PageText[], segs: Segment[]): RoomLabel[] 
         t.cx,
         t.cy,
       );
-      if (loop.length !== 4) continue;
+      // A box, or a box drawn double (one inside the other).
+      if (loop.length !== 4 && loop.length !== 8) continue;
       const axisAligned = loop.every((s) => Math.abs(s.x1 - s.x2) < 0.2 || Math.abs(s.y1 - s.y2) < 0.2);
       if (!axisAligned) continue;
       const xs = loop.flatMap((s) => [s.x1, s.x2]);
@@ -63,7 +66,9 @@ export function findRoomLabels(texts: PageText[], segs: Segment[]): RoomLabel[] 
     }
     if (!box) continue;
     const cx = (box.x0 + box.x1) / 2;
-    out.push({ number: t.str, name: nameAbove(texts, t, cx, box.y0, box.x1 - box.x0), at: [cx, (box.y0 + box.y1) / 2], box: [box.x0, box.y0, box.x1, box.y1] });
+    const name = nameAbove(texts, t, cx, box.y0, box.x1 - box.x0);
+    if (lettered && !name) continue;
+    out.push({ number: t.str, name, at: [cx, (box.y0 + box.y1) / 2], box: [box.x0, box.y0, box.x1, box.y1] });
   }
   if (out.length) return out;
 

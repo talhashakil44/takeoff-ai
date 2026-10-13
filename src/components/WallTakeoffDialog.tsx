@@ -53,6 +53,15 @@ export function WallTakeoffDialog({ page, sheet, units, types, earlier, palette,
     return out;
   }, [legend]);
 
+  // The project's wall types, once read from an assembly schedule: other codes on the plan
+  // (W1 for a window on some sets) are tags only where a leader puts them on a wall.
+  const known = useMemo(() => {
+    const codes = new Set(fromLegend.keys());
+    for (const t of types) if (t.kind === 'linear' && t.assemblyTitle) codes.add(codeOf(t.name).replace('-', ''));
+    const exterior = [...fromLegend.values()].filter((a) => a.category === 'exterior_wall').map((a) => a.code);
+    return { codes: [...codes], exterior };
+  }, [fromLegend, types]);
+
   const [throughDoors, setThroughDoors] = useState(true);
   // Finish-only partition types (finishes don't run across a door) stop at doors from the start.
   const [stopAt, setStopAt] = useState<Set<string>>(() => {
@@ -73,12 +82,15 @@ export function WallTakeoffDialog({ page, sheet, units, types, earlier, palette,
     let live = true;
     setState({ phase: 'running' });
     const started = performance.now();
-    sheetWallTakeoff(page, sheet, maxOpening, throughDoors, [...stopAt])
+    sheetWallTakeoff(page, sheet, maxOpening, throughDoors, [...stopAt], known)
       .then((result) => {
         if (!live) return;
         const lines = runsToLines(result.runs);
         const linear = types.filter((t) => t.kind === 'linear');
-        setChoice((prev) => new Map(lines.map((l) => [l.code, prev.get(l.code) ?? linear.find((t) => codeOf(t.name) === l.code)?.id ?? NEW])));
+        // A code read from this drawing file's schedule first (two buildings can share a code).
+        const typeFor = (code: string) =>
+          linear.find((t) => codeOf(t.name) === code && t.fromDoc === sheet.docId) ?? linear.find((t) => codeOf(t.name) === code && !t.fromDoc) ?? linear.find((t) => codeOf(t.name) === code);
+        setChoice((prev) => new Map(lines.map((l) => [l.code, prev.get(l.code) ?? typeFor(l.code)?.id ?? NEW])));
         setState({ phase: 'done', result, lines, ms: Math.round(performance.now() - started) });
       })
       .catch((e) => live && setState({ phase: 'error', message: e instanceof Error ? e.message : String(e) }));
@@ -139,7 +151,7 @@ export function WallTakeoffDialog({ page, sheet, units, types, earlier, palette,
         newTypes.push(t);
         typeId = t.id;
       }
-      if (tagKind(l.code) === 'partition') stopsAtDoors.set(typeId, stopAt.has(l.code));
+      if (tagKind(l.code, known.exterior) === 'partition') stopsAtDoors.set(typeId, stopAt.has(l.code));
       for (const points of l.lines) {
         measurements.push({ id: newId(), sheetId: sheet.id, typeId, points: points.map((p) => [...p] as Pt), holes: [], source: 'walls' });
       }
@@ -206,7 +218,7 @@ export function WallTakeoffDialog({ page, sheet, units, types, earlier, palette,
                         {l.light ? ` · ${l.light} in light lines, check` : ''}
                       </td>
                       <td>
-                        {tagKind(l.code) === 'partition' && (
+                        {tagKind(l.code, known.exterior) === 'partition' && (
                           <input
                             type="checkbox"
                             aria-label={`${l.code} stops at doors`}

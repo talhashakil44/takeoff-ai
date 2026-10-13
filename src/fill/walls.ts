@@ -247,7 +247,7 @@ function detectStrokedPens(stats: PenStats[], shares: number[]): string[] {
   // Wall pens draw mostly in parallel pairs. A sheet border or title block in the same pen
   // can pull its share down, so a looser share is accepted when no pen passes.
   for (const share of shares) {
-    const candidates = stats.filter((s) => s.key !== 'fill' && s.paired >= most * 0.1 && s.paired / s.length >= share);
+    const candidates = stats.filter((s) => s.key !== 'fill' && s.paired >= most * 0.05 && s.paired / s.length >= share);
     if (!candidates.length) continue;
     const heaviest = candidates.reduce((a, b) => (Number(b.key) > Number(a.key) ? b : a));
     // Exterior walls are often drawn heavier than partitions: both count.
@@ -288,6 +288,9 @@ export function bridgeGaps(walls: Segment[], maxGap: number, glazing?: GlazingRu
       if (Math.abs((s.x1 - ax) * -uy + (s.y1 - ay) * ux) > glazing.band) continue;
       const t1 = (s.x1 - ax) * ux + (s.y1 - ay) * uy;
       const t2 = (s.x2 - ax) * ux + (s.y2 - ay) * uy;
+      // A line running far past both ends of the gap (a grid or section line across the
+      // plan) is passing by, not glazing in the opening.
+      if (Math.min(t1, t2) < -glazing.band && Math.max(t1, t2) > L + glazing.band) continue;
       const lo = Math.max(0, Math.min(t1, t2));
       const hi = Math.min(L, Math.max(t1, t2));
       if (hi > lo) spans.push([lo, hi]);

@@ -11,9 +11,17 @@ import type { PageText } from './pageText';
  * section heading over the table gives the category.
  */
 
-const TAG = /^[A-Z]{1,4}-?\d{1,3}[A-Z]?$/;
+/** A type tag: W1, VS1, WP2a, EXT-3. */
+const TAG = /^[A-Z]{1,4}-?\d{1,3}[A-Za-z]?$/;
+/** The tag column's header. */
+const TAG_HEADER = /^(?:TYPE|MARK|TAG)$/i;
 const DESCRIPTION = /^(?:CONSTRUCTION|DESCRIPTION|ASSEMBLY DESCRIPTION|COMPOSITION|MATERIALS?|LAYERS)$/i;
-const IGNORED = /^(?:DESIGN|ASSEMBLY|DETAIL|SECTION|GRAPHIC|DIAGRAM|SKETCH)$/i;
+/** Drawing columns: "DESIGN", "ASSEMBLY (PLAN VIEW)". */
+const IGNORED = /^(?:DESIGN|ASSEMBLY|DETAIL|SECTION|GRAPHIC|DIAGRAM|SKETCH)(?:\s*\(.*\))?$/i;
+/** A title naming its type: "WALL PARTITION TYPE 2 (WP2b)". */
+const NAMED = /\(([A-Z]{1,4}-?\d{1,3}[A-Za-z]?)\)\s*$/;
+/** Nominal lumber (2x6) by its actual depth in millimetres. */
+const LUMBER: Record<string, number> = { 4: 89, 6: 140, 8: 184, 10: 235, 12: 286 };
 const BULLET = /^[•·●▪◦\-–—*]\s*/;
 
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
@@ -99,6 +107,17 @@ export function measures(text: string): { thickness_mm: number | null; spacing_m
       thickness = Math.round((Number(whole) + n / d) * 25.4);
     }
   }
+  if (thickness === null) {
+    // A size leading the layer, in millimetres on metric drawings: "13 GYPSUM BOARD",
+    // "38x140 WOOD STUDS" (its depth), "2x6 STUDS" (nominal lumber).
+    const lead = t.replace(/^[-–—•*\s]+/, '');
+    const size = /^(\d{1,3})\s*[X×]\s*(\d{1,3})\b/.exec(lead);
+    if (size) thickness = Number(size[1]) <= 3 ? (LUMBER[size[2]] ?? null) : Number(size[2]);
+    else {
+      const n = /^(\d{1,3})\s+(?!MIL\b|LAYERS?\b|PLY\b|ROWS?\b|COATS?\b|X\b|OF\b)[A-Z]/.exec(lead);
+      if (n && Number(n[1]) >= 3) thickness = Number(n[1]);
+    }
+  }
   return { thickness_mm: thickness, spacing_mm: spacing };
 }
 
@@ -106,13 +125,15 @@ export function measures(text: string): { thickness_mm: number | null; spacing_m
 export function roleOf(text: string): ExtractedLayer['role'] {
   const t = text.toUpperCase();
   if (/AIR\s*SPACE|AIR\s*GAP/.test(t)) return 'air_space';
-  if (/\bSTUDS?\b|JOISTS?|GIRTS?|FURRING|\bTRACK\b|C-H|\bZ-|FRAMING|RUNNERS?|CHANNELS?|PURLINS?/.test(t)) return 'framing';
+  if (/\bSTUDS?\b|JOISTS?|GIRTS?|FURRING|\bTRACK\b|C-H|\bZ-|FRAMING|RUNNERS?|CHANNELS?|PURLINS?|TRUSS|CEILING GRID|T-BAR/.test(t)) return 'framing';
+  // Lumber at a spacing: "2x6 @ 406 o.c.".
+  if (/^\W*\d{1,3}\s*X\s*\d{1,3}\b.*(?:@|\bAT\b)/.test(t)) return 'framing';
   if (/INSULATION|\bBATTS?\b|MINERAL WOOL|ROCKWOOL|SPRAY FOAM|\bEPS\b|\bXPS\b|POLYISO|R-?\d/.test(t)) return 'insulation';
   // "Fill cavity with batt" is insulation (above); a bare cavity is an air space.
   if (/CAVITY/.test(t)) return 'air_space';
   if (/SHEATHING|PLYWOOD|\bOSB\b/.test(t)) return 'sheathing';
   if (/MEMBRANE|VAPOU?R|AIR BARRIER|WATERPROOF|DAMPPROOF|\bPOLY\b|\bWRB\b|BUILDING PAPER/.test(t)) return 'membrane';
-  if (/GYPSUM|\bGWB\b|DRYWALL|SHAFT\s*LINER|CEMENT BOARD|\bBOARD\b|ACOUSTIC (?:TILE|PANEL)/.test(t)) return 'board';
+  if (/GYPSUM|\bGWB\b|DRYWALL|SHAFT\s*LINER|CEMENT BOARD|\bBOARD\b|ACOUSTIC (?:CEILING )?(?:TILE|PANEL)|CEILING TILE/.test(t)) return 'board';
   if (/SIDING|CLADDING|\bACM\b|\bPANELS?\b|BRICK|STONE|STUCCO|EIFS|METAL ROOF|SHINGLE/.test(t)) return 'cladding';
   if (/CONCRETE|MASONRY|\bCMU\b|\bBLOCK\b|\bSLAB\b|\bDECK\b|\bCLT\b|TOPPING|\bICF\b/.test(t)) return 'structure';
   if (/GRANULAR|\bFILL\b|GRAVEL|\bSOIL\b/.test(t)) return 'fill';
@@ -120,13 +141,14 @@ export function roleOf(text: string): ExtractedLayer['role'] {
   return 'other';
 }
 
-function categoryOf(heading: string, code: string): ExtractedAssembly['category'] {
+function categoryOf(heading: string, code: string, title = ''): ExtractedAssembly['category'] {
   const h = heading.toUpperCase();
-  if (/EXTERIOR WALL/.test(h)) return 'exterior_wall';
+  if (/EXTERIOR WALL|FOUNDATION WALL/.test(h)) return 'exterior_wall';
   if (/ROOF/.test(h)) return 'roof';
   if (/CEILING/.test(h)) return 'ceiling';
   if (/FLOOR/.test(h)) return 'floor';
-  if (/WALL|PARTITION|SHAFT/.test(h)) return /^(?:EW|EXT)/.test(code) ? 'exterior_wall' : 'interior_wall';
+  // A wall schedule's exterior types say so in their titles ("EXTERIOR WALL INFILL").
+  if (/WALL|PARTITION|SHAFT/.test(h)) return /^(?:EW|EXT)/.test(code) || /EXTERIOR|FOUNDATION/i.test(title) ? 'exterior_wall' : 'interior_wall';
   if (/^(?:EW|EXT)/.test(code)) return 'exterior_wall';
   if (/^(?:R|RF)\d/.test(code)) return 'roof';
   if (/^(?:F|FL)\d/.test(code)) return 'floor';
@@ -136,22 +158,26 @@ function categoryOf(heading: string, code: string): ExtractedAssembly['category'
 
 /** A description cell as a title, its layers (the bulleted lines, wrapped lines joined) and its notes. */
 export function readCell(cell: Line[]): { title: string; layers: ExtractedLayer[]; notes: string[] } {
-  const layers: { text: string; x0: number }[] = [];
+  const layers: { text: string; x0: number; typed: boolean; cy: number; h: number }[] = [];
   const notes: string[] = [];
   let title = '';
   let inNotes = false;
   for (const l of cell) {
     // A dash or star followed by a space is a bullet; "-30mm" (no space) is not.
-    const bulleted = l.dot || /^[•·●▪◦]/.test(l.text) || /^[-–—*]\s/.test(l.text);
+    const typed = /^[•·●▪◦]/.test(l.text) || /^[-–—*]\s/.test(l.text);
+    const bulleted = l.dot || typed;
     const text = norm(l.text.replace(BULLET, ''));
     if (!text) continue;
     const last = layers[layers.length - 1];
+    // A layer wrapped onto the next line: indented under its text, or (a typed bullet,
+    // "- 92 STEEL STUD ... C/W SOUND BATT") carried on from the bullet's edge, right below.
+    const wrapped = last && !inNotes && (l.x0 > last.x0 + 2 || (last.typed && l.x0 > last.x0 - 2 && l.cy - last.cy < 1.8 * Math.max(l.h, last.h)));
     if (bulleted) {
-      layers.push({ text, x0: l.x0 });
+      layers.push({ text, x0: l.x0, typed, cy: l.cy, h: l.h });
       inNotes = false;
-    } else if (last && !inNotes && l.x0 > last.x0 + 2) {
-      // A layer wrapped onto the next line, indented under its text.
+    } else if (wrapped) {
       last.text = norm(`${last.text} ${text}`);
+      last.cy = l.cy;
     } else if (!title && !layers.length) {
       title = text;
     } else if (inNotes && notes.length && !/[.:]$/.test(notes[notes.length - 1])) {
@@ -161,21 +187,40 @@ export function readCell(cell: Line[]): { title: string; layers: ExtractedLayer[
       inNotes = true;
     }
   }
-  return { title, layers: layers.map((l) => ({ material: l.text, role: roleOf(l.text), ...measures(l.text) })), notes };
+  return { title, layers: layers.flatMap((l) => withSplit(l.text)), notes };
+}
+
+/**
+ * A layer and what it comes with: "38x140 WOOD STUDS @ 406 o.c. C/W MINERAL BATT
+ * INSULATION" is framing and insulation, each its own material.
+ */
+function withSplit(text: string): ExtractedLayer[] {
+  const layer = (t: string): ExtractedLayer => ({ material: t, role: roleOf(t), ...measures(t) });
+  const m = /^(.*?)\s+(?:C\/W|COMPLETE WITH)\s+(.+)$/i.exec(text);
+  if (m) {
+    const [main, extra] = [layer(norm(m[1])), layer(norm(m[2]))];
+    if (main.role !== 'other' && extra.role !== 'other' && extra.role !== main.role) return [main, extra];
+  }
+  return [layer(text)];
 }
 
 /** Every assembly type in the schedules on a sheet; empty when there are none (or the text is drawn as outlines). */
 export function readAssemblyTable(texts: PageText[], segs: Segment[]): Extraction {
   const lineSegs = segs.filter((s) => !s.filled);
-  const headers = texts.filter((t) => /^TYPE$/i.test(t.str.trim()));
+  const headers = texts.filter((t) => TAG_HEADER.test(t.str.trim()));
   const assemblies: ExtractedAssembly[] = [];
   const seen = new Set<string>();
   for (const head of headers) {
-    // The headers on the TYPE header's row, left to right from it.
+    // The table's width: the longest line drawn across it just above or below the header row.
+    const across = lineSegs
+      .filter((s) => Math.abs(s.y1 - s.y2) < 0.5 && Math.abs((s.y1 + s.y2) / 2 - head.cy) < 4 * head.h && Math.min(s.x1, s.x2) < head.cx && Math.max(s.x1, s.x2) > head.cx)
+      .sort((a, b) => Math.abs(b.x2 - b.x1) - Math.abs(a.x2 - a.x1))[0];
+    const right = across ? Math.max(across.x1, across.x2) : Infinity;
+    // The headers on the TYPE header's row, left to right from it (not another table's beside it).
     const row = texts
-      .filter((t) => Math.abs(t.cy - head.cy) < head.h && t.cx > head.cx && t.str.trim().length > 1)
+      .filter((t) => Math.abs(t.cy - head.cy) < head.h && t.cx > head.cx && t.cx < right && t.str.trim().length > 1)
       .sort((a, b) => a.cx - b.cx);
-    const next = row.findIndex((t) => /^TYPE$/i.test(t.str.trim()));
+    const next = row.findIndex((t) => TAG_HEADER.test(t.str.trim()));
     const own = next >= 0 ? row.slice(0, next) : row;
     const descIndex = own.findIndex((t) => DESCRIPTION.test(norm(t.str)));
     if (descIndex < 0) continue;
@@ -200,8 +245,11 @@ export function readAssemblyTable(texts: PageText[], segs: Segment[]): Extractio
       texts
         .filter((t) => t.cy < head.cy - head.h && t.cx > tx0 - 50 && t.cx < dx1 + 50 && t.h >= head.h * 0.9 && /[A-Z]{3}/.test(t.str))
         .sort((a, b) => b.cy - a.cy)[0]?.str ?? '';
+    // Its tags: down the TYPE column, as far as the next table's header in it.
+    const below = headers.filter((o) => o !== head && o.cy > head.cy && o.cx > tx0 && o.cx < tx1).map((o) => o.cy);
+    const end = below.length ? Math.min(...below) : Infinity;
     const tags = texts
-      .filter((t) => TAG.test(t.str.trim()) && t.cx > tx0 && t.cx < tx1 && t.cy > head.cy + head.h)
+      .filter((t) => TAG.test(t.str.trim()) && t.cx > tx0 && t.cx < tx1 && t.cy > head.cy + head.h && t.cy < end)
       .sort((a, b) => a.cy - b.cy);
     const ys = rowLines(lineSegs, dx0, dx1);
     tags.forEach((tag, i) => {
@@ -219,23 +267,31 @@ export function readAssemblyTable(texts: PageText[], segs: Segment[]): Extractio
             return lines(texts, a, b, top, bottom).filter((l) => /^\d{2,3}$/.test(l.text));
           })()
         : [];
-      const { title, layers, notes } = readCell(cell);
-      const code = tag.str.trim().replace('-', '');
       const extras = extra.flatMap(({ t, range }) => {
         const text = norm(lines(texts, range[0], range[1], top, bottom).map((l) => l.text).join(' '));
         return text && text !== '-' ? [`${norm(t.str)}: ${text}`] : [];
       });
-      const key = `${code}|${title}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      assemblies.push({
-        code,
-        category: categoryOf(heading, code),
-        title: title || code,
-        layers,
-        total_thickness_mm: dims.length === 1 ? Number(dims[0].text) : null,
-        notes: [...extras, ...notes],
-      });
+      // One row can hold several types, each under a title naming it: "... TYPE 2 (WP2a)",
+      // then "... TYPE 2 (WP2b)".
+      const starts = cell.flatMap((l, k) => (NAMED.test(l.text) && !l.dot && !/^[-–—•*]/.test(l.text) ? [k] : []));
+      // (Only when one of them is the row's own tag: "(R31)" in a title is an R-value.)
+      const named = starts.length > 1 && starts.some((k) => NAMED.exec(cell[k].text)![1] === tag.str.trim());
+      const parts = named ? starts.map((k, j) => ({ code: NAMED.exec(cell[k].text)![1], cell: cell.slice(k, starts[j + 1]) })) : [{ code: tag.str.trim(), cell }];
+      for (const part of parts) {
+        const { title, layers, notes } = readCell(part.cell);
+        const code = part.code.replace('-', '');
+        const key = `${code}|${title}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        assemblies.push({
+          code,
+          category: categoryOf(heading, code, title),
+          title: title || code,
+          layers,
+          total_thickness_mm: dims.length === 1 && parts.length === 1 ? Number(dims[0].text) : null,
+          notes: [...extras, ...notes],
+        });
+      }
     });
   }
   return { assemblies };

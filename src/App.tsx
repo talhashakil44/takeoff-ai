@@ -267,7 +267,7 @@ export function App() {
         const result = checkScale(texts, segs, units);
         setScaleCheck({ sheetId: sheet.id, result });
         // A scale read from the title block that the dimensions confirm needs no checking.
-        if (result && result.agree >= 5 && sheet.scaleSource === 'detected' && sheet.metersPerPoint && Math.abs(result.metersPerPoint / sheet.metersPerPoint - 1) < 0.02) {
+        if (result && result.agree >= 5 && sheet.scaleSource === 'detected' && sheet.scaleHints?.includes(sheet.scaleLabel ?? '') && sheet.metersPerPoint && Math.abs(result.metersPerPoint / sheet.metersPerPoint - 1) < 0.02) {
           // Not a user change: kept out of undo and history.
           const prev = projectRef.current;
           if (prev) {
@@ -604,12 +604,17 @@ export function App() {
         setBusy(`Reading ${file.name}: sheet ${n} of ${pdf.numPages}`);
         const pg = await pdf.getPage(n);
         const info = await inspectPage(pg);
-        pg.cleanup();
         if (info.textRuns < 5) noText++;
         // A single standard scale on the sheet is applied automatically and flagged for checking;
         // a sheet noting its scale in both systems (1:100 and 1/8" = 1'-0") gets the project's.
         const inUnits = info.scaleHints.filter((h) => /^1:/.test(h) === (projectRef.current?.units === 'metric'));
-        const detected = info.scaleHints.length === 1 ? info.scaleHints[0] : inUnits.length === 1 ? inUnits[0] : null;
+        let detected = info.scaleHints.length === 1 ? info.scaleHints[0] : inUnits.length === 1 ? inUnits[0] : null;
+        // No scale printed (a plan whose title gives none): the one its dimensions agree on.
+        if (!detected && !info.scaleHints.length && info.textRuns >= 20) {
+          const read = checkScale(await pageTexts(pg), await segmentsOnce(pg), projectRef.current?.units ?? 'metric');
+          if (read && read.agree >= 5) detected = read.label;
+        }
+        pg.cleanup();
         sheets.push({
           id: newId(),
           docId,
@@ -2429,7 +2434,8 @@ export function App() {
           types={project.types}
           earlier={project.measurements.filter((m) => m.sheetId === sheet.id && m.source === 'walls').length}
           palette={PALETTE}
-          legend={project.sheets.flatMap((s) => s.aiAssemblies?.assemblies ?? [])}
+          // This drawing file's schedules first: another building's WE1 may be a different wall.
+          legend={[...project.sheets.filter((s) => s.docId === sheet.docId), ...project.sheets.filter((s) => s.docId !== sheet.docId)].flatMap((s) => s.aiAssemblies?.assemblies ?? [])}
           maxOpening={maxOpening}
           onApply={({ types, measurements, replaceEarlier, stopsAtDoors }) =>
             commit(

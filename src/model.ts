@@ -84,6 +84,11 @@ export interface TakeoffType {
   assemblyTitle?: string;
   /** Assembly build-up, e.g. the layers from the legend. */
   description?: string;
+  /**
+   * The drawing file its assembly was read from. Two buildings in one project can use one
+   * code for different walls (WE1 on the garage set and on the office set).
+   */
+  fromDoc?: string;
 }
 
 /** Estimate divisions, named as on the estimator's bid workbook tabs. */

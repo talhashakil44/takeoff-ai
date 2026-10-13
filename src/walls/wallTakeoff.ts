@@ -2,7 +2,7 @@ import type { Pt } from '../model';
 import type { Segment } from '../fill/vectors';
 import { findWallRuns, SegmentIndex, type WallRun } from './bands';
 import { lightWall } from './lightWalls';
-import { resolveTags, type TagText, type WallTag } from './tags';
+import { distToSeg, resolveTags, type TagText, type WallTag } from './tags';
 
 export interface TypedRun extends WallRun {
   id: number;
@@ -43,10 +43,13 @@ export interface WallTakeoffOptions {
   throughDoors?: boolean;
   /** Partition types stopped at door openings even when the rest are measured through (finish-only types). */
   stopAtDoors?: string[];
+  /** Codes the project's assembly schedules give as exterior walls (WE1), whatever their prefix. */
+  exterior?: string[];
 }
 
 /** Kinds of wall tag. A wall has at most one of each; a tag's type spreads only within its kind. */
-export function tagKind(code: string): string {
+export function tagKind(code: string, exterior?: readonly string[]): string {
+  if (exterior?.includes(code)) return 'exterior';
   const prefix = code.replace(/-?\d.*$/, '');
   if (prefix === 'EW' || prefix === 'EXT' || prefix === 'EP') return 'exterior';
   if (prefix === 'FR') return 'furring';
@@ -70,7 +73,7 @@ export function wallTakeoff(
   metersPerPoint: number,
   options: WallTakeoffOptions = {},
 ): WallTakeoffResult {
-  const { minThickness = 0.05, maxThickness = 0.65, tee = 'centre', carry = 'wall+tees', doors = [], throughDoors = true, stopAtDoors = [] } = options;
+  const { minThickness = 0.05, maxThickness = 0.65, tee = 'centre', carry = 'wall+tees', doors = [], throughDoors = true, stopAtDoors = [], exterior = [] } = options;
   const pt = (m: number) => m / metersPerPoint;
   const found = findWallRuns(wallLines, pt(minThickness), pt(maxThickness)).filter(
     (r) => runLength(r) >= Math.max(pt(0.1), r.thickness * 0.5),
@@ -247,15 +250,25 @@ export function wallTakeoff(
     let bestRun = -1;
     let bestD = Infinity;
     let bestSteps = Infinity;
+    const stepped = (path: Pt[]): Pt[] =>
+      path.flatMap((p, k) => {
+        if (k === 0) return [p];
+        const q = path[k - 1];
+        const n = Math.max(1, Math.ceil(dist(p, q)));
+        return Array.from({ length: n }, (_, i): Pt => [q[0] + ((p[0] - q[0]) * (i + 1)) / n, q[1] + ((p[1] - q[1]) * (i + 1)) / n]);
+      });
     // A code outside the usual wall prefixes is a wall type only when its leader lands on a wall.
     if (tag.generic && !tag.leader) continue;
-    const paths = tag.leader ? tag.paths : [[tag.target]];
+    // A tick is followed in small steps from the box, so the first wall it crosses is found.
+    const paths = tag.leader ? (tag.tick ? tag.paths.map(stepped) : tag.paths) : [[tag.target]];
     for (const path of paths) {
       for (let k = tag.leader ? 1 : 0; k < Math.min(path.length, bestSteps); k++) {
         let hit = -1;
         let hitD = Infinity;
         drawn.forEach((r, ri) => {
-          const d = distToRun(path[k], r);
+          // A tick lands inside the wall's band itself, not in the round end beyond it (a
+          // locker or a cabinet drawn square on beside the wall reads as a short thick wall).
+          const d = tag.tick ? distInBand(path[k], r) : distToRun(path[k], r);
           const limit = tag.leader ? r.thickness / 2 + 1.5 : pt(1.0);
           if (d <= limit && d - r.thickness / 2 < hitD) {
             hit = ri;
@@ -288,7 +301,7 @@ export function wallTakeoff(
       continue;
     }
     // Two tags of one kind on one piece: the one pointing more squarely at it wins.
-    const kind = tagKind(tag.code);
+    const kind = tagKind(tag.code, exterior);
     // Exterior and foundation walls can stack (a screen wall over the wall below, both
     // tagged on one line); for partitions the tag pointing more squarely wins.
     const prev = tagged[best.id].get(kind);
@@ -313,13 +326,52 @@ export function wallTakeoff(
   // Partitions and furring keep to walls of the same thickness. Exterior and
   // foundation types follow their wall on round corners even where it thickens
   // (cladding, footings change), but never into walls that run into it.
-  const adj = pieces.map(() => [] as { j: number; diff: number; tee: boolean; link: 'straight' | 'corner' | 'tee' }[]);
+  // Existing walls drawn solid (poché) and new ones drawn as outlines or hatched are different
+  // work on a renovation: a type never carries from one to the other. (New work can be drawn
+  // over the poché, so a solid wall is one filled with nothing drawn inside it.)
+  const filledIndex = new SegmentIndex(allSegments.filter((s) => s.filled), 16);
+  const strokeIndex = new SegmentIndex(allSegments, 16);
+  const solid = pieces.map((p) => {
+    const L = runLength(p);
+    if (L < 0.5) return 'other';
+    const [ux, uy] = [(p.b[0] - p.a[0]) / L, (p.b[1] - p.a[1]) / L];
+    const mid: Pt = [(p.a[0] + p.b[0]) / 2, (p.a[1] + p.b[1]) / 2];
+    const at = (side: number): Pt => [mid[0] - (uy * side * p.thickness) / 2, mid[1] + (ux * side * p.thickness) / 2];
+    const faces = [1, -1].map((side) => {
+      const f = at(side);
+      return filledIndex.query(f[0] - 1, f[1] - 1, f[0] + 1, f[1] + 1).map((i) => filledIndex.segs[i]).filter((q) => distToSeg(f[0], f[1], q) < 1);
+    });
+    // Faces drawn as lines (not a door or window opening the model closed across).
+    const outlined = [1, -1].every((side) => {
+      const f = at(side);
+      return strokeIndex.query(f[0] - 1, f[1] - 1, f[0] + 1, f[1] + 1).some((i) => !strokeIndex.segs[i].filled && distToSeg(f[0], f[1], strokeIndex.segs[i]) < 1);
+    });
+    // Along a long filled edge each side: a column's square of poché in a new wall is no existing wall.
+    const filled = faces.every((f) => f.some((q) => Math.hypot(q.x2 - q.x1, q.y2 - q.y1) >= Math.max(3 * p.thickness, pt(1.5))));
+    const anyFill = faces.some((f) => f.length > 0);
+    const reach = Math.min(L / 2, 10);
+    const r = reach + p.thickness;
+    const inside = strokeIndex.query(mid[0] - r, mid[1] - r, mid[0] + r, mid[1] + r).filter((i) => {
+      const q = strokeIndex.segs[i];
+      const c: Pt = [(q.x1 + q.x2) / 2, (q.y1 + q.y2) / 2];
+      const along = (c[0] - mid[0]) * ux + (c[1] - mid[1]) * uy;
+      const across = Math.abs((c[0] - mid[0]) * -uy + (c[1] - mid[1]) * ux);
+      return Math.abs(along) <= reach && across < p.thickness / 2 - 0.5;
+    });
+    const lines = inside.filter((i) => !strokeIndex.segs[i].filled).length;
+    // Solid: filled with nothing drawn inside. New: an outline, or hatched with insulation
+    // lines. (Filled with a concrete stipple, a pier, is neither.)
+    return filled && !inside.length ? 'solid' : (!anyFill && outlined) || lines >= 4 ? 'new' : 'other';
+  });
+  const apart = (i: number, j: number) => (solid[i] === 'solid' && solid[j] === 'new') || (solid[i] === 'new' && solid[j] === 'solid');
+  const adj = pieces.map(() => [] as { j: number; diff: number; tee: boolean; link: 'straight' | 'corner' | 'tee'; apart: boolean }[]);
   for (const [i, j, kind] of links) {
     if (carry === 'none') continue;
     const diff = Math.abs(pieces[i].thickness - pieces[j].thickness) / Math.max(pieces[i].thickness, pieces[j].thickness);
     const abs = Math.abs(pieces[i].thickness - pieces[j].thickness);
-    adj[i].push({ j, diff: abs <= 0.6 ? 0 : diff, tee: kind === 'tee', link: kind });
-    adj[j].push({ j: i, diff: abs <= 0.6 ? 0 : diff, tee: kind === 'tee', link: kind });
+    const cut = apart(i, j);
+    adj[i].push({ j, diff: abs <= 0.6 ? 0 : diff, tee: kind === 'tee', link: kind, apart: cut });
+    adj[j].push({ j: i, diff: abs <= 0.6 ? 0 : diff, tee: kind === 'tee', link: kind, apart: cut });
   }
   const followsWall = (kind: string) => kind === 'exterior' || kind === 'foundation';
   const kinds = new Set(tagged.flatMap((m) => [...m.keys()]));
@@ -344,7 +396,9 @@ export function wallTakeoff(
       const i = queue.splice(k, 1)[0];
       if (done.has(i)) continue;
       done.add(i);
-      for (const { j, diff, tee, link } of adj[i]) {
+      for (const { j, diff, tee, link, apart: cut } of adj[i]) {
+        // New work stops at existing walls (furring is the exception: it lines them).
+        if (cut && kind !== 'furring') continue;
         // Furring and finishes belong to a room: they turn its corners but stop where a
         // wall meets them and the wall carries on into the next room.
         if (kind === 'furring' && (link === 'straight' || wrapped.has(i))) continue;
@@ -379,7 +433,7 @@ export function wallTakeoff(
     p.how = own.length ? 'tag' : more.length ? 'carried' : null;
   }
   // An opening another wall passes through is a junction, not a door.
-  const cuts = (p: TypedRun) => isPartition(p.tags) && (!throughDoors || p.tags.some((t) => stopAtDoors.includes(t)));
+  const cuts = (p: TypedRun) => isPartition(p.tags, exterior) && (!throughDoors || p.tags.some((t) => stopAtDoors.includes(t)));
   const doorways = throughDoors && !stopAtDoors.length
     ? []
     : doors.filter((q) => {
@@ -483,7 +537,7 @@ function crossingRay(x: number, y: number, dx: number, dy: number, p: WallRun): 
   return u >= -0.02 && u <= 1.02 ? t : null;
 }
 
-const isPartition = (tags: string[]) => tags.some((t) => tagKind(t) === 'partition') && !tags.some((t) => tagKind(t) === 'exterior');
+const isPartition = (tags: string[], exterior?: readonly string[]) => tags.some((t) => tagKind(t, exterior) === 'partition') && !tags.some((t) => tagKind(t, exterior) === 'exterior');
 
 /** The piece without the door openings along it. */
 function cutAtDoors(p: TypedRun, doors: Pt[][]): TypedRun[] {
@@ -548,6 +602,15 @@ function crossing(r: WallRun, q: WallRun): Pt | null {
   const m2 = r.thickness / 2 + 1;
   if (t < m1 || t > L1 - m1 || s < m2 || s > L2 - m2) return null;
   return [r.a[0] + ux * t, r.a[1] + uy * t];
+}
+
+/** Distance across a wall to its centreline, from a point alongside it (Infinity past its ends). */
+function distInBand(p: Pt, r: WallRun): number {
+  const L = runLength(r);
+  const ux = (r.b[0] - r.a[0]) / L;
+  const uy = (r.b[1] - r.a[1]) / L;
+  const t = (p[0] - r.a[0]) * ux + (p[1] - r.a[1]) * uy;
+  return t < -1 || t > L + 1 ? Infinity : Math.abs((p[0] - r.a[0]) * -uy + (p[1] - r.a[1]) * ux);
 }
 
 function distToRun(p: Pt, r: WallRun): number {

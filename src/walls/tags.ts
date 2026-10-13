@@ -29,6 +29,11 @@ export interface WallTag extends TagText {
    */
   paths: Pt[][];
   leader: boolean;
+  /**
+   * The leader is a short tick from the side of a box across the wall it labels: the wall
+   * is the first one it crosses, not where it happens to end.
+   */
+  tick?: boolean;
 }
 
 /** Wall type tags (W1, EW3A, FR2, CB1, …). */
@@ -37,8 +42,8 @@ export interface WallTag extends TagText {
  * other common prefixes (W-1, EW-2A, WT1, IP2, EXT1, INT4).
  */
 export const WALL_TAG = /^(?:EW|IW|W|FR|FW|CB|PW|SW|WT|IP|EP|EXT|INT)-?\d{1,2}[A-Z]?$/;
-/** Any type code: letters then a number (VS1, CW-2, SH3A). */
-export const TYPE_TAG = /^[A-Z]{1,4}-?\d{1,3}[A-Z]?$/;
+/** Any type code: letters then a number (VS1, CW-2, SH3A, WP2a). */
+export const TYPE_TAG = /^[A-Z]{1,4}-?\d{1,3}[A-Za-z]?$/;
 
 const near = (ax: number, ay: number, bx: number, by: number, tol: number) => Math.abs(ax - bx) <= tol && Math.abs(ay - by) <= tol;
 
@@ -60,19 +65,33 @@ export function resolveTags(texts: TagText[], segs: Segment[]): WallTag[] {
     );
     // Tags and their leaders are drawn with one pen. Furniture or hatching can sit under
     // a tag, so each pen is tried and the smallest loop with a leader wins.
-    let best: { paths: Pt[][]; size: number } | null = null;
+    let best: { paths: Pt[][]; size: number; tick?: boolean } | null = null;
+    const loops: Segment[][] = [];
     for (const pen of new Set(candidates.map((s) => s.width))) {
       const symbol = symbolLoop(
         candidates.filter((s) => s.width === pen),
         t.cx,
         t.cy,
       );
-      if (symbol.length < 3 || (best && symbol.length >= best.size)) continue;
+      if (symbol.length < 3) continue;
+      loops.push(symbol);
+      if (best && symbol.length >= best.size) continue;
       const paths = leadersFrom(symbol, local.filter((s) => s.width === pen), t, index, lines);
       if (paths.length) best = { paths, size: symbol.length };
     }
+    // A box set beside its wall with a short tick from the middle of its edge onto the wall,
+    // often in a heavier pen than the box.
+    if (!best) {
+      for (const symbol of loops.sort((a, b) => a.length - b.length)) {
+        const paths = leadersFrom(symbol, local, t, index, lines, true);
+        if (paths.length) {
+          best = { paths, size: symbol.length, tick: true };
+          break;
+        }
+      }
+    }
     if (!best) return { ...t, target: [t.cx, t.cy] as Pt, paths: [], leader: false };
-    return { ...t, target: best.paths[0][1], paths: best.paths, leader: true };
+    return { ...t, target: best.paths[0][1], paths: best.paths, leader: true, ...(best.tick ? { tick: true } : {}) };
   });
 }
 
@@ -107,8 +126,7 @@ export function symbolLoop(segs: Segment[], x: number, y: number): Segment[] {
 }
 
 /** Lines leading off the symbol's corners, each followed through its bends. */
-function leadersFrom(symbol: Segment[], pen: Segment[], t: TagText, index: SegmentIndex, lines: Segment[]): Pt[][] {
-  const width = symbol[0].width;
+function leadersFrom(symbol: Segment[], pen: Segment[], t: TagText, index: SegmentIndex, lines: Segment[], fromEdge = false): Pt[][] {
   const corners: Pt[] = [];
   for (const e of symbol) {
     for (const [x, y] of [
@@ -120,6 +138,14 @@ function leadersFrom(symbol: Segment[], pen: Segment[], t: TagText, index: Segme
   }
   const atCorner = (x: number, y: number) => corners.some((c) => near(c[0], c[1], x, y, 0.6));
   const onSymbol = (x: number, y: number) => symbol.some((s) => distToSeg(x, y, s) < 0.6);
+  // A tick leaves from the middle of a side of the box (a line merely touching it does not).
+  const xs = symbol.flatMap((e) => [e.x1, e.x2]);
+  const ys = symbol.flatMap((e) => [e.y1, e.y2]);
+  const [bx0, bx1, by0, by1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const midSide = (x: number, y: number) =>
+    onSymbol(x, y) &&
+    ((Math.min(Math.abs(y - by0), Math.abs(y - by1)) < 0.6 && Math.abs(x - (bx0 + bx1) / 2) < 0.2 * (bx1 - bx0)) ||
+      (Math.min(Math.abs(x - bx0), Math.abs(x - bx1)) < 0.6 && Math.abs(y - (by0 + by1) / 2) < 0.2 * (by1 - by0)));
   const paths: Pt[][] = [];
   for (const s of pen) {
     if (symbol.includes(s)) continue;
@@ -127,7 +153,8 @@ function leadersFrom(symbol: Segment[], pen: Segment[], t: TagText, index: Segme
       [s.x1, s.y1, s.x2, s.y2],
       [s.x2, s.y2, s.x1, s.y1],
     ]) {
-      if (!atCorner(ax, ay) || onSymbol(bx, by)) continue;
+      if (!(atCorner(ax, ay) || (fromEdge && midSide(ax, ay))) || onSymbol(bx, by)) continue;
+      const width = s.width;
       if (Math.hypot(bx - t.cx, by - t.cy) <= Math.hypot(ax - t.cx, ay - t.cy)) continue;
       let end: Pt = [bx, by];
       const path: Pt[] = [[ax, ay], end];
