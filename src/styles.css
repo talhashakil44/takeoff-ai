@@ -707,6 +707,54 @@ input[type='checkbox'] {
   font-size: 12px;
 }
 
+/* Sheets grouped by the drawing file they came from. */
+.doc-group {
+  display: flex;
+  align-items: center;
+  margin-top: 6px;
+}
+.doc-head {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-align: left;
+}
+.doc-head:hover {
+  background: var(--fill);
+}
+.doc-chevron {
+  display: inline-flex;
+  transition: transform 0.15s;
+}
+.doc-chevron.open {
+  transform: rotate(90deg);
+}
+.doc-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-count {
+  font-weight: 400;
+  color: var(--text-3);
+}
+.doc-group .doc-remove {
+  opacity: 0;
+}
+.doc-group:hover .doc-remove {
+  opacity: 1;
+}
+
 /* Sheet numbers read from the title block. */
 .source-head .number-sheets {
   margin-left: auto;

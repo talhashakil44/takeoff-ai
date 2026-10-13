@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { diffProjects, type ActivityEvent } from './activity';
 import { AiAssembliesDialog } from './components/AiAssembliesDialog';
 import { AiSettingsDialog } from './components/AiSettingsDialog';
@@ -101,6 +101,8 @@ export function App() {
   const [activeTypeId, setActiveTypeId] = useState<string | null>(null);
   const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Drawing files folded shut in the sheet list. */
+  const [collapsedDocs, setCollapsedDocs] = useState<Set<string>>(new Set());
   /** Takeoffs picked together (Box select), on the open sheet. */
   const [multiIds, setMultiIds] = useState<string[]>([]);
   // A selection belongs to its sheet.
@@ -1626,6 +1628,57 @@ export function App() {
   const exactTags = exactHits.length;
   const totalFor = (typeId: string) => totals.find((t) => t.type.id === typeId);
   const scaleState = !sheet ? 'none' : !sheet.metersPerPoint ? 'unset' : sheet.scaleSource === 'detected' ? 'check' : 'set';
+  const renderSheet = (s: Sheet) => {
+              const count = project.measurements.filter((m) => m.sheetId === s.id).length;
+              const state = !s.metersPerPoint ? 'unset' : s.scaleSource === 'detected' ? 'check' : 'set';
+              return (
+                <li key={s.id}>
+                  <button
+                    className={`source-row ${s.id === sheetId ? 'active' : ''}`}
+                    onClick={() => {
+                      setSheetId(s.id);
+                      setSelectedId(null);
+                      // Text found on the sheet: show it, the next one on each further click.
+                      const hits = hitsOn(s.id);
+                      if (hits) {
+                        hitTurn.current = s.id === sheetId ? hitTurn.current + 1 : 0;
+                        const t = hits[hitTurn.current % hits.length];
+                        // With the drawing around it.
+                        const r = Math.max(t.w, t.h) / 2 + 120;
+                        setFocus((f) => ({ box: [t.cx - r, t.cy - r, t.cx + r, t.cy + r], n: (f?.n ?? 0) + 1 }));
+                      }
+                    }}
+                    onDoubleClick={async () => {
+                      const name = await askText('Rename sheet', { initial: s.name });
+                      if (name?.trim()) updateSheet(s.id, { name: name.trim() }, 'Rename sheet');
+                    }}
+                    title="Double-click to rename"
+                  >
+                    <Icon name="sheet" size={16} />
+                    <span className="row-main">
+                      <span className="row-title sheet-name" title={s.title}>
+                        {s.name}
+                        {s.title && <span className="sheet-title"> {s.title}</span>}
+                      </span>
+                      <span className={`row-sub scale-${state}`}>
+                        {state === 'check' && <span className="check-dot" title="Read from the sheet; check it against a dimension" />}
+                        {s.metersPerPoint ? s.scaleLabel : 'No scale'}
+                        {state === 'check' && <span title="Read from the sheet; check it against a dimension"> · check</span>}
+                        {s.done ? <span className="done-tag" title="Marked done"> · done</span> : null}
+                        {hitsOn(s.id) ? <span className="found-tag"> · {hitsOn(s.id)!.length} found</span> : null}
+                        {s.repeat ? <span className="repeat-tag" title={`Takeoffs on this sheet count ${s.repeat} times`}> · ×{s.repeat}</span> : null}
+                      </span>
+                    </span>
+                    {count > 0 && (
+                      <span className="badge" title={`${count} takeoff${count === 1 ? '' : 's'} on this sheet`}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            };
+
   const toolDisabled = (id: Tool) => !page || (id === 'cutout' && selectedType?.kind !== 'area');
   const toolTitle = (t: (typeof TOOLS)[number]) => `${t.help} (${t.key})${t.id === 'cutout' && selectedType?.kind !== 'area' ? ' — select an area first' : ''}`;
 
@@ -1782,56 +1835,41 @@ export function App() {
             </label>
           )}
           <ul className="source-list">
-            {filteredSheets.map((s) => {
-              const count = project.measurements.filter((m) => m.sheetId === s.id).length;
-              const state = !s.metersPerPoint ? 'unset' : s.scaleSource === 'detected' ? 'check' : 'set';
-              return (
-                <li key={s.id}>
-                  <button
-                    className={`source-row ${s.id === sheetId ? 'active' : ''}`}
-                    onClick={() => {
-                      setSheetId(s.id);
-                      setSelectedId(null);
-                      // Text found on the sheet: show it, the next one on each further click.
-                      const hits = hitsOn(s.id);
-                      if (hits) {
-                        hitTurn.current = s.id === sheetId ? hitTurn.current + 1 : 0;
-                        const t = hits[hitTurn.current % hits.length];
-                        // With the drawing around it.
-                        const r = Math.max(t.w, t.h) / 2 + 120;
-                        setFocus((f) => ({ box: [t.cx - r, t.cy - r, t.cx + r, t.cy + r], n: (f?.n ?? 0) + 1 }));
-                      }
-                    }}
-                    onDoubleClick={async () => {
-                      const name = await askText('Rename sheet', { initial: s.name });
-                      if (name?.trim()) updateSheet(s.id, { name: name.trim() }, 'Rename sheet');
-                    }}
-                    title="Double-click to rename"
-                  >
-                    <Icon name="sheet" size={16} />
-                    <span className="row-main">
-                      <span className="row-title sheet-name" title={s.title}>
-                        {s.name}
-                        {s.title && <span className="sheet-title"> {s.title}</span>}
-                      </span>
-                      <span className={`row-sub scale-${state}`}>
-                        {state === 'check' && <span className="check-dot" title="Read from the sheet; check it against a dimension" />}
-                        {s.metersPerPoint ? s.scaleLabel : 'No scale'}
-                        {state === 'check' && <span title="Read from the sheet; check it against a dimension"> · check</span>}
-                        {s.done ? <span className="done-tag" title="Marked done"> · done</span> : null}
-                        {hitsOn(s.id) ? <span className="found-tag"> · {hitsOn(s.id)!.length} found</span> : null}
-                        {s.repeat ? <span className="repeat-tag" title={`Takeoffs on this sheet count ${s.repeat} times`}> · ×{s.repeat}</span> : null}
-                      </span>
-                    </span>
-                    {count > 0 && (
-                      <span className="badge" title={`${count} takeoff${count === 1 ? '' : 's'} on this sheet`}>
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
+            {project.docs.length > 1
+              ? project.docs.map((d) => {
+                  const own = filteredSheets.filter((x) => x.docId === d.id);
+                  if (!own.length && query) return null;
+                  const all = project.sheets.filter((x) => x.docId === d.id);
+                  const done = all.filter((x) => x.done).length;
+                  const open = !collapsedDocs.has(d.id) || !!query;
+                  return (
+                    <Fragment key={d.id}>
+                      <li className="doc-group">
+                        <button
+                          className="doc-head"
+                          onClick={() => setCollapsedDocs((c) => (c.has(d.id) ? new Set([...c].filter((x) => x !== d.id)) : new Set(c).add(d.id)))}
+                          onDoubleClick={async () => {
+                            const name = await askText('Rename drawing file', { initial: d.name.replace(/\.pdf$/i, ''), hint: 'e.g. Architectural, Structural, Mechanical' });
+                            if (name?.trim()) commit((p) => ({ ...p, docs: p.docs.map((x) => (x.id === d.id ? { ...x, name: name.trim() } : x)) }), 'Rename drawing file');
+                          }}
+                          aria-expanded={open}
+                          title={`${d.name} · click to fold, double-click to rename`}
+                        >
+                          <span className={`doc-chevron ${open ? 'open' : ''}`}>
+                            <Icon name="chevron" size={12} />
+                          </span>
+                          <span className="doc-name">{d.name.replace(/\.pdf$/i, '')}</span>
+                          <span className="doc-count">{done ? `${done}/${all.length}` : all.length}</span>
+                        </button>
+                        <button className="icon-button small danger doc-remove" title={`Remove ${d.name} and its takeoffs`} aria-label={`Remove ${d.name}`} onClick={() => void removeDrawings(d.id)}>
+                          <Icon name="trash" size={13} />
+                        </button>
+                      </li>
+                      {open && own.map(renderSheet)}
+                    </Fragment>
+                  );
+                })
+              : filteredSheets.map(renderSheet)}
           </ul>
           {project.sheets.length === 0 && <p className="source-empty">Drawings you add appear here, one row per sheet.</p>}
           {query.length >= 2 && textHits?.q !== query && <p className="source-empty">Searching the drawings…</p>}
