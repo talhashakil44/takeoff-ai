@@ -10,6 +10,12 @@ export interface TagText {
   /** Text width and height. */
   w: number;
   h: number;
+  /**
+   * A code outside the usual wall prefixes (VS1 shaftwall, CW2…): offices name their types
+   * their own way. It counts only as a tag in a symbol with a leader onto a wall, and
+   * is never reported as unmatched (a stair or equipment tag isn't a missed wall).
+   */
+  generic?: boolean;
 }
 
 export interface WallTag extends TagText {
@@ -31,6 +37,8 @@ export interface WallTag extends TagText {
  * other common prefixes (W-1, EW-2A, WT1, IP2, EXT1, INT4).
  */
 export const WALL_TAG = /^(?:EW|IW|W|FR|FW|CB|PW|SW|WT|IP|EP|EXT|INT)-?\d{1,2}[A-Z]?$/;
+/** Any type code: letters then a number (VS1, CW-2, SH3A). */
+export const TYPE_TAG = /^[A-Z]{1,4}-?\d{1,3}[A-Z]?$/;
 
 const near = (ax: number, ay: number, bx: number, by: number, tol: number) => Math.abs(ax - bx) <= tol && Math.abs(ay - by) <= tol;
 

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { buildWorkbook } from '../src/exportExcel';
-import { newProject, type Project, type Sheet } from '../src/model';
+import { newProject, type Project, type Sheet, defaultTypes } from '../src/model';
 import { parseScale } from '../src/units';
 
 const mpp = parseScale('1:100')!;
 const pts = (meters: number) => meters / mpp;
 
 function sampleProject(): Project {
-  const p = newProject('metric');
+  const p = { ...newProject('metric'), types: defaultTypes('metric') };
   p.name = 'Kelso test';
   const sheet = (id: string, name: string, scaled = true): Sheet => ({
     id,

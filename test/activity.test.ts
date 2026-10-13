@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { describeGroup, diffProjects, groupActivity } from '../src/activity';
-import { newProject, type Measurement, type Project, type Sheet } from '../src/model';
+import { newProject, type Measurement, type Project, type Sheet, defaultTypes } from '../src/model';
 
 const sheet: Sheet = {
   id: 's1',
@@ -16,7 +16,7 @@ const sheet: Sheet = {
 };
 
 function base(): Project {
-  const p = newProject('metric');
+  const p = { ...newProject('metric'), types: defaultTypes('metric') };
   return { ...p, docs: [{ id: 'd1', name: 'set.pdf' }], sheets: [sheet] };
 }
 

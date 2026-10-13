@@ -247,6 +247,8 @@ export function wallTakeoff(
     let bestRun = -1;
     let bestD = Infinity;
     let bestSteps = Infinity;
+    // A code outside the usual wall prefixes is a wall type only when its leader lands on a wall.
+    if (tag.generic && !tag.leader) continue;
     const paths = tag.leader ? tag.paths : [[tag.target]];
     for (const path of paths) {
       for (let k = tag.leader ? 1 : 0; k < Math.min(path.length, bestSteps); k++) {
@@ -410,7 +412,7 @@ export function wallTakeoff(
       }
     }
     if (!found) {
-      stillUnmatched.push(tag);
+      if (!tag.generic) stillUnmatched.push(tag);
       continue;
     }
     const same = light.find((r) => sameLine(r, found!));

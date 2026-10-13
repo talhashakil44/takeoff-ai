@@ -1,7 +1,7 @@
 import { PDFDocument, PDFName, StandardFonts } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { markupPdf, safeText, toUser } from '../src/markupPdf';
-import { newProject, type Sheet } from '../src/model';
+import { newProject, type Sheet, defaultTypes } from '../src/model';
 import { parseScale } from '../src/units';
 
 const mpp = parseScale('1:100')!;
@@ -21,7 +21,7 @@ describe('marked-up PDF', () => {
     src.addPage([600, 400]);
     src.addPage([600, 400]);
     const bytes = await src.save();
-    const p = newProject('metric');
+    const p = { ...newProject('metric'), types: defaultTypes('metric') };
     p.name = 'Lodge – level 1 ²';
     const sheet = (id: string, page: number, docId = 'd'): Sheet => ({
       id,
@@ -66,7 +66,7 @@ describe('marked-up PDF', () => {
     const big = src.context.register(src.context.stream(new Uint8Array(200_000).map((_, i) => (i * 7919) % 251)));
     for (let i = 0; i < 3; i++) src.addPage([600, 400]).node.setXObject(PDFName.of('Shared'), big);
     const bytes = await src.save({ useObjectStreams: false });
-    const p = newProject('metric');
+    const p = { ...newProject('metric'), types: defaultTypes('metric') };
     const [, , floor] = p.types;
     p.sheets = [1, 2, 3].map((page) => ({
       id: `s${page}`,

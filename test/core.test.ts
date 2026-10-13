@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { evaluate } from '../src/formula';
 import { orthoSnap, polylineLength, ringArea, ringLength } from '../src/geometry';
-import { newProject, type Project } from '../src/model';
+import { newProject, type Project, defaultTypes } from '../src/model';
 import { typeTotals } from '../src/quantities';
 import { findScaleHints, parseLength, parseScale } from '../src/units';
 
@@ -81,7 +81,7 @@ describe('evaluate', () => {
 
 describe('typeTotals', () => {
   it('rolls wall and room takeoffs into assembly quantities', () => {
-    const p: Project = newProject('metric');
+    const p: Project = { ...newProject('metric'), types: defaultTypes('metric') };
     const mpp = parseScale('1:100')!;
     // 1000 pt at 1:100 = 35.278 m.
     const ptsFor = (meters: number) => meters / mpp;
@@ -151,7 +151,7 @@ describe('formula names', () => {
 describe('typical floors', () => {
   it('counts a repeated sheet that many times', () => {
     const mpp = parseScale('1:100')!;
-    const p = newProject('metric');
+    const p = { ...newProject('metric'), types: defaultTypes('metric') };
     const sheet = { id: 's', docId: 'd', page: 1, name: 'A2.2', width: 1000, height: 1000, metersPerPoint: mpp, scaleLabel: '1:100', scaleSource: 'preset' as const, scaleHints: [] };
     p.sheets = [sheet, { ...sheet, id: 't', name: 'A2.1' }];
     const [w1, , floor, , doors] = p.types;

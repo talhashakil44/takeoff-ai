@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFinishSchedule, roomNumbersOf } from '../src/finishSchedule';
-import { finishType, newProject, type Measurement, type Sheet } from '../src/model';
+import { finishType, newProject, type Measurement, type Sheet, defaultTypes } from '../src/model';
 import type { PageText } from '../src/pageText';
 import { typeTotals } from '../src/quantities';
 
@@ -64,7 +64,7 @@ describe('room finish schedule', () => {
 
 describe('room finish quantities', () => {
   it('counts a room toward its floor and ceiling as area and its base and walls as perimeter', () => {
-    const p = newProject('metric');
+    const p = { ...newProject('metric'), types: defaultTypes('metric') };
     const sheet: Sheet = {
       id: 's',
       docId: 'd',

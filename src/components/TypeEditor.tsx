@@ -1,7 +1,7 @@
 import { evaluate } from '../formula';
 import { DIVISIONS, newId, type Kind, type TakeoffType, type Units } from '../model';
 import { formulaVars, type Vars } from '../quantities';
-import { formatQty, lengthUnit } from '../units';
+import { areaUnit, formatQty, lengthUnit } from '../units';
 import { Icon } from './Icons';
 
 interface Props {
@@ -26,6 +26,33 @@ const VARS_HELP: [keyof Vars, string][] = [
 ];
 
 /** Edits a takeoff type: name, kind, colour, height, estimate grouping and its assembly items. */
+/** How a material is worked out, as one-click choices; anything else is a custom formula. */
+function basesFor(type: TakeoffType, units: Units): { id: string; label: string; formula: string; unit: string }[] {
+  const len = lengthUnit(units);
+  const area = areaUnit(units);
+  if (type.kind === 'linear')
+    return [
+      { id: 'L', label: 'Per length', formula: 'L', unit: len },
+      { id: 'L * H', label: 'Per wall area (length × height)', formula: 'L * H', unit: area },
+      { id: 'N', label: 'Each (per takeoff)', formula: 'N', unit: 'ea' },
+    ];
+  if (type.kind === 'area')
+    return [
+      { id: 'A', label: 'Per area', formula: 'A', unit: area },
+      { id: 'P', label: 'Per perimeter', formula: 'P', unit: len },
+      { id: 'P * H', label: 'Per wall area (perimeter × height)', formula: 'P * H', unit: area },
+      { id: 'N', label: 'Each (per takeoff)', formula: 'N', unit: 'ea' },
+    ];
+  return [{ id: 'N', label: 'Each', formula: 'N', unit: 'ea' }];
+}
+
+/** A new material's starting formula: by length, by wall area once a height is set, by area, or each. */
+function defaultItem(type: TakeoffType, units: Units) {
+  if (type.kind === 'linear') return type.height ? { formula: 'L * H', unit: areaUnit(units) } : { formula: 'L', unit: lengthUnit(units) };
+  if (type.kind === 'area') return { formula: 'A', unit: areaUnit(units) };
+  return { formula: 'N', unit: 'ea' };
+}
+
 export function TypeEditor({ type, units, totals, onChange, onDelete, onDuplicate, onClose }: Props) {
   const set = (patch: Partial<TakeoffType>) => onChange({ ...type, ...patch });
   const vars = totals ?? { L: 0, H: type.height, A: 0, P: 0, N: 0, I: 0 };
@@ -54,13 +81,17 @@ export function TypeEditor({ type, units, totals, onChange, onDelete, onDuplicat
             </select>
           </label>
           <label className="field narrow">
-            <span>Height ({lengthUnit(units)})</span>
+            <span>
+              {type.kind === 'linear' ? 'Wall height' : 'Height'} ({lengthUnit(units)})
+            </span>
+            {/* Blank is no height: only items that use H (a wall's area) need one. */}
             <input
               id="type-height"
               type="number"
               min={0}
               step={0.1}
-              value={type.height}
+              placeholder="optional"
+              value={type.height || ''}
               onChange={(e) => set({ height: Math.max(0, Number(e.target.value) || 0) })}
             />
           </label>
@@ -130,6 +161,7 @@ export function TypeEditor({ type, units, totals, onChange, onDelete, onDuplicat
         {type.items.length === 0 && <p className="muted small-text">Add the materials this type needs. Each one is a formula of the totals below.</p>}
         {type.items.map((it, i) => {
           const r = evaluate(it.formula, formulaVars(vars, type));
+          const bases = basesFor(type, units);
           const update = (patch: Partial<typeof it>) => set({ items: type.items.map((x, j) => (j === i ? { ...x, ...patch } : x)) });
           return (
             <div className="assembly-item" key={it.id}>
@@ -140,6 +172,24 @@ export function TypeEditor({ type, units, totals, onChange, onDelete, onDuplicat
                   <Icon name="trash" size={14} />
                 </button>
               </div>
+              <div className="item-basis">
+                <select
+                  aria-label="Calculated"
+                  value={bases.find((b) => b.formula === it.formula.replace(/\s+/g, ' ').trim())?.id ?? 'custom'}
+                  onChange={(e) => {
+                    const b = bases.find((x) => x.id === e.target.value);
+                    if (b) update({ formula: b.formula, unit: b.unit });
+                    else document.getElementById(`item-formula-${it.id}`)?.focus();
+                  }}
+                >
+                  {bases.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.label}
+                    </option>
+                  ))}
+                  <option value="custom">Custom formula…</option>
+                </select>
+              </div>
               <div className="item-bottom">
                 <input
                   id={`item-formula-${it.id}`}
@@ -149,13 +199,14 @@ export function TypeEditor({ type, units, totals, onChange, onDelete, onDuplicat
                   title={r.ok ? '' : r.error}
                   onChange={(e) => update({ formula: e.target.value })}
                 />
-                <input id={`item-unit-${it.id}`} className="unit" value={it.unit} aria-label="Unit" onChange={(e) => update({ unit: e.target.value })} />
+                <input id={`item-unit-${it.id}`} className="unit" value={it.unit} placeholder="unit" aria-label="Unit (optional)" onChange={(e) => update({ unit: e.target.value })} />
               </div>
               {!r.ok && <div className="field-hint error">{r.error}</div>}
+              {r.ok && /\bH\b|Height/.test(it.formula) && !type.height && <div className="field-hint">Uses the wall height: enter one above.</div>}
             </div>
           );
         })}
-        <button className="add-row" onClick={() => set({ items: [...type.items, { id: newId(), name: 'New material', unit: 'ea', formula: 'N' }] })}>
+        <button className="add-row" onClick={() => set({ items: [...type.items, { id: newId(), name: 'New material', ...defaultItem(type, units) }] })}>
           <Icon name="plus" size={14} /> Add material
         </button>
       </div>

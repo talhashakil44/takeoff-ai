@@ -249,6 +249,21 @@ Where the project stands, for picking it up in a new session.
     still quits. `.versions/` keeps the previous project.json every 10 minutes,
     50 kept. Workflow e2e: setup, new project folder, Kelso drawings on disk,
     rename, edit 0.6 s before quit lands, relaunch.
+- **Sheet numbers from the title block** (`src/sheetNumbers.ts`,
+  `SheetNumbersDialog.tsx`): Number sheets (Sheets header, More, the toast after
+  adding drawings) marks a box; it is kept as fractions of the sheet and read on
+  every sheet (`linesIn` groups text into lines, sideways title blocks too;
+  `readNumber` takes the biggest text shaped like a sheet number, captions such
+  as "SHEET NO." stripped). An optional title box fills `Sheet.title`. Kelso: 41
+  of 51 read from one box; the rest have no text layer (34–35, 44–51), which
+  needs OCR.
+- **Types:** new projects start with no types (`newProject`); only the sample
+  gets `defaultTypes`. Height is optional (blank = 0). Wall tags: any type code
+  (`TYPE_TAG`, e.g. VS1) counts when its symbol's leader lands on a wall;
+  codes outside `WALL_TAG` are never reported unmatched (Kelso 10.7% → 9.9%,
+  storefront tags S200A… now take their own length off W2). Materials have a
+  "Calculated" picker (per length, per wall area, per area, per perimeter,
+  each, custom); new ones follow the type's kind and height.
 - **Interface (redesigned):** light, Mac-style (system font, segmented tools,
   source-list sidebar, inspector with Quantities / Takeoffs / History). State
   changes go through `commit()` in `App.tsx`, which keeps undo/redo stacks and

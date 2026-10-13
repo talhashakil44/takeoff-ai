@@ -700,6 +700,28 @@ input[type='checkbox'] {
   width: 60px;
 }
 .busy,
+/* How each assembly material is worked out. */
+.item-basis select {
+  width: 100%;
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+/* Sheet numbers read from the title block. */
+.source-head .number-sheets {
+  margin-left: auto;
+  margin-right: 8px;
+  font-size: 11px;
+}
+.sheet-title {
+  color: var(--text-2);
+  font-weight: 400;
+}
+.sheet-numbers-scroll {
+  max-height: 56vh;
+  overflow: auto;
+}
+
 /* Desktop app, first launch: where projects live. */
 .modal.folder-setup {
   max-width: 460px;
@@ -911,7 +933,7 @@ input[type='checkbox'] {
   flex: 1;
 }
 .field-row .field.narrow {
-  flex: 0 0 84px;
+  flex: 0 0 104px;
 }
 .field-row .field.color {
   flex: 0 0 auto;

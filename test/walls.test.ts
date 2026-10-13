@@ -102,6 +102,15 @@ describe('wall takeoff', () => {
     expect(by.get('W1')?.length).toBeCloseTo(3 - T / 2, 2);
   });
 
+  it('takes any type code (VS1 shaftwall) tagged onto a wall, and ignores stray codes', () => {
+    const vs = tag('VS1', 2.5, 1.5, [2.5, T]);
+    const stair = tag('ST1', 2.5, 8); // a stair tag: a code in a symbol, no leader
+    const far = tag('FE1', 2.5, 9, [2.5, 8.5]); // equipment, its leader on no wall
+    const res = wallTakeoff(lShape(), [...lShape(), ...vs.segs, ...stair.segs, ...far.segs], [vs.text, { ...stair.text, generic: true }, { ...far.text, generic: true }].map((t, i) => (i === 0 ? { ...t, generic: true } : t)), MPP);
+    expect(lengthsByType(res.runs, MPP).get('VS1')?.length).toBeCloseTo(9 - T, 2);
+    expect(res.unmatched).toHaveLength(0);
+  });
+
   it('reports tags that point at no wall', () => {
     const t = tag('EW3A', 2.5, 8, [2.5, 7]);
     const res = wallTakeoff(lShape(), [...lShape(), ...t.segs], [t.text], MPP);
