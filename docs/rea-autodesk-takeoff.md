@@ -279,6 +279,109 @@ false-positive cleanup, and works across every sheet in one pass.
 
 ## REA
 
-_Not run yet._ REA needs Node.js, which isn't installed on this machine yet.
-This section will be added after `npx rea-agents setup` has been reviewed and
-run.
+**Method.** `rea-agents` 6.4.0, set up for Claude Code (`npx rea-agents setup`
+added an MCP server entry and the REA skill, reviewed with `--dry-run` first).
+REA only *observes* a browser over the Chrome DevTools Protocol. It cannot
+attach to an ordinary Chrome, so it ran against a separate Chrome profile
+started with a local debugging port, signed in to Autodesk by the user. REA
+does not click, so a small Playwright script drove the same features (package →
+sheet A2.1 → Symbol Detection, cancelled → inventory) during REA's observation
+window. Three REA commands were used:
+
+- `list-browser-targets` – find the Takeoff tab;
+- `inspect-web-page` with `--include-json-body-shapes` – network requests and
+  value-free JSON shapes;
+- `analyze-web-bundle` – static analysis of the JavaScript the page loaded.
+
+All REA output stayed outside the repo. REA itself never keeps headers,
+cookies, bodies or storage values; it keeps request lists and value-free shapes.
+
+**Time.** About 35 minutes: 10 minutes installing Node and checking and setting
+up REA, then about 25 minutes on three observation runs. Two of the runs failed,
+for the reasons under "What it missed" below.
+
+### What REA observed
+
+- **Network (third run).** 12 requests over 200 s: takeoff types and takeoff
+  items for the package, the sheet's derivative manifest, a viewer session, the
+  one-page PDF, the viewer's PDF worker, and the Symbol Detection request. These
+  are the same calls the baseline found. For each JSON body it recorded a
+  structural shape with per-field observation counts, e.g. 18 takeoff types,
+  89 items, and 47 detection matches in that run.
+- **Shapes match the baseline.** The takeoff type, takeoff item and detection
+  request/response shapes REA recorded agree field-for-field with §3 and §6.
+  That independently confirms them.
+- **Bundle.** 141 scripts captured and parsed. The Takeoff front end is a
+  webpack build using module federation (a `remoteEntry.js` plus numbered
+  chunks), with React detected, and the APS Viewer 7.127 and its extensions
+  loaded as separate scripts. REA listed 248 route-like strings and 185
+  endpoint-like strings. Almost none of the endpoints were Takeoff's real API
+  paths, because those are built from pieces at runtime.
+- **Workers.** Four web workers attached to the page, including the viewer's
+  geometry worker and the PDF worker. Together with §1, that means sheet
+  parsing and rendering run off the main thread.
+- Every run is recorded as an evidence bundle with an id, a timestamp window,
+  hashes of the scripts it saw, and an explicit list of its own limitations.
+
+### What REA added over the baseline
+
+- An inventory of the front end's build: bundler, module federation, chunk
+  count, framework, and the hash of each script. The baseline did not look at
+  code at all.
+- A count of web workers, which the baseline did not check.
+- Reproducible, hashed evidence with stated coverage limits, in place of
+  hand-written notes.
+- A second, independent capture of the same data shapes.
+
+### What REA missed or could not do
+
+- **Values.** REA keeps shapes only, so it could not show: the detection
+  threshold (0.6); that match boxes snap to the 5400 × 3600 raster; that item
+  geometry is in paper inches; or the scale arithmetic (1.3084 in × 25.4 × 100
+  = 3.3233 m). Those baseline findings all came from looking at actual values.
+- **The UI.** REA doesn't drive or read the interface, so it found nothing about:
+  the formula variables and math.js functions; the scale presets and "Scale not
+  set" banner; the inventory grouping options; output definitions; or the
+  export buttons. All of these came from using the UI.
+- **Startup data.** Like the baseline, it only sees what happens after it
+  attaches. If the page reloads, REA aborts the run ("target changed"), which
+  is what ended the first run. It therefore could not answer where per-sheet
+  scale is stored either.
+- **Default scope.** By default REA only watches the page's own domain. All of
+  Takeoff's data calls go to Autodesk's API domains, so the second run captured
+  no API traffic. The third run fixed this by passing `--allowed-origins`.
+- **Attaching.** REA needs a Chrome started with remote debugging, so it can't
+  use the browser you're already signed into. That meant a separate profile and
+  a fresh sign-in.
+
+### Found during this step, but not by REA
+
+While I was scripting the clicks, the toolbar listed tools the baseline had
+missed:
+- **Flood Fill** in the Area group: click inside a closed region to fill it as
+  an area. It is not run here, because it creates a takeoff item.
+- **Vector viewing** under the viewer settings.
+
+Both are worth looking at for this app. A flood fill on our vector PDF geometry
+would be the start of automatic room areas.
+
+## Comparison
+
+| | Baseline (browser tools) | REA |
+|---|---|---|
+| Time | ~50 min | ~35 min (10 setup + 25 on three runs, two failed) |
+| Setup | none, uses the signed-in Chrome | Node, REA setup, separate Chrome profile and sign-in |
+| Sheet processing | derivative types, 150 dpi raster, vector rendering | same requests seen, plus 4 web workers |
+| Scale / calibration | per-sheet scale, paper-inch geometry, the arithmetic | nothing new (values not kept) |
+| Data model | full field list, confirmed against public docs | same shapes, independently confirmed |
+| Formulas | variables and functions from the UI | nothing (UI not observed) |
+| Export | entry points found | nothing |
+| Symbol Detection | request, 0.6 threshold, raster snapping, label-blind | same request and response shapes, no values |
+| Front-end code | not examined | webpack + module federation, React, 141 scripts |
+
+**Bottom line.** For learning how a web app's *features* work, plain browser
+tools did more, mainly because they can see values and use the UI. REA's
+strengths are packaging (hashed evidence and explicit limits) and code-level
+inventory. Here it confirmed the baseline more than it extended it. It would
+matter more for a desktop or Electron app, or when the network shapes need to
+be stated with evidence.
