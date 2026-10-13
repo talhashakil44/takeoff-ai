@@ -348,7 +348,7 @@ History: every takeoff, type, scale and drawing change is recorded with its time
 sheet and quantity, saved in the browser's database beside the project, shown in
 the **History** tab and exported as the **Activity** sheet.
 
-Navigation: scroll to zoom, drag or Space-drag to pan, F fits the sheet.
+Navigation: a mouse wheel zooms; a Magic Mouse or trackpad swipe pans (⌘ + swipe or pinch zooms); drag, middle-drag or Space-drag pans in any tool (a click still places a point); while drawing, the sheet scrolls when the cursor nears its edge; F fits the sheet.
 **More → Keyboard shortcuts** lists them all.
 
 ### Assembly formula variables

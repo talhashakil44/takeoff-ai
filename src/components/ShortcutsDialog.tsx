@@ -19,8 +19,10 @@ const SHORTCUTS: [string, string][] = [
   ['⌘F', 'Search sheets and drawing text'],
   ['F', 'Fit the sheet in the window'],
   ['[ and ]', 'Previous and next sheet'],
-  ['Scroll', 'Zoom'],
-  ['Drag, or Space-drag', 'Move around the sheet'],
+  ['Mouse wheel', 'Zoom (Windows mouse)'],
+  ['Swipe the mouse or trackpad', 'Move around the sheet (Magic Mouse); ⌘ + swipe or pinch to zoom'],
+  ['Drag, middle-drag or Space-drag', 'Move around the sheet, in any tool (a click still places a point)'],
+  ['Point near the edge', 'While drawing a line or area, the sheet scrolls that way'],
   ['?', 'Show these shortcuts'],
 ];
 

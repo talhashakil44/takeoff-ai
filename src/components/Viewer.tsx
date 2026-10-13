@@ -84,10 +84,13 @@ export function Viewer(props: Props) {
   /** A box being dragged: around a symbol to count, or over takeoffs to select (`add` with Shift). */
   const [band, setBand] = useState<{ a: Pt; b: Pt; select?: boolean; add?: boolean } | null>(null);
   const [hover, setHover] = useState<{ pt: Pt; sx: number; sy: number } | null>(null);
+  /** While a line or area is being drawn, the cursor near an edge scrolls the drawing that way. */
+  const edge = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
   const [status, setStatus] = useState<string | null>(null);
   const base = useRef<{ canvas: HTMLCanvasElement; pageRef: PDFPageProxy } | null>(null);
   const hi = useRef<{ canvas: HTMLCanvasElement; view: View; dpr: number } | null>(null);
-  const pan = useRef<{ sx: number; sy: number; vx: number; vy: number; moved: boolean } | null>(null);
+  /** A pan under way; `slack` is how far it can wander before it counts as one (a click in a measuring tool can wobble). */
+  const pan = useRef<{ sx: number; sy: number; vx: number; vy: number; moved: boolean; slack: number } | null>(null);
   const suppressClick = useRef(false);
   const spaceHeld = useRef(false);
   /** The last fill on this sheet, so Shift+click can grow it into a neighbouring space. */
@@ -256,16 +259,61 @@ export function Viewer(props: Props) {
     };
   }, [view, size.w, size.h, dpr, page, sheet, paint]);
 
-  // Wheel zoom around the cursor (needs a non-passive listener).
+  // Edge scrolling while drawing: the point under the cursor moves with the drawing, so the
+  // line in progress keeps following it.
+  const drawing = draft.length > 0;
+  useEffect(() => {
+    if (!drawing) {
+      edge.current = { dx: 0, dy: 0 };
+      return;
+    }
+    let raf = 0;
+    const step = () => {
+      const { dx, dy } = edge.current;
+      if (dx || dy) {
+        const v = viewRef.current;
+        const next = { ...v, x: v.x + dx * 10, y: v.y + dy * 10 };
+        viewRef.current = next;
+        setView(next);
+        setHover((h) => (h ? { ...h, pt: [(h.sx - next.x) / next.zoom, (h.sy - next.y) / next.zoom] } : h));
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [drawing]);
+
+  // Scrolling (needs a non-passive listener). A notched mouse wheel zooms round the cursor;
+  // a touch surface (Magic Mouse, trackpad) pans as it swipes, and zooms with Cmd or Ctrl
+  // held, or a pinch (which arrives as Ctrl+scroll).
   useEffect(() => {
     const el = wrapRef.current!;
+    let gesture: { at: number; touch: boolean } | null = null;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      const now = performance.now();
+      // A wheel notch is a big whole step with nothing sideways (Chromium reports it as a
+      // multiple of 120); a touch surface sends many small, often sideways, steps. One
+      // gesture keeps the reading of its first event.
+      if (!gesture || now - gesture.at > 220) {
+        const legacy = (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY;
+        const notched =
+          e.deltaMode !== 0 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 40 && (legacy === undefined ? Number.isInteger(e.deltaY) : legacy !== 0 && legacy % 120 === 0));
+        gesture = { at: now, touch: !notched };
+      }
+      gesture.at = now;
+      if (gesture.touch && !e.ctrlKey && !e.metaKey) {
+        const k = e.deltaMode === 1 ? 16 : 1;
+        setView((v) => ({ ...v, x: v.x - e.deltaX * k, y: v.y - e.deltaY * k }));
+        return;
+      }
       const rect = el.getBoundingClientRect();
       const cx = e.clientX - rect.left;
       const cy = e.clientY - rect.top;
+      // A pinch steps finely; a wheel notch by about 15%.
+      const rate = gesture.touch ? 0.01 : 0.0015;
       setView((v) => {
-        const zoom = Math.min(40, Math.max(0.03, v.zoom * Math.exp(-e.deltaY * 0.0015)));
+        const zoom = Math.min(40, Math.max(0.03, v.zoom * Math.exp(-e.deltaY * rate)));
         const k = zoom / v.zoom;
         return { zoom, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
       });
@@ -352,9 +400,12 @@ export function Viewer(props: Props) {
       svgRef.current!.setPointerCapture(e.pointerId);
       return;
     }
-    if (e.button === 1 || spaceHeld.current || (tool === 'select' && e.button === 0 && background)) {
+    // Pan: the middle button, Space held, the background in Select, or a drag in a tool that
+    // places points by clicking (a click still places one: only a drag pans).
+    const clickTool = tool === 'measure' || tool === 'calibrate' || tool === 'cutout' || tool === 'trace' || tool === 'fill';
+    if (e.button === 1 || spaceHeld.current || (tool === 'select' && e.button === 0 && background) || (clickTool && e.button === 0)) {
       e.preventDefault();
-      pan.current = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moved: false };
+      pan.current = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moved: false, slack: clickTool && e.button === 0 && !spaceHeld.current ? 6 : 3 };
       svgRef.current!.setPointerCapture(e.pointerId);
     }
   };
@@ -382,12 +433,17 @@ export function Viewer(props: Props) {
     if (p) {
       const dx = e.clientX - p.sx;
       const dy = e.clientY - p.sy;
-      if (Math.abs(dx) + Math.abs(dy) > 3) p.moved = true;
-      setView((v) => ({ ...v, x: p.vx + dx, y: p.vy + dy }));
+      if (Math.abs(dx) + Math.abs(dy) > p.slack) p.moved = true;
+      if (p.moved) setView((v) => ({ ...v, x: p.vx + dx, y: p.vy + dy }));
       return;
     }
     const h = toPt(e);
     setHover({ ...h, pt: snap(h.pt, e.shiftKey) });
+    const rect = svgRef.current!.getBoundingClientRect();
+    const m = 28;
+    edge.current = draft.length
+      ? { dx: h.sx < m ? 1 : h.sx > rect.width - m ? -1 : 0, dy: h.sy < m ? 1 : h.sy > rect.height - m ? -1 : 0 }
+      : { dx: 0, dy: 0 };
   };
 
   /** A drag the browser took away (touch cancel, window lost focus) is dropped, not saved. */
@@ -558,7 +614,10 @@ export function Viewer(props: Props) {
         onPointerUp={onPointerUp}
         onPointerCancel={cancelDrag}
         onLostPointerCapture={cancelDrag}
-        onPointerLeave={() => setHover(null)}
+        onPointerLeave={() => {
+          setHover(null);
+          edge.current = { dx: 0, dy: 0 };
+        }}
         onClick={onClick}
         onAuxClick={(e) => e.preventDefault()}
       >
