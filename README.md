@@ -348,6 +348,8 @@ History: every takeoff, type, scale and drawing change is recorded with its time
 sheet and quantity, saved in the browser's database beside the project, shown in
 the **History** tab and exported as the **Activity** sheet.
 
+Takeoff types: the eye beside each type shows or hides its takeoffs on the drawing (they still count in quantities and exports); Option-click shows only that type. Groups (the folder button) file types into folders you name: move a type with its folder button or drag it onto a group; a group's eye hides all of it.
+
 Navigation: a mouse wheel zooms; a Magic Mouse or trackpad swipe pans (⌘ + swipe or pinch zooms); drag, middle-drag or Space-drag pans in any tool (a click still places a point); while drawing, the sheet scrolls when the cursor nears its edge; F fits the sheet.
 **More → Keyboard shortcuts** lists them all.
 

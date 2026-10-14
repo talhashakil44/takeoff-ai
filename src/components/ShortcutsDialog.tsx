@@ -23,6 +23,7 @@ const SHORTCUTS: [string, string][] = [
   ['Swipe the mouse or trackpad', 'Move around the sheet (Magic Mouse); ⌘ + swipe or pinch to zoom'],
   ['Drag, middle-drag or Space-drag', 'Move around the sheet, in any tool (a click still places a point)'],
   ['Point near the edge', 'While drawing a line or area, the sheet scrolls that way'],
+  ['Option-click an eye', 'Show only that takeoff type (or group); again shows all'],
   ['?', 'Show these shortcuts'],
 ];
 

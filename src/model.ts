@@ -89,6 +89,16 @@ export interface TakeoffType {
    * code for different walls (WE1 on the garage set and on the office set).
    */
   fromDoc?: string;
+  /** The group it is filed under (none: ungrouped). */
+  groupId?: string;
+  /** Its takeoffs are hidden on the drawing (they still count in quantities and exports). */
+  hidden?: boolean;
+}
+
+/** A folder of takeoff types, made by the estimator (e.g. "Phase 2", "Drywall"). */
+export interface TakeoffGroup {
+  id: string;
+  name: string;
 }
 
 /** Estimate divisions, named as on the estimator's bid workbook tabs. */
@@ -155,6 +165,8 @@ export interface Project {
   docs: Doc[];
   sheets: Sheet[];
   types: TakeoffType[];
+  /** Groups the takeoff types are filed in, in the order they are listed. */
+  groups?: TakeoffGroup[];
   measurements: Measurement[];
 }
 

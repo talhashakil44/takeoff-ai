@@ -73,6 +73,13 @@ const TOOLS: { id: Tool; label: string; icon: IconName; key: string; help: strin
   { id: 'cutout', label: 'Cutout', icon: 'cutout', key: 'C', help: 'Cut a hole out of the selected area' },
 ];
 
+/** A project from the undo or redo stack, with the types shown or hidden as they are now (that is a view, not an edit). */
+function keepVisibility(target: Project, now: Project): Project {
+  const hidden = new Map(now.types.map((t) => [t.id, t.hidden]));
+  if (!target.types.some((t) => hidden.has(t.id) && !!hidden.get(t.id) !== !!t.hidden)) return target;
+  return { ...target, types: target.types.map((t) => (hidden.has(t.id) ? { ...t, hidden: hidden.get(t.id) || undefined } : t)) };
+}
+
 export function App() {
   const [project, setProject] = useState<Project | null>(null);
   const projectRef = useRef<Project | null>(null);
@@ -102,6 +109,12 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** Drawing files folded shut in the sheet list. */
   const [collapsedDocs, setCollapsedDocs] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  /** The "Move to group" menu open for a type, anchored to its button. */
+  const [moveMenu, setMoveMenu] = useState<{ typeId: string; anchor: { current: HTMLElement | null } } | null>(null);
+  /** A type being dragged onto a group, and the group it is over ('' for no group). */
+  const dragType = useRef<string | null>(null);
+  const [dropOn, setDropOn] = useState<string | null>(null);
   /** Takeoffs picked together (Box select), on the open sheet. */
   const [multiIds, setMultiIds] = useState<string[]>([]);
   // A selection belongs to its sheet.
@@ -401,8 +414,9 @@ export function App() {
     future.current.push(cur);
     record(diffProjects(cur, prev, 'Undo'));
     lastCommit.current = null;
-    projectRef.current = prev;
-    setProject(prev);
+    const back = keepVisibility(prev, cur);
+    projectRef.current = back;
+    setProject(back);
     setSelectedId(null);
     historyRev.current++;
     setHistoryTick((n) => n + 1);
@@ -415,8 +429,9 @@ export function App() {
     past.current.push(cur);
     record(diffProjects(cur, next, 'Redo'));
     lastCommit.current = null;
-    projectRef.current = next;
-    setProject(next);
+    const fwd = keepVisibility(next, cur);
+    projectRef.current = fwd;
+    setProject(fwd);
     historyRev.current++;
     setHistoryTick((n) => n + 1);
   }, [record]);
@@ -577,6 +592,9 @@ export function App() {
   const selected = project.measurements.find((m) => m.id === selectedId) ?? null;
   const selectedType = selected ? project.types.find((t) => t.id === selected.typeId) : undefined;
   const sheetMeasurements = sheet ? project.measurements.filter((m) => m.sheetId === sheet.id) : [];
+  // Takeoffs of hidden types are left off the drawing (they still count everywhere else).
+  const hiddenTypes = new Set(project.types.filter((t) => t.hidden).map((t) => t.id));
+  const shownMeasurements = hiddenTypes.size ? sheetMeasurements.filter((m) => !hiddenTypes.has(m.typeId)) : sheetMeasurements;
   // Picked takeoffs still on this sheet (an undo may have taken some away).
   const picked = sheetMeasurements.filter((m) => multiIds.includes(m.id));
   const canUndo = past.current.length > 0;
@@ -1053,6 +1071,70 @@ export function App() {
     };
     commit((p) => ({ ...p, types: [...p.types, type] }), 'New type');
     setEditingTypeId(type.id);
+  }
+
+  /**
+   * Shows or hides types' takeoffs on the drawing. A view setting, not an edit: kept with
+   * the project but out of undo (an undo leaves what is shown alone).
+   */
+  function setHidden(typeIds: string[], hidden: boolean) {
+    const prev = projectRef.current;
+    if (!prev) return;
+    const ids = new Set(typeIds);
+    const next = { ...prev, types: prev.types.map((t) => (ids.has(t.id) ? { ...t, hidden: hidden || undefined } : t)) };
+    projectRef.current = next;
+    setProject(next);
+    if (hidden) {
+      const gone = new Set(next.measurements.filter((m) => ids.has(m.typeId)).map((m) => m.id));
+      if (selectedId && gone.has(selectedId)) setSelectedId(null);
+      setMultiIds((cur) => cur.filter((id) => !gone.has(id)));
+    }
+  }
+
+  /** Option/Alt-click on an eye: only this type (or group) shown; again shows everything. */
+  function soloTypes(typeIds: string[]) {
+    const ids = new Set(typeIds);
+    const alreadySolo = project!.types.every((t) => ids.has(t.id) === !t.hidden);
+    if (alreadySolo) setHidden(project!.types.map((t) => t.id), false);
+    else {
+      setHidden(project!.types.filter((t) => !ids.has(t.id)).map((t) => t.id), true);
+      setHidden(typeIds, false);
+    }
+  }
+
+  async function newGroup(withTypes: string[] = []): Promise<string | null> {
+    const name = await askText('New group', { hint: 'e.g. Phase 2, Drywall, Level 1' });
+    if (!name?.trim()) return null;
+    const id = newId();
+    const ids = new Set(withTypes);
+    commit(
+      (p) => ({ ...p, groups: [...(p.groups ?? []), { id, name: name.trim() }], types: p.types.map((t) => (ids.has(t.id) ? { ...t, groupId: id } : t)) }),
+      'New group',
+    );
+    return id;
+  }
+
+  async function renameGroup(id: string) {
+    const g = project!.groups?.find((x) => x.id === id);
+    if (!g) return;
+    const name = await askText('Rename group', { initial: g.name });
+    if (name?.trim()) commit((p) => ({ ...p, groups: (p.groups ?? []).map((x) => (x.id === id ? { ...x, name: name.trim() } : x)) }), 'Rename group');
+  }
+
+  /** Removes a group; its types stay, ungrouped. */
+  function deleteGroup(id: string) {
+    const g = project!.groups?.find((x) => x.id === id);
+    commit(
+      (p) => ({ ...p, groups: (p.groups ?? []).filter((x) => x.id !== id), types: p.types.map((t) => (t.groupId === id ? { ...t, groupId: undefined } : t)) }),
+      'Delete group',
+    );
+    setToast({ text: `Removed the group ${g?.name ?? ''}; its types are kept, ungrouped`, undo: true });
+  }
+
+  function moveToGroup(typeId: string, groupId: string | undefined) {
+    const t = project!.types.find((x) => x.id === typeId);
+    if (!t || (t.groupId ?? undefined) === groupId) return;
+    commit((p) => ({ ...p, types: p.types.map((x) => (x.id === typeId ? { ...x, groupId } : x)) }), 'Move to group');
   }
 
   function deleteType(typeId: string) {
@@ -1893,7 +1975,7 @@ export function App() {
             <h2>Takeoff types</h2>
             <button
               ref={newTypeButton}
-              className="icon-button small"
+              className="icon-button small push-right"
               onClick={() => setPopover(popover === 'newtype' ? null : 'newtype')}
               title="New takeoff type"
               aria-label="New takeoff type"
@@ -1901,33 +1983,139 @@ export function App() {
             >
               <Icon name="plus" size={16} />
             </button>
+            <button className="icon-button small" onClick={() => void newGroup()} title="New group (a folder for takeoff types)" aria-label="New group">
+              <Icon name="folderPlus" size={16} />
+            </button>
           </div>
           <ul className="source-list">
-            {project.types.map((t) => {
-              const tt = totalFor(t.id);
-              return (
-                <li key={t.id} className="type-item">
-                  <button className={`source-row ${t.id === activeTypeId ? 'active' : ''}`} onClick={() => chooseType(t)} title={`Take off ${t.name}`}>
-                    <span className="dot" style={{ background: t.color }} />
-                    <span className="row-main">
-                      <span className="row-title type-name">{t.name}</span>
-                      <span className="row-sub">
-                        {t.kind === 'area' ? 'Area' : t.kind === 'linear' ? (t.headline === 'area' ? 'Wall area' : 'Length') : 'Count'}
-                        {tt && tt.vars.N > 0 ? ` · ${formatQty(tt.primary)} ${tt.unit}` : ''}
-                      </span>
-                    </span>
-                  </button>
-                  <span className="row-actions-hover">
-                    <button className="icon-button small" title="Edit type" aria-label={`Edit ${t.name}`} onClick={() => setEditingTypeId(t.id)}>
-                      <Icon name="edit" size={14} />
-                    </button>
-                    <button className="icon-button small danger" title="Delete type and its takeoffs" aria-label={`Delete ${t.name}`} onClick={() => deleteType(t.id)}>
-                      <Icon name="trash" size={14} />
-                    </button>
-                  </span>
-                </li>
+            {(() => {
+              const groups = project.groups ?? [];
+              const known = new Set(groups.map((g) => g.id));
+              const eye = (ids: string[], hidden: boolean, label: string) => (
+                <button
+                  className={`icon-button small eye ${hidden ? 'off' : ''}`}
+                  title={`${hidden ? 'Show' : 'Hide'} ${label} on the drawing (Option-click: show only ${ids.length > 1 ? 'these' : 'this'})`}
+                  aria-label={`${hidden ? 'Show' : 'Hide'} ${label}`}
+                  aria-pressed={!hidden}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (e.altKey) soloTypes(ids);
+                    else setHidden(ids, !hidden);
+                  }}
+                >
+                  <Icon name={hidden ? 'eyeOff' : 'eye'} size={15} />
+                </button>
               );
-            })}
+              const dropProps = (groupId: string) => ({
+                onDragOver: (e: React.DragEvent) => {
+                  if (!dragType.current) return;
+                  e.preventDefault();
+                  setDropOn(groupId);
+                },
+                onDragLeave: () => setDropOn((d) => (d === groupId ? null : d)),
+                onDrop: (e: React.DragEvent) => {
+                  e.preventDefault();
+                  if (dragType.current) moveToGroup(dragType.current, groupId || undefined);
+                  dragType.current = null;
+                  setDropOn(null);
+                },
+              });
+              const renderType = (t: TakeoffType) => {
+                const tt = totalFor(t.id);
+                return (
+                  <li
+                    key={t.id}
+                    className={`type-item ${t.hidden ? 'is-hidden' : ''} ${t.groupId && known.has(t.groupId) ? 'in-group' : ''}`}
+                    draggable
+                    onDragStart={(e) => {
+                      dragType.current = t.id;
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', t.name);
+                    }}
+                    onDragEnd={() => {
+                      dragType.current = null;
+                      setDropOn(null);
+                    }}
+                  >
+                    {eye([t.id], !!t.hidden, t.name)}
+                    <button className={`source-row ${t.id === activeTypeId ? 'active' : ''}`} onClick={() => chooseType(t)} title={`Take off ${t.name}`}>
+                      <span className="dot" style={{ background: t.color }} />
+                      <span className="row-main">
+                        <span className="row-title type-name">{t.name}</span>
+                        <span className="row-sub">
+                          {t.kind === 'area' ? 'Area' : t.kind === 'linear' ? (t.headline === 'area' ? 'Wall area' : 'Length') : 'Count'}
+                          {tt && tt.vars.N > 0 ? ` · ${formatQty(tt.primary)} ${tt.unit}` : ''}
+                        </span>
+                      </span>
+                    </button>
+                    <span className="row-actions-hover">
+                      <button
+                        className="icon-button small"
+                        title="Move to a group"
+                        aria-label={`Move ${t.name} to a group`}
+                        onClick={(e) => setMoveMenu({ typeId: t.id, anchor: { current: e.currentTarget } })}
+                      >
+                        <Icon name="folder" size={14} />
+                      </button>
+                      <button className="icon-button small" title="Edit type" aria-label={`Edit ${t.name}`} onClick={() => setEditingTypeId(t.id)}>
+                        <Icon name="edit" size={14} />
+                      </button>
+                      <button className="icon-button small danger" title="Delete type and its takeoffs" aria-label={`Delete ${t.name}`} onClick={() => deleteType(t.id)}>
+                        <Icon name="trash" size={14} />
+                      </button>
+                    </span>
+                  </li>
+                );
+              };
+              const loose = project.types.filter((t) => !t.groupId || !known.has(t.groupId));
+              return (
+                <>
+                  {groups.map((g) => {
+                    const members = project.types.filter((t) => t.groupId === g.id);
+                    const open = !collapsedGroups.has(g.id);
+                    const allHidden = members.length > 0 && members.every((t) => t.hidden);
+                    return (
+                      <Fragment key={g.id}>
+                        <li className={`type-group ${dropOn === g.id ? 'drop' : ''} ${allHidden ? 'is-hidden' : ''}`} {...dropProps(g.id)}>
+                          {members.length ? eye(members.map((t) => t.id), allHidden, `the ${g.name} group`) : <span className="eye-space" />}
+                          <button
+                            className="doc-head group-head"
+                            onClick={() => setCollapsedGroups((c) => (c.has(g.id) ? new Set([...c].filter((x) => x !== g.id)) : new Set(c).add(g.id)))}
+                            onDoubleClick={() => void renameGroup(g.id)}
+                            aria-expanded={open}
+                            title={`${g.name} · click to fold, double-click to rename, drag types here to file them`}
+                          >
+                            <span className={`doc-chevron ${open ? 'open' : ''}`}>
+                              <Icon name="chevron" size={12} />
+                            </span>
+                            <Icon name="folder" size={14} />
+                            <span className="doc-name">{g.name}</span>
+                            <span className="doc-count">{members.length}</span>
+                          </button>
+                          <span className="row-actions-hover">
+                            <button className="icon-button small" title="Rename group" aria-label={`Rename ${g.name}`} onClick={() => void renameGroup(g.id)}>
+                              <Icon name="edit" size={13} />
+                            </button>
+                            <button className="icon-button small danger" title="Remove the group (its types are kept)" aria-label={`Remove group ${g.name}`} onClick={() => deleteGroup(g.id)}>
+                              <Icon name="trash" size={13} />
+                            </button>
+                          </span>
+                        </li>
+                        {open && members.map(renderType)}
+                        {open && !members.length && <li className="group-empty">Drag types here, or use a type’s folder button</li>}
+                      </Fragment>
+                    );
+                  })}
+                  {groups.length > 0 && (loose.length > 0 || dropOn !== null) && (
+                    <li className={`type-group loose ${dropOn === '' ? 'drop' : ''}`} {...dropProps('')}>
+                      <span className="eye-space" />
+                      <span className="group-head muted">No group</span>
+                    </li>
+                  )}
+                  {loose.map(renderType)}
+                </>
+              );
+            })()}
           </ul>
         </section>
       </aside>
@@ -1936,7 +2124,7 @@ export function App() {
         <Viewer
           page={page}
           sheet={sheet}
-          measurements={sheetMeasurements}
+          measurements={shownMeasurements}
           types={project.types}
           activeType={activeType}
           units={project.units}
@@ -2336,6 +2524,24 @@ export function App() {
               { label: 'From the library…', hint: 'Ceilings, flooring, paint…', onSelect: () => setAiDialog('library') },
             ],
             otherProjects.slice(0, 8).map((o) => ({ label: `Types from ${o.name}`, onSelect: () => void importTypes(o.id) })),
+          ].filter((g) => g.length)}
+        />
+      )}
+      {moveMenu && (
+        <Menu
+          anchor={moveMenu.anchor}
+          onClose={() => setMoveMenu(null)}
+          label="Move to group"
+          groups={[
+            (project.groups ?? []).map((g) => ({
+              label: g.name,
+              hint: project.types.find((t) => t.id === moveMenu.typeId)?.groupId === g.id ? 'In this group' : undefined,
+              onSelect: () => moveToGroup(moveMenu.typeId, g.id),
+            })),
+            [
+              ...(project.types.find((t) => t.id === moveMenu.typeId)?.groupId ? [{ label: 'No group', onSelect: () => moveToGroup(moveMenu.typeId, undefined) }] : []),
+              { label: 'New group…', onSelect: () => void newGroup([moveMenu.typeId]) },
+            ],
           ].filter((g) => g.length)}
         />
       )}

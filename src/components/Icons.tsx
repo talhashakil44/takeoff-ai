@@ -35,6 +35,10 @@ const PATHS = {
   doc: 'M5 2.5h10v15H5zM7.5 6.5h5M7.5 9.5h5M7.5 12.5h3',
   door: 'M3.5 16.5h13M6 16.5V3.5h8v13M11.5 10.5h.01',
   marquee: 'M3 6V3h3M9 3h2M14 3h3v3M17 9v2M3 9v2M3 14v3h3M9 17h2M14 17h3v-3',
+  eye: 'M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10zM10 10m-2.3 0a2.3 2.3 0 104.6 0 2.3 2.3 0 10-4.6 0',
+  eyeOff: 'M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10zM10 10m-2.3 0a2.3 2.3 0 104.6 0 2.3 2.3 0 10-4.6 0M3.5 3.5l13 13',
+  folder: 'M2.5 5.5V15.5h15V7.5H9.5L8 5.5z',
+  folderPlus: 'M2.5 5.5V15.5h15V7.5H9.5L8 5.5zM10 9.5v4M8 11.5h4',
 } as const;
 
 export type IconName = keyof typeof PATHS;
