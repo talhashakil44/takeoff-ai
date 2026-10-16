@@ -18,6 +18,8 @@ export interface Segment {
   window?: boolean;
   /** A piece of a curve (a door swing, a round column): walls are straight. */
   curve?: boolean;
+  /** Its ink, as #rrggbb: the stroke colour of a line, the fill colour of a fill. */
+  color?: string;
 }
 
 type Matrix = [number, number, number, number, number, number];
@@ -53,32 +55,40 @@ export function extractSegments(fnArray: ArrayLike<number>, argsArray: ArrayLike
   const counter = { sub: 0 };
   let ctm: Matrix = base;
   let lineWidth = 1;
-  const stack: { ctm: Matrix; lineWidth: number }[] = [];
+  let stroke = '#000000';
+  let fill = '#000000';
+  const stack: { ctm: Matrix; lineWidth: number; stroke: string; fill: string }[] = [];
 
   for (let i = 0; i < fnArray.length; i++) {
     const fn = fnArray[i];
     const args = argsArray[i] as unknown[];
     switch (fn) {
       case OPS.save:
-        stack.push({ ctm, lineWidth });
+        stack.push({ ctm, lineWidth, stroke, fill });
         break;
       case OPS.restore: {
         const s = stack.pop();
-        if (s) ({ ctm, lineWidth } = s);
+        if (s) ({ ctm, lineWidth, stroke, fill } = s);
         break;
       }
       case OPS.transform:
         ctm = multiply(ctm, args as Matrix);
         break;
       case OPS.paintFormXObjectBegin:
-        stack.push({ ctm, lineWidth });
+        stack.push({ ctm, lineWidth, stroke, fill });
         if (Array.isArray(args[0])) ctm = multiply(ctm, args[0] as Matrix);
         break;
       case OPS.paintFormXObjectEnd: {
         const s = stack.pop();
-        if (s) ({ ctm, lineWidth } = s);
+        if (s) ({ ctm, lineWidth, stroke, fill } = s);
         break;
       }
+      case OPS.setStrokeRGBColor:
+        if (typeof args[0] === 'string') stroke = args[0];
+        break;
+      case OPS.setFillRGBColor:
+        if (typeof args[0] === 'string') fill = args[0];
+        break;
       case OPS.setLineWidth:
         lineWidth = args[0] as number;
         break;
@@ -93,7 +103,7 @@ export function extractSegments(fnArray: ArrayLike<number>, argsArray: ArrayLike
         const data = (args[1] as unknown[])?.[0];
         if (!data || typeof (data as ArrayLike<number>).length !== 'number') break;
         const width = stroked ? lineWidth * Math.sqrt(Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2])) : 0;
-        addPath(data as ArrayLike<number>, ctm, width, filled, out, counter);
+        addPath(data as ArrayLike<number>, ctm, width, filled, out, counter, stroked ? stroke : fill);
         break;
       }
     }
@@ -101,7 +111,7 @@ export function extractSegments(fnArray: ArrayLike<number>, argsArray: ArrayLike
   return out;
 }
 
-function addPath(d: ArrayLike<number>, m: Matrix, width: number, filled: boolean, out: Segment[], counter: { sub: number }) {
+function addPath(d: ArrayLike<number>, m: Matrix, width: number, filled: boolean, out: Segment[], counter: { sub: number }, color: string) {
   let cx = 0;
   let cy = 0;
   let sx = 0;
@@ -110,7 +120,7 @@ function addPath(d: ArrayLike<number>, m: Matrix, width: number, filled: boolean
     const [a, b] = apply(m, cx, cy);
     const [c, e] = apply(m, x, y);
     // A zero-length stroke is a dot (round caps): kept as a point so stipple patterns count.
-    if (a !== c || b !== e || (!filled && width > 0)) out.push({ x1: a, y1: b, x2: c, y2: e, width, filled, sub: counter.sub, ...(curve ? { curve } : {}) });
+    if (a !== c || b !== e || (!filled && width > 0)) out.push({ x1: a, y1: b, x2: c, y2: e, width, filled, sub: counter.sub, color, ...(curve ? { curve } : {}) });
     cx = x;
     cy = y;
   };

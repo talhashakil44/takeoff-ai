@@ -110,3 +110,94 @@ export function traceLine(segs: Segment[], at: Pt, reach: number, gap = 4): Pt[]
   }
   return out.length >= 2 ? out : null;
 }
+
+type Box = [number, number, number, number];
+
+/**
+ * Every line drawn in the same pen and ink as the stroke under a click: a sprinkler pipe
+ * network, a fence, a duct run. Symbols drawn in that pen (small closed shapes: heads, valves)
+ * are left out, and so are the sheet's frame and whatever lies in `avoid` (the title block).
+ * Returned as runs: lines joined end to end between forks. Null when nothing is near the click.
+ */
+export function linesLike(segs: Segment[], at: Pt, reach: number, sheet: { width: number; height: number }, avoid: Box[] = []): Pt[][] | null {
+  const strokes = segs.filter((s) => !s.filled && s.width > 0 && len(s) > 0.2);
+  let start: Segment | null = null;
+  let best = reach;
+  for (const s of strokes) {
+    const d = distToSeg(at, s);
+    if (d < best) {
+      best = d;
+      start = s;
+    }
+  }
+  if (!start) return null;
+  const pen = start.width;
+  const ink = start.color;
+  const same = strokes.filter((s) => Math.abs(s.width - pen) <= 0.01 + pen * 0.03 && s.color === ink && !!s.curve === !!start.curve);
+
+  // Small closed shapes are symbols drawn in the pipe's pen, not pipe.
+  const shapes = new Map<number, Segment[]>();
+  for (const s of same) if (s.sub !== undefined) (shapes.get(s.sub) ?? shapes.set(s.sub, []).get(s.sub)!).push(s);
+  const symbol = new Set<Segment>();
+  const small = Math.max(16, pen * 20);
+  for (const g of shapes.values()) {
+    if (g.length < 3) continue;
+    const xs = g.flatMap((s) => [s.x1, s.x2]);
+    const ys = g.flatMap((s) => [s.y1, s.y2]);
+    const closed = Math.hypot(g[0].x1 - g[g.length - 1].x2, g[0].y1 - g[g.length - 1].y2) < 0.5;
+    if (closed && Math.max(...xs) - Math.min(...xs) <= small && Math.max(...ys) - Math.min(...ys) <= small) for (const s of g) symbol.add(s);
+  }
+  const { width, height } = sheet;
+  const edge = Math.min(width, height) * 0.03;
+  const onFrame = (s: Segment) =>
+    (Math.max(s.x1, s.x2) < edge || Math.min(s.x1, s.x2) > width - edge || Math.max(s.y1, s.y2) < edge || Math.min(s.y1, s.y2) > height - edge) && len(s) > width * 0.2;
+  const inside = (x: number, y: number) => avoid.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1);
+  const kept = same.filter((s) => !symbol.has(s) && !onFrame(s) && !inside(s.x1, s.y1) && !inside(s.x2, s.y2));
+
+  // Runs: lines joined end to end, broken at forks and gaps.
+  const tol = 0.5;
+  const cell = 4;
+  const grid = new Map<string, { s: Segment; end: 0 | 1 }[]>();
+  const key = (x: number, y: number) => `${Math.floor(x / cell)},${Math.floor(y / cell)}`;
+  for (const s of kept)
+    for (const end of [0, 1] as const) {
+      const k = key(end ? s.x2 : s.x1, end ? s.y2 : s.y1);
+      (grid.get(k) ?? grid.set(k, []).get(k)!).push({ s, end });
+    }
+  const at2 = (x: number, y: number) => {
+    const out: { s: Segment; end: 0 | 1 }[] = [];
+    const cx = Math.floor(x / cell);
+    const cy = Math.floor(y / cell);
+    for (let i = -1; i <= 1; i++)
+      for (let j = -1; j <= 1; j++)
+        for (const e of grid.get(`${cx + i},${cy + j}`) ?? []) if (Math.hypot((e.end ? e.s.x2 : e.s.x1) - x, (e.end ? e.s.y2 : e.s.y1) - y) <= tol) out.push(e);
+    return out;
+  };
+  const used = new Set<Segment>();
+  const runs: Pt[][] = [];
+  for (const s of kept) {
+    if (used.has(s)) continue;
+    used.add(s);
+    const grow = (x: number, y: number): Pt[] => {
+      const pts: Pt[] = [];
+      for (let guard = 0; guard < 100000; guard++) {
+        const here = at2(x, y);
+        // A fork (three or more lines meet) ends the run.
+        if (here.length !== 2) break;
+        const next = here.find((e) => !used.has(e.s));
+        if (!next) break;
+        used.add(next.s);
+        [x, y] = next.end ? [next.s.x1, next.s.y1] : [next.s.x2, next.s.y2];
+        pts.push([x, y]);
+      }
+      return pts;
+    };
+    const fwd = grow(s.x2, s.y2);
+    const back = grow(s.x1, s.y1);
+    runs.push([...back.reverse(), [s.x1, s.y1], [s.x2, s.y2], ...fwd]);
+  }
+  return runs;
+}
+
+/** A run's length, in sheet points. */
+export const runLength = (pts: Pt[]) => pts.reduce((n, p, i) => (i ? n + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0);
