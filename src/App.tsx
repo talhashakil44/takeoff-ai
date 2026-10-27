@@ -38,6 +38,8 @@ import { readTitleBlock, titleBlockBox } from './titleBlock';
 import { middleOf, roomLocator } from './locate';
 import { buildingOfDoc, buildingsOf, fileLabel, onBuilding, quantitySections, type QtyGrouping } from './buildings';
 import { isHosted, saveFile } from './host';
+import { SmartPanel, kindColor } from './components/SmartPanel';
+import { buildIndex, entries, searchEntries, tagsOn, TAG_KINDS, type DrawingIndex, type Entry, type SmartTag, type TagKind } from './smart/index';
 import { defaultTypes, newId, newProject, type Kind, type Measurement, type Project, type Pt, type Sheet, type TakeoffType, type Units } from './model';
 import { openPdf, type PDFDocumentProxy, type PDFPageProxy } from './pdf';
 import { measurementVars, primaryOf, primaryUnit, sheetRepeat, typeTotals, type TypeTotals } from './quantities';
@@ -134,6 +136,12 @@ export function App() {
   const [page, setPage] = useState<PDFPageProxy | null>(null);
   const [activeTypeId, setActiveTypeId] = useState<string | null>(null);
   const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
+  /** The type as it was when its editor opened, so Cancel can put it back. */
+  const editSnapshot = useRef<{ id: string; json: string } | null>(null);
+  useEffect(() => {
+    const t = editingTypeId ? projectRef.current?.types.find((x) => x.id === editingTypeId) : null;
+    editSnapshot.current = t ? { id: t.id, json: JSON.stringify(t) } : null;
+  }, [editingTypeId]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** Drawing files folded shut in the sheet list. */
   const [collapsedDocs, setCollapsedDocs] = useState<Set<string>>(new Set());
@@ -158,6 +166,17 @@ export function App() {
   const [wholeSetReport, setWholeSetReport] = useState<{ text: string; rfis: string } | null>(null);
 
   const [busy, setBusy] = useState<string | null>(null);
+  /** Smart view: the set's schedules and legends read once, every tag on a sheet clickable. */
+  const [smartOn, setSmartOn] = useState(false);
+  const [smartIndex, setSmartIndex] = useState<{ index: DrawingIndex; key: string } | null>(null);
+  const [smartKinds, setSmartKinds] = useState<Set<TagKind>>(() => new Set(TAG_KINDS.map((k) => k.kind)));
+  const [smartQuery, setSmartQuery] = useState('');
+  const [smartPick, setSmartPick] = useState<string | null>(null);
+  const [smartTags, setSmartTags] = useState<SmartTag[]>([]);
+  /** A tag to bring into view once its sheet's tags are read. */
+  const smartFocus = useRef<string | null>(null);
+  const smartIndexRef = useRef<{ index: DrawingIndex; key: string } | null>(null);
+  const smartBuilding = useRef(false);
   const [toast, setToastState] = useState<Toast | null>(null);
   /** The latest chooseTool, for the keyboard handler. */
   const chooseToolRef = useRef<(id: Tool) => void>(() => {});
@@ -307,6 +326,41 @@ export function App() {
   }, [project]);
 
   const sheet = project?.sheets.find((s) => s.id === sheetId) ?? null;
+  const smartKey = project ? project.sheets.filter((s) => !s.superseded).map((s) => s.id).join(',') : '';
+  // The last reading, while a newer one (drawings added) is under way.
+  const smartData = smartIndex ? smartIndex.index : null;
+  const smartDict = useMemo(() => (smartData ? entries(smartData) : new Map<string, Entry>()), [smartData]);
+  const smartByKey = useMemo(() => new Map([...smartDict.values()].map((e) => [e.key, e] as const)), [smartDict]);
+  const smartLit = useMemo(() => (smartQuery.trim() ? new Set(searchEntries(smartByKey, smartQuery, 500).map((e) => e.key)) : null), [smartByKey, smartQuery]);
+  const tagView = (box: [number, number, number, number]): [number, number, number, number] => [box[0] - 160, box[1] - 110, box[2] + 160, box[3] + 110];
+  // Drawings added or removed while Smart view is on: read the set again.
+  useEffect(() => {
+    if (smartOn && !smartBuilding.current && smartIndexRef.current?.key !== smartKey && smartKey) void openSmart();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smartKey]);
+  // The open sheet's tags, once the set is read.
+  useEffect(() => {
+    if (!smartOn || !smartData || !sheet || !project) {
+      setSmartTags([]);
+      return;
+    }
+    let stop = false;
+    void sheetTexts(sheet).then((t) => {
+      if (stop) return;
+      const tags = tagsOn(sheet, t, smartData, project.sheets, smartDict);
+      setSmartTags(tags);
+      const k = smartFocus.current;
+      if (k) {
+        smartFocus.current = null;
+        const hit = tags.find((x) => x.key === k);
+        if (hit) setFocus({ box: tagView(hit.box), n: Date.now() });
+      }
+    });
+    return () => {
+      stop = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smartOn, smartData, sheet?.id, pdfs]);
 
   // A sheet with almost no linework is a scanned image: the automatic tools can't read it.
   const [scanned, setScanned] = useState<{ sheetId: string; dismissed: boolean } | null>(null);
@@ -796,6 +850,7 @@ export function App() {
 
   const activeType = project.types.find((t) => t.id === activeTypeId) ?? null;
   const editingType = project.types.find((t) => t.id === editingTypeId) ?? null;
+  const editingDirty = !!editingType && editSnapshot.current?.id === editingType.id && JSON.stringify(editingType) !== editSnapshot.current.json;
   const selected = project.measurements.find((m) => m.id === selectedId) ?? null;
   const selectedType = selected ? project.types.find((t) => t.id === selected.typeId) : undefined;
   const sheetMeasurements = sheet ? project.measurements.filter((m) => m.sheetId === sheet.id) : [];
@@ -1505,6 +1560,64 @@ export function App() {
       setToast({ text: `Something went wrong: ${e instanceof Error ? e.message : String(e)}`, undo: false });
     } finally {
       setBusy(null);
+    }
+  }
+
+  /** Turns Smart view on, reading the set's schedules, legends and tags first when they are not read yet. */
+  async function openSmart(rebuild = false): Promise<DrawingIndex | null> {
+    const p = projectRef.current;
+    if (!p?.sheets.length) return null;
+    setSmartOn(true);
+    const key = p.sheets.filter((s) => !s.superseded).map((s) => s.id).join(',');
+    const had = smartIndexRef.current;
+    if (!rebuild && had?.key === key) return had.index;
+    if (smartBuilding.current) return had?.index ?? null;
+    smartBuilding.current = true;
+    setBusy('Smart view: reading the set…');
+    try {
+      let index = await buildIndex(p.sheets, setAccess());
+      let at = key;
+      // Drawings still coming in while it read: read the set as it is now.
+      for (let n = 0; n < 3; n++) {
+        const q = projectRef.current!;
+        const now = q.sheets.filter((s) => !s.superseded).map((s) => s.id).join(',');
+        if (now === at) break;
+        at = now;
+        index = await buildIndex(q.sheets, setAccess());
+      }
+      setSmartIndex({ index, key: at });
+      smartIndexRef.current = { index, key: at };
+      const n = index.schedules.length + index.legends.length;
+      setToast({
+        text: n
+          ? `Read ${index.schedules.length} schedule${index.schedules.length === 1 ? '' : 's'} and ${index.legends.length} legend type${index.legends.length === 1 ? '' : 's'}. Click any tag on a sheet.`
+          : 'No schedules or legends found in this set’s text. A scanned set has no text to read.',
+        undo: false,
+      });
+      return index;
+    } catch (e) {
+      setSmartOn(false);
+      setToast({ text: `Smart view could not read the set: ${e instanceof Error ? e.message : String(e)}`, undo: false });
+      return null;
+    } finally {
+      smartBuilding.current = false;
+      setBusy(null);
+    }
+  }
+
+  /** Shows what the drawings say about a code: its card, and its tag brought into view (on its sheet, if it is not on this one). */
+  function pickSmart(e: Entry | null) {
+    setSmartPick(e?.key ?? null);
+    if (!e) return;
+    const here = smartTags.find((t) => t.key === e.key);
+    if (here) {
+      setFocus({ box: tagView(here.box), n: Date.now() });
+      return;
+    }
+    const first = Object.keys(smartData?.where[e.key] ?? {})[0];
+    if (first && first !== sheet?.id) {
+      smartFocus.current = e.key;
+      setSheetId(first);
     }
   }
 
@@ -2274,6 +2387,20 @@ export function App() {
     },
     maxOpening: () => maxOpening,
     wholeSet: (watch?: boolean) => takeOffEverything(!!watch),
+    smartIndex: () => openSmart(),
+    showTag: (key: string) => {
+      const index = smartIndexRef.current?.index;
+      setSmartOn(true);
+      setSmartPick(key);
+      const where = Object.keys(index?.where[key] ?? {});
+      if (!where.length) return;
+      const target = where.includes(sheetId ?? '') ? sheetId! : where[0];
+      smartFocus.current = key;
+      if (target === sheetId) {
+        const hit = smartTags.find((x) => x.key === key);
+        if (hit) setFocus({ box: tagView(hit.box), n: Date.now() });
+      } else setSheetId(target);
+    },
   };
 
   return (
@@ -2364,6 +2491,7 @@ export function App() {
               <Icon name="chevronDown" size={12} />
             </button>
           )}
+
         </div>
 
         <div className="tb-right">
@@ -2761,10 +2889,59 @@ export function App() {
           onTrace={(at, reach) => void traceAt(at, reach)}
           focus={focus}
           highlights={sheet ? hitsOn(sheet.id) : undefined}
+          smart={
+            smartOn && smartData
+              ? {
+                  tags: smartTags.filter((t) => smartKinds.has(t.kind)),
+                  color: (t) => kindColor(t.kind),
+                  lit: smartLit,
+                  picked: smartPick,
+                  onPick: (t) => {
+                    if (t.kind === 'sheet' && t.target) setSheetId(t.target);
+                    else setSmartPick(t.key);
+                  },
+                }
+              : undefined
+          }
         />
 
+        {sheet && !smartOn && (
+          <button className="smart-fab" onClick={() => void openSmart()} title="Click any door, room, window, wall type or equipment tag to see what the drawings say about it">
+            <Icon name="tag" size={16} />
+            Smart view
+          </button>
+        )}
+
+        {smartOn && smartData && (
+          <SmartPanel
+            index={smartData}
+            dict={smartDict}
+            byKey={smartByKey}
+            sheets={project.sheets}
+            sheet={sheet}
+            tags={smartTags}
+            kinds={smartKinds}
+            onKinds={setSmartKinds}
+            query={smartQuery}
+            onQuery={setSmartQuery}
+            picked={smartPick ? (smartByKey.get(smartPick) ?? null) : null}
+            onPick={pickSmart}
+            onOpenSheet={(id, key) => {
+              if (id === sheet?.id) {
+                const hit = key ? smartTags.find((t) => t.key === key) : undefined;
+                if (hit) setFocus({ box: tagView(hit.box), n: Date.now() });
+                return;
+              }
+              smartFocus.current = key ?? null;
+              setSheetId(id);
+            }}
+            onRebuild={() => void openSmart(true)}
+            onClose={() => setSmartOn(false)}
+          />
+        )}
+
         {picked.length > 0 && (
-          <div className="selection-bar" role="toolbar" aria-label="Selected takeoffs">
+          <div className={`selection-bar ${smartOn ? 'below-smart' : ''}`} role="toolbar" aria-label="Selected takeoffs">
             <span className="selection-count">{picked.length} selected</span>
             <span className="selection-types">{pickedSummary(picked, project.types)}</span>
             <button onClick={() => setMultiIds([])}>Clear</button>
@@ -2935,6 +3112,15 @@ export function App() {
               setEditingTypeId(copy.id);
             }}
             onClose={() => setEditingTypeId(null)}
+            dirty={editingDirty}
+            onCancel={() => {
+              const snap = editSnapshot.current;
+              if (snap && snap.id === editingType.id) {
+                const before = JSON.parse(snap.json) as TakeoffType;
+                commit((p) => ({ ...p, types: p.types.map((t) => (t.id === before.id ? before : t)) }), 'Cancel type edit');
+              }
+              setEditingTypeId(null);
+            }}
           />
         ) : (
           <Inspector

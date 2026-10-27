@@ -1,4 +1,5 @@
 import type { Automation } from '../automate/result';
+import { describe, entries, entryName, indexStats, norm, searchEntries, type DrawingIndex } from '../smart/index';
 import type { SetAccess } from '../automate/set';
 import { PALETTE } from '../automate/set';
 import { automateRooms } from '../automate/rooms';
@@ -75,6 +76,10 @@ export interface McpContext {
   /** Takes off the whole set; resolves to the review and RFIs. */
   /** `watch`: slower, holding on each sheet as its takeoffs are drawn (to watch or record it). */
   wholeSet?(watch?: boolean): Promise<string>;
+  /** The set's schedules, legends and tags, read once (Smart view). */
+  smartIndex?(): Promise<DrawingIndex | null>;
+  /** Shows a tag's card in the window, on its sheet. */
+  showTag?(key: string): void;
 }
 
 const text = (t: string, structured?: Record<string, unknown>): ToolResult => ({ content: [{ type: 'text', text: t }], ...(structured ? { structuredContent: structured } : {}) });
@@ -279,6 +284,22 @@ export const TOOL_DEFS: ToolDef[] = [
     title: 'Export to Excel',
     description: 'Saves the takeoff as an Excel workbook (bid workbook layout) in the project\'s Exports folder and returns its path.',
     inputSchema: obj({}),
+  },
+  {
+    name: 'look_up_tag',
+    title: 'Look up a tag',
+    description:
+      'What the drawings say about a tag: a door (size, frame, hardware, fire rating), a room (floor, base, each wall and ceiling finish), a window, a wall type (studs, boards, width, fire and sound rating), a finish code, or an equipment mark (EF-1, FC-3, WC-1), read from the set\'s own schedules, legends and abbreviations, with the sheets its tag is on. Also searches: give part of a code or a room name to list matches. Shows the tag\'s card in the app (Smart view).',
+    inputSchema: obj({ code: str('The tag as drawn (D013.1, 105, P3, ACT 1, EF-1) or part of a code or name'), show: { type: 'boolean', description: 'Show it in the app window too (default true)' } }, ['code']),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'drawing_index',
+    title: 'Schedules and legends read',
+    description:
+      'Every schedule (door, window, room finish, equipment, structural…), type legend and abbreviation list read from the set\'s text, with counts by kind of how many listed tags were found on the plans and which were not (a door in the schedule with no tag on any plan is worth an RFI).',
+    inputSchema: obj({}),
+    annotations: { readOnlyHint: true },
   },
   {
     name: 'undo',
@@ -651,6 +672,41 @@ async function dispatch(ctx: McpContext, name: string, a: Record<string, unknown
       need(ctx);
       const where = await ctx.exportExcel();
       return text(`Saved ${where}`, { path: where });
+    }
+
+    case 'look_up_tag': {
+      const p = need(ctx);
+      if (!ctx.smartIndex) throw new ToolError('This version of the app cannot read tags.');
+      const index = await ctx.smartIndex();
+      if (!index) throw new ToolError('The set could not be read.');
+      const dict = entries(index);
+      const q = String(a.code ?? '').trim();
+      const exact = dict.get(norm(q));
+      const matches = exact ? [exact] : searchEntries(new Map([...dict.values()].map((e) => [e.key, e] as const)), q, 12);
+      if (!matches.length) return fail(`Nothing on the drawings called "${q}".`);
+      if (matches.length > 1 && !exact) return text(json({ matches: matches.map((e) => ({ code: e.code, kind: e.kind, name: entryName(e) })) }));
+      const e = matches[0];
+      const info = describe(e, index, p.sheets, dict);
+      if (a.show !== false) ctx.showTag?.(e.key);
+      const out = { code: info.code, kind: info.kind, title: info.title, source: info.source, sections: info.sections.map((s) => ({ title: s.title ?? null, rows: s.rows.map((r) => ({ [r.label]: r.value })) })) };
+      return text(json(out), out);
+    }
+
+    case 'drawing_index': {
+      const p = need(ctx);
+      if (!ctx.smartIndex) throw new ToolError('This version of the app cannot read tags.');
+      const index = await ctx.smartIndex();
+      if (!index) throw new ToolError('The set could not be read.');
+      const name = (id: string) => p.sheets.find((s) => s.id === id)?.name ?? id;
+      const stats = [...indexStats(index)].map(([kind, s]) => ({ kind, listed: s.listed, on_plans: s.onPlans, not_found_on_plans: s.missing }));
+      const out = {
+        sheets_read: index.sheets,
+        schedules: index.schedules.map((s) => ({ sheet: name(s.sheetId), title: s.title, kind: s.kind, rows: s.rows.length, columns: s.columns.map((c) => c.join(' · ')) })),
+        legends: index.legends.map((l) => ({ sheet: name(l.sheetId), code: l.code, kind: l.kind, heading: l.lines[0] })),
+        abbreviations: Object.keys(index.abbreviations).length,
+        tags: stats,
+      };
+      return text(json(out), out);
     }
 
     case 'undo':

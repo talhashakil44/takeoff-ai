@@ -2566,3 +2566,340 @@ button.link-button:hover {
 .access-card .small {
   font-size: 12px;
 }
+
+/* ---------- Smart view: tags on the drawing, the bar over it, the card for a tag ---------- */
+
+.ai-button.smart-toggle.on {
+  background: var(--ai);
+  border-color: var(--ai);
+  color: #ffffff;
+}
+.viewer .smart-tag {
+  fill: color-mix(in srgb, var(--tag) 14%, transparent);
+  stroke: var(--tag);
+  pointer-events: none;
+  transition: fill 0.12s, opacity 0.12s;
+}
+.viewer .smart-layer.live .smart-tag {
+  pointer-events: all;
+  cursor: pointer;
+}
+.viewer .smart-layer.live .smart-tag:hover {
+  fill: color-mix(in srgb, var(--tag) 34%, transparent);
+}
+.viewer .smart-tag.dim {
+  opacity: 0.18;
+}
+.viewer .smart-tag.lit:not(.dim) {
+  opacity: 1;
+}
+.viewer .smart-layer:has(.dim) .smart-tag.lit {
+  fill: color-mix(in srgb, var(--tag) 45%, transparent);
+}
+.viewer .smart-tag.on {
+  fill: color-mix(in srgb, var(--tag) 40%, transparent);
+}
+.smart-bar {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  min-width: 0;
+}
+.smart-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--ai);
+  white-space: nowrap;
+}
+.smart-chips {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  min-width: 0;
+  scrollbar-width: none;
+}
+.smart-bar .smart-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--control);
+  color: var(--text-2);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.smart-bar .smart-chip.on {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--tag) 50%, var(--line));
+  background: color-mix(in srgb, var(--tag) 9%, var(--control));
+}
+.smart-bar .smart-chip:disabled {
+  opacity: 0.4;
+}
+.smart-chip .dot,
+.smart-results .dot,
+.smart-summary .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tag);
+  flex: none;
+}
+.smart-chip .n {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.smart-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 200px;
+  min-width: 150px;
+  max-width: 320px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--fill);
+  color: var(--text-2);
+}
+.smart-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 6px 0;
+  font: inherit;
+  color: var(--text);
+  outline: none;
+}
+.smart-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: -60px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border-radius: 10px;
+  box-shadow: var(--shadow-3);
+  z-index: 8;
+}
+.smart-results li.muted {
+  padding: 8px 10px;
+}
+.smart-results button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  min-height: 0;
+}
+.smart-results button:hover {
+  background: var(--control-hover);
+}
+.smart-results .name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+.smart-results .muted,
+.smart-summary .muted,
+.smart-card .muted {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.selection-bar.below-smart {
+  top: 62px;
+}
+.smart-card,
+.smart-summary {
+  position: absolute;
+  top: 62px;
+  right: 12px;
+  z-index: 5;
+  width: 340px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 80px);
+  overflow: auto;
+  padding: 12px 14px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+}
+.smart-summary {
+  right: auto;
+  left: 12px;
+  width: 460px;
+}
+.smart-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kind-pill {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--tag) 75%, #000);
+  background: color-mix(in srgb, var(--tag) 14%, transparent);
+}
+.smart-card h3 {
+  margin: 8px 0 2px;
+  font-size: 17px;
+  line-height: 1.25;
+}
+.smart-card .source {
+  margin: 0 0 6px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.smart-card h4,
+.smart-summary h4 {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.smart-card dl {
+  margin: 0;
+}
+.smart-card .row {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.smart-card .row:last-child {
+  border-bottom: none;
+}
+.smart-card dt {
+  color: var(--text-2);
+}
+.smart-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.smart-card dd .line {
+  display: block;
+}
+.inline-link {
+  display: inline;
+  min-height: 0;
+  padding: 0 3px;
+  border: none;
+  border-radius: 4px;
+  box-shadow: none;
+  font: inherit;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--tag) 80%, #000);
+  background: color-mix(in srgb, var(--tag) 14%, transparent);
+  cursor: pointer;
+}
+.smart-card .where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.code-chip {
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.code-chip.here {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.smart-summary table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.smart-summary td {
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.smart-summary td.num {
+  white-space: nowrap;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.smart-summary .missing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.smart-sources {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.smart-summary p.small {
+  margin: 10px 0;
+}
+.smart-fab {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  min-height: 32px;
+  border-radius: 16px;
+  border-color: #e2cdf2;
+  color: var(--ai);
+  font-weight: 600;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+.smart-fab:hover {
+  background: var(--ai-soft) !important;
+}
+.editor-head .editor-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.editor-head .editor-actions button {
+  min-height: 26px;
+  padding: 0 10px;
+}

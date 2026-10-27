@@ -12,7 +12,12 @@ interface Props {
   onDelete: () => void;
   /** Makes a copy of this type, with its assembly, to edit into a similar one. */
   onDuplicate: () => void;
+  /** Back (and Save): keeps the changes. */
   onClose: () => void;
+  /** Changed since it was opened. */
+  dirty?: boolean;
+  /** Puts the type back as it was when it was opened. */
+  onCancel?: () => void;
 }
 
 const VARS_HELP: [keyof Vars, string][] = [
@@ -53,17 +58,27 @@ function defaultItem(type: TakeoffType, units: Units) {
   return { formula: 'N', unit: 'ea' };
 }
 
-export function TypeEditor({ type, units, totals, onChange, onDelete, onDuplicate, onClose }: Props) {
+export function TypeEditor({ type, units, totals, onChange, onDelete, onDuplicate, onClose, dirty, onCancel }: Props) {
   const set = (patch: Partial<TakeoffType>) => onChange({ ...type, ...patch });
   const vars = totals ?? { L: 0, H: type.height, A: 0, P: 0, N: 0, I: 0 };
 
   return (
     <div className="type-editor">
       <div className="editor-head">
-        <button className="back" onClick={onClose}>
-          <Icon name="chevron" size={14} /> Done
+        <button className="back" onClick={onClose} title="Back to the quantities (keeps your changes)">
+          <Icon name="chevron" size={14} /> Back
         </button>
-        <span className="editor-title">Takeoff type</span>
+        <span className="editor-title">{dirty ? 'Edited' : 'Takeoff type'}</span>
+        <span className="editor-actions">
+          {dirty && onCancel && (
+            <button className="small" onClick={onCancel} title="Undo every change made since you opened this type">
+              Cancel
+            </button>
+          )}
+          <button className={`small ${dirty ? 'primary' : ''}`} onClick={onClose} title={dirty ? 'Keep these changes' : 'Close'}>
+            {dirty ? 'Save' : 'Done'}
+          </button>
+        </span>
       </div>
 
       <div className="form-group">
