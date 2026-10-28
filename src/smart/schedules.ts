@@ -61,6 +61,8 @@ const ySpan = (t: PageText): [number, number] => (turned(t) ? [t.cy - t.w / 2, t
 /** A tick in a yes/no column. */
 const TICK = /^[●•✓✔xX■◼◆*]$/;
 const clean = (s: string) => (TICK.test(s.trim()) ? '✓' : s.replace(/\s+/g, ' ').trim());
+/** A cell's pieces as one value: a tick alone is a tick; bullets among words start lines (a description's list). */
+const joinCell = (pieces: string[]) => (pieces.length === 1 ? pieces[0] : pieces.join(' ').replace(/\s*✓\s*/g, '\n').trim());
 
 const median = (xs: number[]) => {
   if (!xs.length) return 0;
@@ -259,7 +261,7 @@ function readOne(title: PageText, texts: PageText[], titles: PageText[], vert: S
         }
       for (const w of words) cells[w.c].push(clean(w.s));
     }
-    return { mark: r.str.trim(), cells: cells.map((c) => c.join(' ')) };
+    return { mark: r.str.trim(), cells: cells.map(joinCell) };
   });
   // A column with no heading and nothing in it is a gap.
   const keep = cols.map((_, i) => columns[i].length > 0 || rows.some((r) => r.cells[i]));

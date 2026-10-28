@@ -311,7 +311,7 @@ export function describe(e: Entry, index: DrawingIndex, sheets: Sheet[], dict = 
     });
     // Its name, when the schedule gives one (ROOM NAME, DESCRIPTION, a TYPE column of its own).
     const nameCol = nameColumn(s);
-    const name = nameCol >= 0 ? e.row.cells[nameCol] : '';
+    const name = nameCol >= 0 ? (e.row.cells[nameCol] ?? '').split('\n')[0] : '';
     if (name) heading = `${e.code} · ${title(name.length > 60 ? `${name.slice(0, 57)}…` : name)}`;
     // A group of one column (ESP over (in wc)) reads as one line in the main section.
     const main: InfoRow[] = [];
@@ -323,7 +323,7 @@ export function describe(e: Entry, index: DrawingIndex, sheets: Sheet[], dict = 
       }
       const ticks = list.filter((x) => x.value === '✓');
       const rows: InfoRow[] = list
-        .filter((x) => x.value !== '✓' && !(name && x.value === name && !group))
+        .filter((x) => x.value !== '✓' && !(name && x.value.split('\n')[0] === name && !x.value.includes('\n') && !group))
         .map((x) => ({ label: sentence(x.label || group || 'Value'), value: expand(x.value, abbr), link: linkOf(x.value) }));
       if (ticks.length) rows.push({ label: ticks.length > 2 ? 'Includes' : 'Checked', value: ticks.map((x) => sentence(x.label)).join(', ') });
       if (!group) main.unshift(...rows);
@@ -345,7 +345,7 @@ export function describe(e: Entry, index: DrawingIndex, sheets: Sheet[], dict = 
     rows.push({ label: e.schedule ? title(head) : 'Construction', value: rest.map((x) => sentence(x)).join('\n') || sentence(head) });
     sections.push({ title: 'Legend', rows });
   }
-  if (e.kind === 'wall' && e.schedule && e.row && !e.legend) sections.push({ title: 'Key facts', rows: wallFacts(e.row.cells) });
+  if (e.kind === 'wall' && e.schedule && e.row && !e.legend) sections.push({ title: 'Key facts', rows: wallFacts(e.row.cells.flatMap((c) => c.split('\n'))) });
   // A finish code: what it is, and the rooms it is in.
   if (e.kind === 'finish') {
     const word = norm(e.code).replace(/\d.*$/, '');
@@ -388,7 +388,7 @@ const nameColumn = (s: Schedule) => s.columns.findIndex((c, i) => i !== s.markCo
 export function entryName(e: Entry): string {
   if (e.schedule && e.row) {
     const i = nameColumn(e.schedule);
-    if (i >= 0 && e.row.cells[i]) return title(e.row.cells[i]);
+    if (i >= 0 && e.row.cells[i]) return title(e.row.cells[i].split('\n')[0]);
   }
   if (e.legend) return title(e.legend.lines[0] ?? '');
   return '';
@@ -412,9 +412,9 @@ export function wallFacts(lines: string[]): InfoRow[] {
   const insul = lines.find((l) => /INSUL|SAFB|BATT|MINERAL WOOL/i.test(l));
   if (insul) rows.push({ label: 'Insulation', value: sentence(insul.replace(/^[•✓\-\s]+/, '')) });
   const fire = /(\d(?:\.\d+)?\s*(?:HR|HOUR)S?\b[^\n]{0,12}?(?:F\.?R\.?R\.?|FIRE)?)|((?:F\.?R\.?R\.?|FIRE RATING)[:\s]+\d[^\n]{0,10})/i.exec(all);
-  rows.push({ label: 'Fire rating', value: fire ? fire[0].trim() : 'Not stated on the legend' });
+  rows.push({ label: 'Fire rating', value: fire ? fire[0].trim() : 'Not stated on the drawings' });
   const stc = /S\.?T\.?C\.?\s*:?\s*(\d{2})/i.exec(all);
-  rows.push({ label: 'Sound (STC)', value: stc ? stc[1] : 'Not stated on the legend' });
+  rows.push({ label: 'Sound (STC)', value: stc ? stc[1] : 'Not stated on the drawings' });
   return rows;
 }
 
