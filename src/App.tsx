@@ -44,7 +44,8 @@ import { DrawingMap } from './components/DrawingMap';
 import { ProjectMap } from './components/ProjectMap';
 import { SpecView, type SpecTarget } from './components/SpecView';
 import { FileManager } from './components/FileManager';
-import { mergeSections, readSpec } from './spec/parse';
+import { addendumNumber, mergeSections, readSpec } from './spec/parse';
+import { isCombined, pageKinds, pagesOf, splitPdf } from './splitPdf';
 import { buildProjectMap } from './spec/links';
 import { buildGraph, definitionsOf, type DrawingGraph, type Link, type Place } from './graph/graph';
 import { entries, norm, type Entry } from './smart/index';
@@ -356,16 +357,18 @@ export function App() {
   // The spec tied to the drawings: built when the spec or the map is looked at.
   const specBooks = useMemo(() => (project?.specs ?? []).flatMap((d) => (d.book ? [d.book] : [])), [project?.specs]);
   const projectMap = useMemo(
-    () => (view !== 'drawings' && project && (specBooks.length || graph) ? buildProjectMap(graph, specBooks, project.sheets, graph?.specRefs ?? []) : null),
+    () => (view !== 'drawings' && project && (specBooks.length || graph) ? buildProjectMap(graph, specBooks, project.sheets, graph?.specRefs ?? [], project.docs) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [view === 'drawings', graph, specBooks, project?.sheets],
   );
+  if (import.meta.env.DEV) (window as unknown as { __pmap: unknown; __graph: unknown }).__pmap = projectMap;
+  if (import.meta.env.DEV) (window as unknown as { __pmap: unknown; __graph: unknown }).__graph = graph;
   const sheetByNumber = useMemo(() => new Map((project?.sheets ?? []).filter((s) => !s.superseded && /\d/.test(s.name)).map((s) => [norm(s.name), s])), [project?.sheets]);
-  // The spec or the map opened: the drawings are read into their graph for it.
+  // The spec or the map open: the drawings are read into their graph for it (again when drawings come or go).
   useEffect(() => {
-    if (view !== 'drawings' && project?.sheets.length && !graphRef.current && !graphBuilding.current) void openLinks();
+    if (view !== 'drawings' && graphKey && !graphBuilding.current && graphRef.current?.key !== graphKey) void openLinks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
+  }, [view, graphKey]);
   // Drawings added or removed while links are on: read the set again.
   useEffect(() => {
     if (linksOn && !graphBuilding.current && graphRef.current?.key !== graphKey && graphKey) void openLinks();
@@ -900,25 +903,48 @@ export function App() {
   }
 
   /** Adds specification files: kept like drawings, each read into its sections once. */
-  async function addSpecs(files: FileList | File[]) {
-    const list = [...files].filter((f) => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name));
+  async function addSpecs(files: FileList | (File | { name: string; data: ArrayBuffer })[]) {
+    const raw = [...files].filter((f) => ('data' in f ? true : /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)));
+    // A combined file added here: its drawings go to the set, the rest is read.
+    const list: { name: string; data: ArrayBuffer }[] = [];
+    for (const f of raw) {
+      const item = 'data' in f ? f : { name: f.name, data: await f.arrayBuffer() };
+      const split = 'data' in f ? null : await splitCombined(item.name, item.data);
+      if (!split) {
+        list.push(item);
+        continue;
+      }
+      if (split.drawings) {
+        setBusy(`Reading ${split.drawings.name}…`);
+        await addDrawingData(split.drawings.name, split.drawings.data);
+        setBusy(null);
+      }
+      if (split.spec) list.push(split.spec);
+    }
     const added: SpecDoc[] = [];
     const failed: string[] = [];
     for (const [i, f] of list.entries()) {
       const docId = newId();
       const label = list.length > 1 ? `${f.name} (file ${i + 1} of ${list.length})` : f.name;
       try {
-        const data = await f.arrayBuffer();
+        const data = f.data;
         await savePdf(docId, data);
         const pdf = await openPdf(data);
         specPdfs.current.set(docId, Promise.resolve(pdf));
         setSpecReading({ name: label, page: 0, of: pdf.numPages });
+        // An addendum (by its name, or its first page): read for what it changes as well.
+        let addendum = addendumNumber(f.name);
+        if (addendum === null) {
+          const first = (await pageTexts(await pdf.getPage(1)).catch(() => [])).map((t) => t.str).join(' ');
+          if (/\baddend(um|a)\b/i.test(first) && !/specifications?\b.*\bdivision/i.test(first)) addendum = addendumNumber(first);
+        }
         const book = await readSpec(
           docId,
           f.name,
           pdf.numPages,
           async (n) => pageTexts(await pdf.getPage(n)).catch(() => []),
           (n) => setSpecReading({ name: label, page: n, of: pdf.numPages }),
+          addendum !== null ? { addendum } : {},
         );
         added.push({ id: docId, name: f.name, book });
       } catch {
@@ -1014,9 +1040,19 @@ export function App() {
     }
     // Originals first, then addenda by number: a re-issued sheet then follows the sheet it replaces.
     const byName = new Map(Array.from(files).map((f) => [f.name, f]));
+    const specParts: { name: string; data: ArrayBuffer }[] = [];
     for (const file of issueOrder([...byName.keys()]).map((n) => byName.get(n)!)) {
       setBusy(`Reading ${file.name}…`);
-      const { sheets, noText } = await addDrawingData(file.name, await file.arrayBuffer());
+      let data = await file.arrayBuffer();
+      let name = file.name;
+      // Specification and drawings in one file: split them, the drawings here, the rest read as the spec.
+      const split = await splitCombined(name, data);
+      if (split) {
+        if (split.spec) specParts.push(split.spec);
+        if (!split.drawings) continue;
+        ({ name, data } = split.drawings);
+      }
+      const { sheets, noText } = await addDrawingData(name, data);
       setBusy(null);
       // What is ready: scales read, and sheets the automatic tools can't read.
       const scaled = sheets.filter((x) => x.metersPerPoint).length;
@@ -1030,6 +1066,41 @@ export function App() {
     }
     setBusy(null);
     supersedeReissued();
+    if (specParts.length) await addSpecs(specParts);
+  }
+
+  /**
+   * A tender bound as one PDF (the project manual and the drawings together): offered to be split
+   * in two by page size, the drawings to the set and the letter-size pages to the specification.
+   * Null when the file is all one kind or the split is declined.
+   */
+  async function splitCombined(name: string, data: ArrayBuffer): Promise<{ drawings?: { name: string; data: ArrayBuffer }; spec?: { name: string; data: ArrayBuffer } } | null> {
+    let kinds;
+    try {
+      const pdf = await openPdf(data);
+      kinds = await pageKinds(pdf);
+      void pdf.destroy();
+    } catch {
+      return null;
+    }
+    if (!isCombined(kinds)) {
+      // A document, not drawings (an addendum, a spec): read it as such.
+      if (kinds.every((k) => k === 'doc') && /addend|spec|manual/i.test(name)) return { spec: { name, data } };
+      return null;
+    }
+    const docs = pagesOf(kinds, 'doc');
+    const sheets = pagesOf(kinds, 'sheet');
+    setBusy(null);
+    const ok = await askConfirm(
+      `${name} holds ${docs.length} letter-size pages (the specification and reports) and ${sheets.length} drawing sheets. Split it, the drawings into the set and the rest read as the specification?`,
+      { confirmLabel: 'Split' },
+    );
+    if (!ok) return null;
+    setBusy(`Splitting ${name}…`);
+    const base = name.replace(/\.pdf$/i, '');
+    const [dwg, spec] = await splitPdf(data, [sheets, docs]);
+    setBusy(null);
+    return { drawings: { name: `${base} - Drawings.pdf`, data: dwg }, spec: { name: `${base} - Specifications.pdf`, data: spec } };
   }
 
   /**
@@ -2544,7 +2615,7 @@ export function App() {
       const g = await openLinks();
       const q = projectRef.current;
       if (!q) return null;
-      return buildProjectMap(g, (q.specs ?? []).flatMap((d) => (d.book ? [d.book] : [])), q.sheets, g?.specRefs ?? []);
+      return buildProjectMap(g, (q.specs ?? []).flatMap((d) => (d.book ? [d.book] : [])), q.sheets, g?.specRefs ?? [], q.docs);
     },
     showTag: (key: string) => {
       const g = graphRef.current?.graph;

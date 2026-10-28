@@ -4486,3 +4486,189 @@ button.link-button:hover {
   color: #8fd0ff;
   font-size: 12px;
 }
+
+/* ───────────── Map type: spaced capitals ───────────── */
+.pmap,
+.pmap-empty {
+  font-family: 'Space Grotesk', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+.pmap-title,
+.pmap-chip,
+.pmap-seg button,
+.pmap-panel h3,
+.pmap-panel h4,
+.pmap-panel-head strong,
+.pmap-kind,
+.pmap-badge,
+.pmap-link-main,
+.pmap-list button,
+.pmap-results button,
+.pmap-legend,
+.pmap-buttons button,
+.pmap-panel > p,
+.pmap-warn,
+.pmap-more,
+.pmap-empty h2,
+.pmap-empty p {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.pmap-title strong {
+  letter-spacing: 0.14em;
+  font-weight: 700;
+}
+.pmap-sub {
+  letter-spacing: 0.08em;
+  font-size: 11px;
+}
+.pmap-search input {
+  letter-spacing: 0.04em;
+}
+.pmap-search input::placeholder {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+.pmap-panel h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 19px;
+  line-height: 1.25;
+  letter-spacing: 0.05em;
+}
+.pmap-panel h3 span {
+  font-size: 14px;
+}
+.pmap-panel h4 {
+  letter-spacing: 0.14em;
+}
+.pmap-link-main {
+  font-size: 12px;
+}
+.pmap-link-main small {
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+}
+.pmap-badge {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+}
+.pmap-badge.revises {
+  color: #ff8cbe;
+  background: rgba(255, 95, 162, 0.15);
+}
+.pmap-chip.revises .swatch {
+  border-top: 2px solid #ff5fa2;
+}
+.pmap-legend .s.planet {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4da3ff;
+  box-shadow: 0 0 0 2px rgba(5, 9, 21, 1), 0 0 0 3px rgba(77, 163, 255, 0.7);
+}
+.pmap-legend .s.flare {
+  width: 10px;
+  height: 10px;
+  background: radial-gradient(circle, #fff 0 18%, transparent 20%), linear-gradient(#ff5fa2, #ff5fa2) center/100% 1.5px no-repeat, linear-gradient(#ff5fa2, #ff5fa2) center/1.5px 100% no-repeat;
+}
+.map3d-tip {
+  font-family: 'Space Grotesk', sans-serif;
+  letter-spacing: 0.06em;
+}
+.spec-sec .t,
+.spec-crumb span:last-child,
+.spec-side-head p,
+.spec-tie-main {
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.tag.add {
+  background: #fde7f0;
+  color: #c2185b;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.spec-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.spec-changes > li > button {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: none;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}
+.spec-changes > li > button:hover,
+.spec-changes > li > button.here {
+  border-color: #e0457b;
+}
+.spec-changes .chg {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--fill);
+}
+.spec-changes .chg.added {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.spec-changes .chg.revised {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.spec-changes .chg.deleted {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.spec-changes .spec-chips {
+  margin-top: 4px;
+}
+.spec-chip.sheet {
+  color: var(--good);
+}
+.pmap-zoom {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: rgba(16, 22, 40, 0.62);
+  backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(140, 170, 255, 0.16);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+.pmap-zoom button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  box-shadow: none;
+  color: #e8ecff;
+  font: 500 18px 'Space Grotesk', sans-serif;
+}
+.pmap-zoom button:hover {
+  background: rgba(140, 170, 255, 0.16);
+}

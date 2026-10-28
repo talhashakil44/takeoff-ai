@@ -53,6 +53,7 @@ const DIVISIONS: Record<string, string> = {
   '12': 'Furnishings',
   '13': 'Special construction',
   '14': 'Conveying equipment',
+  '20': 'Mechanical general',
   '21': 'Fire suppression',
   '22': 'Plumbing',
   '23': 'HVAC',
@@ -63,6 +64,10 @@ const DIVISIONS: Record<string, string> = {
   '31': 'Earthwork',
   '32': 'Exterior improvements',
   '33': 'Utilities',
+  '34': 'Transportation',
+  '35': 'Waterway & marine',
+  '40': 'Process integration',
+  '48': 'Electrical power generation',
 };
 
 type Hot = { box: [number, number, number, number]; kind: 'section' | 'sheet' | 'schedule'; text: string; key: string };
@@ -100,6 +105,7 @@ export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAd
   // Every file's sections as one book.
   const all = useMemo(() => mergeSections(books.map((d) => d.book!)), [books]);
   const sectionByKey = useMemo(() => new Map(all.map((s) => [s.key, s])), [all]);
+  const addenda = useMemo(() => books.filter((d) => d.book!.addendum !== undefined).sort((a, b) => a.book!.addendum! - b.book!.addendum!), [books]);
 
   // The table of contents, by division, filtered.
   const divisions = useMemo(() => {
@@ -253,7 +259,7 @@ export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAd
             )}
             {all.some((s) => s.missing) && (
               <span className="warn">
-                <b>{all.filter((s) => s.missing).length}</b> to follow
+                <b>{all.filter((s) => s.missing).length}</b> not issued
               </span>
             )}
           </div>
@@ -264,6 +270,31 @@ export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAd
         </div>
         {reading && <ReadingBar reading={reading} />}
         <div className="spec-toc-list">
+          {addenda.length > 0 && !query.trim() && (
+            <div className={`spec-div ${open.has('AD') || addenda.some((d) => d.id === doc?.id) ? 'open' : ''}`}>
+              <button className="spec-div-head" onClick={() => setOpen((o) => (o.has('AD') ? (o.delete('AD'), new Set(o)) : new Set(o).add('AD')))}>
+                <span className="spec-div-num" style={{ ['--c' as string]: '#e0457b' }}>
+                  AD
+                </span>
+                <span className="spec-div-name">Addenda</span>
+                <span className="count">{addenda.length}</span>
+                <Icon name="chevronDown" size={12} className="chev" />
+              </button>
+              {(open.has('AD') || addenda.some((d) => d.id === doc?.id)) && (
+                <ul>
+                  {addenda.map((d) => (
+                    <li key={d.id}>
+                      <button className={`spec-sec ${d.id === doc?.id ? 'on' : ''}`} onClick={() => (setDocId(d.id), setPage(1))} title={d.name}>
+                        <span className="n">#{d.book!.addendum}</span>
+                        <span className="t">{d.name.replace(/\.pdf$/i, '')}</span>
+                        {d.book!.changes?.length ? <span className="tag add">{d.book!.changes.length}</span> : null}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           {divisions.map(([div, list]) => {
             const isOpen = open.has(div) || !!query.trim() || list.some((s) => s.key === sectionKey);
             return (
@@ -280,10 +311,11 @@ export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAd
                   <ul>
                     {list.map((s) => (
                       <li key={s.key}>
-                        <button className={`spec-sec ${s.key === sectionKey ? 'on' : ''} ${s.missing ? 'missing' : ''}`} onClick={() => goSection(s)} disabled={s.missing} title={s.missing ? 'Listed in the table of contents as “To follow”' : `${s.pages.length} pages`}>
+                        <button className={`spec-sec ${s.key === sectionKey ? 'on' : ''} ${s.missing ? 'missing' : ''}`} onClick={() => goSection(s)} disabled={s.missing} title={s.missing ? 'Listed in the table of contents, not in the spec book (to follow, or issued elsewhere)' : `${s.pages.length} pages`}>
                           <span className="n">{s.number}</span>
                           <span className="t">{s.title || 'Untitled'}</span>
-                          {s.missing ? <span className="tag warn">To follow</span> : linkCount.get(s.key) ? <span className="tag link">{linkCount.get(s.key)}</span> : null}
+                          {s.revisions?.length ? <span className="tag add" title={`Issued in Addendum ${s.revisions.map((r) => r.addendum).join(', ')}`}>ADD {s.revisions[s.revisions.length - 1].addendum}</span> : null}
+                          {s.missing ? <span className="tag warn">Not issued</span> : linkCount.get(s.key) ? <span className="tag link">{linkCount.get(s.key)}</span> : null}
                         </button>
                       </li>
                     ))}
@@ -388,6 +420,35 @@ export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAd
               </span>
             </div>
 
+            {(() => {
+              const merged = sectionByKey.get(section.key);
+              const revs = merged?.revisions ?? [];
+              const changedBy = addenda.flatMap((d) => (d.book!.changes ?? []).filter((c) => c.sections.includes(section.key)).map((c) => ({ d, c })));
+              if (!revs.length && !changedBy.length) return null;
+              return (
+                <>
+                  <h4>Addenda</h4>
+                  <ul className="spec-changes">
+                    {revs.map((r) => (
+                      <li key={`r${r.addendum}`}>
+                        <button onClick={() => (setDocId(r.docId), setPage(r.page))}>
+                          <span className="tag add">ADD {r.addendum}</span> Re-issued in Addendum {r.addendum}
+                          {r.docId === doc?.id ? ' (this one)' : ''}
+                        </button>
+                      </li>
+                    ))}
+                    {changedBy.map(({ d, c }, i) => (
+                      <li key={`c${i}`}>
+                        <button onClick={() => (setDocId(d.id), setPage(c.page))}>
+                          <span className="tag add">ADD {d.book!.addendum}</span> <b>{c.action}</b> · {c.label} {c.text.slice(0, 120)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              );
+            })()}
+
             <h4>On the drawings {ties.length ? <span className="count">{ties.length}</span> : null}</h4>
             {ties.length ? (
               <ul className="spec-ties">
@@ -463,6 +524,50 @@ export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAd
                     ))}
                 </ol>
               </>
+            )}
+          </>
+        ) : book?.addendum !== undefined ? (
+          <>
+            <div className="spec-side-head">
+              <span className="spec-div-num" style={{ ['--c' as string]: '#e0457b' }}>
+                AD
+              </span>
+              <div>
+                <h3>Addendum {book.addendum}</h3>
+                <p>{doc?.name.replace(/\.pdf$/i, '')}</p>
+              </div>
+            </div>
+            <h4>What it changes {book.changes?.length ? <span className="count">{book.changes.length}</span> : null}</h4>
+            {book.changes?.length ? (
+              <ul className="spec-changes">
+                {book.changes.map((c, i) => (
+                  <li key={i}>
+                    <button onClick={() => setPage(c.page)} className={c.page === page ? 'here' : ''}>
+                      <span className={`chg ${c.action}`}>{c.action}</span> <b>{c.label}</b> {c.text.slice(0, 220)}
+                    </button>
+                    <div className="spec-chips">
+                      {c.sections.map((k) => {
+                        const t = sectionByKey.get(k);
+                        return t ? (
+                          <button key={k} className="spec-chip" onClick={() => goSection(t)} disabled={t.missing} title={t.title}>
+                            {t.number}
+                          </button>
+                        ) : null;
+                      })}
+                      {c.sheets.map((tok) => {
+                        const sh = sheetByName(tok);
+                        return sh ? (
+                          <button key={tok} className="spec-chip sheet" onClick={() => onOpenDrawing([{ sheetId: sh.id, box: [0, 0, sh.width, sh.height], label: sh.name }], sh.name)}>
+                            {sh.name}
+                          </button>
+                        ) : null;
+                      })}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted small">No items naming a section or a sheet were read from it.</p>
             )}
           </>
         ) : (

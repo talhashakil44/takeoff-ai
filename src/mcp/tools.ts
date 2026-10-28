@@ -1,6 +1,7 @@
 import type { Automation } from '../automate/result';
 import { sheetEdges, type DrawingGraph } from '../graph/graph';
 import type { ProjectMap } from '../spec/links';
+import { mergeSections } from '../spec/parse';
 import { describe, entries, entryName, indexStats, norm, searchEntries, type DrawingIndex } from '../smart/index';
 import type { SetAccess } from '../automate/set';
 import { PALETTE } from '../automate/set';
@@ -761,7 +762,7 @@ async function dispatch(ctx: McpContext, name: string, a: Record<string, unknown
       const m = await ctx.projectMap();
       if (!m) throw new ToolError('The specification could not be tied to the drawings.');
       const byId = new Map(m.nodes.map((n) => [n.id, n]));
-      const sections = m.books.flatMap((b) => b.sections);
+      const sections = mergeSections(m.books);
       const nm = (id: string) => p.sheets.find((x) => x.id === id)?.name ?? id;
       const tied = (id: string) => m.edges.filter((e) => (e.a === id || e.b === id) && (e.kind === 'written' || e.kind === 'matched'));
       if (a.section) {
@@ -773,6 +774,8 @@ async function dispatch(ctx: McpContext, name: string, a: Record<string, unknown
           section: s.number,
           title: s.title,
           missing: !!s.missing,
+          issued_in_addenda: (s.revisions ?? []).map((r) => r.addendum),
+          changed_by_addenda: m.books.flatMap((b) => (b.changes ?? []).filter((c) => c.sections.includes(s.key)).map((c) => ({ addendum: b.addendum, item: c.label, action: c.action, text: c.text }))),
           pages: s.pages.length ? [s.pages[0], s.pages[s.pages.length - 1]] : [],
           articles: s.articles.map((x) => `${x.number} ${x.title}`),
           refers_to: s.sections.map((k) => {
@@ -788,6 +791,10 @@ async function dispatch(ctx: McpContext, name: string, a: Record<string, unknown
       }
       const linked = new Set(m.edges.filter((e) => e.kind === 'written' || e.kind === 'matched').flatMap((e) => [e.a, e.b]));
       const out = {
+        addenda: m.books
+          .filter((b) => b.addendum !== undefined)
+          .sort((a, b) => a.addendum! - b.addendum!)
+          .map((b) => ({ addendum: b.addendum, file: b.name, changes: (b.changes ?? []).map((c) => ({ item: c.label, action: c.action, sections: c.sections, sheets: c.sheets, text: c.text.slice(0, 200) })) })),
         sections: sections.map((s) => ({ number: s.number, title: s.title, ...(s.missing ? { to_follow: true } : { pages: s.pages.length }), drawing_links: tied(`spec:${s.key}`).length })),
         gaps: {
           to_follow: sections.filter((s) => s.missing).map((s) => `${s.number} ${s.title}${linked.has(`spec:${s.key}`) ? ' (the drawings show its work)' : ''}`),

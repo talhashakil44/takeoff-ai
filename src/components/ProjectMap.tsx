@@ -3,6 +3,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Place } from '../graph/graph';
 import type { MapEdge, MapEdgeKind, MapNode, ProjectMap as MapData } from '../spec/links';
 import { Icon } from './Icons';
+import '@fontsource/space-grotesk/500.css';
+import '@fontsource/space-grotesk/600.css';
+import '@fontsource/space-grotesk/700.css';
+import '@fontsource/jetbrains-mono/500.css';
+
+/** The map's type: a geometric grotesk, set in capitals, spaced. */
+const FONT = '"Space Grotesk", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif';
+const ADD_COLOR = '#ff5fa2';
 
 /**
  * The project map: the specification on the left, the drawings on the right, every link between
@@ -28,6 +36,7 @@ const DIVISIONS: Record<string, string> = {
   '12': 'Furnishings',
   '13': 'Special construction',
   '14': 'Conveying',
+  '20': 'Mechanical general',
   '21': 'Fire suppression',
   '22': 'Plumbing',
   '23': 'HVAC',
@@ -38,11 +47,16 @@ const DIVISIONS: Record<string, string> = {
   '31': 'Earthwork',
   '32': 'Exterior improvements',
   '33': 'Utilities',
+  '34': 'Transportation',
+  '35': 'Waterway & marine',
+  '40': 'Process integration',
+  '48': 'Electrical power generation',
 };
 const TRADES: Record<string, string> = { A: 'Architectural', S: 'Structural', M: 'Mechanical', P: 'Plumbing', E: 'Electrical', FP: 'Fire protection', F: 'Fire', C: 'Civil', SP: 'Site', L: 'Landscape', ID: 'Interiors', '#': 'Other' };
 
 /** A division's colour: the colour of the trade that draws it, so a link reads end to end. */
 function specColor(div: string): string {
+  if (div === 'AD') return ADD_COLOR;
   const n = parseInt(div, 10);
   if (n <= 1) return '#c7cbd6';
   if (n === 2 || n >= 31) return '#c8a27a';
@@ -54,8 +68,11 @@ function specColor(div: string): string {
 }
 const TRADE_COLORS: Record<string, string> = { A: '#4da3ff', S: '#ffb340', M: '#3ddc84', P: '#4fd1ff', E: '#ffd60a', FP: '#ff6b6b', F: '#ff6b6b', C: '#c8a27a', SP: '#c8a27a', L: '#6fe3c5', ID: '#9d8cff', '#': '#c7cbd6' };
 const colorOf = (n: MapNode) => (n.side === 'spec' ? specColor(n.group) : (TRADE_COLORS[n.group] ?? '#c7cbd6'));
-const groupName = (n: MapNode) => (n.side === 'spec' ? `${n.group} · ${DIVISIONS[n.group] ?? 'Division'}` : (TRADES[n.group] ?? n.group));
-const KIND_NAME: Record<MapNode['kind'], string> = { section: 'Spec section', sheet: 'Sheet', schedule: 'Schedule', type: 'Type legend', finish: 'Finish', item: 'Equipment' };
+const groupName = (n: MapNode) => (n.group === 'AD' ? 'Addenda' : n.side === 'spec' ? `Division ${n.group} · ${DIVISIONS[n.group] ?? ''}` : (TRADES[n.group] ?? n.group));
+const KIND_NAME: Record<MapNode['kind'], string> = { section: 'Spec section', sheet: 'Sheet', schedule: 'Schedule', type: 'Type legend', finish: 'Finish', item: 'Equipment', addendum: 'Addendum' };
+const EDGE_COLOR: Record<MapEdgeKind, string> = { written: '#7cc4ff', matched: '#c58cff', 'spec-spec': '#8a93b5', contains: '#3a4566', revises: ADD_COLOR };
+/** Capitals for every label: one case, whatever case the documents used. */
+const up = (s: string) => s.toUpperCase();
 
 interface SimNode extends SimulationNodeDatum, MapNode {
   r: number;
@@ -81,7 +98,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
   const wrapRef = useRef<HTMLDivElement>(null);
   const threeRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<'2d' | '3d'>('2d');
-  const [show, setShow] = useState<Record<MapEdgeKind | 'items', boolean>>({ written: true, matched: true, 'spec-spec': false, contains: true, items: true });
+  const [show, setShow] = useState<Record<MapEdgeKind | 'items', boolean>>({ written: true, matched: true, 'spec-spec': false, contains: true, revises: true, items: true });
   const [hover, setHover] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -90,7 +107,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
   const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean; node?: SimNode } | null>(null);
 
   // The graph, as the simulation and the drawing use it.
-  const { nodes, edges, byId, neighbours } = useMemo(() => {
+  const { nodes, edges, byId, neighbours, rankIn } = useMemo(() => {
     const visible = data.nodes.filter((n) => show.items || !(n.kind === 'item' || n.kind === 'finish' || n.kind === 'type'));
     const ids = new Set(visible.map((n) => n.id));
     const es = data.edges.filter((e) => ids.has(e.a) && ids.has(e.b));
@@ -98,7 +115,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     for (const e of es) if (e.kind !== 'contains') for (const id of [e.a, e.b]) deg.set(id, (deg.get(id) ?? 0) + 1);
     const nodes: SimNode[] = visible.map((n) => {
       const d = deg.get(n.id) ?? 0;
-      const base = n.kind === 'section' ? 4 : n.kind === 'schedule' ? 5 : n.kind === 'sheet' ? 3.5 : 3;
+      const base = n.kind === 'addendum' ? 6 : n.kind === 'section' ? 4 : n.kind === 'schedule' ? 5 : n.kind === 'sheet' ? 3.5 : 3;
       return { ...n, degree: d, r: base + Math.min(10, Math.sqrt(d) * 1.7), color: colorOf(n) };
     });
     const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -110,41 +127,94 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       neighbours.get(e.a)!.add(e.b);
       neighbours.get(e.b)!.add(e.a);
     }
-    return { nodes, edges, byId, neighbours };
+    // Each node's place in its cluster by how linked it is: the first few are named when zoomed out.
+    const rankIn = new Map<string, number>();
+    const byGroup = new Map<string, SimNode[]>();
+    for (const n of nodes) byGroup.set(`${n.side}:${n.group}`, [...(byGroup.get(`${n.side}:${n.group}`) ?? []), n]);
+    for (const list of byGroup.values()) list.sort((a, b) => b.degree - a.degree || (a.kind === 'schedule' ? -1 : 1)).forEach((n, i) => rankIn.set(n.id, i));
+    return { nodes, edges, byId, neighbours, rankIn };
   }, [data, show.items]);
 
   // Where each cluster sits: divisions down an arc on the left, trades down an arc on the right.
   const anchors = useMemo(() => {
     const out = new Map<string, { x: number; y: number; label: string; color: string }>();
+    // Clusters down an arc on each side, each given room for its size so none overlaps the next.
+    const size = new Map<string, number>();
+    for (const n of nodes) size.set(`${n.side === 'spec' ? -1 : 1}:${n.group}`, (size.get(`${n.side === 'spec' ? -1 : 1}:${n.group}`) ?? 0) + 1);
     const place = (keys: string[], side: -1 | 1, label: (k: string) => string, color: (k: string) => string) => {
+      const rad = keys.map((k) => 34 + 15 * Math.sqrt(size.get(`${side}:${k}`) ?? 1));
+      const gap = 64;
+      const total = rad.reduce((a, r) => a + 2 * r, 0) + gap * Math.max(0, keys.length - 1);
+      const arc = Math.max(520, total / 2 / Math.sin((68 * Math.PI) / 180));
+      let y = -total / 2;
       keys.forEach((k, i) => {
-        const t = keys.length === 1 ? 0.5 : i / (keys.length - 1);
-        const spread = Math.min(70, 30 + keys.length * 3);
-        const a = (-spread + 2 * spread * t) * (Math.PI / 180);
-        const R = 480 + keys.length * 14;
-        out.set(`${side}:${k}`, { x: side * (200 + R * 0.8 * Math.cos(a)), y: R * Math.sin(a), label: label(k), color: color(k) });
+        y += rad[i];
+        const th = Math.asin(Math.max(-0.99, Math.min(0.99, y / arc)));
+        out.set(`${side}:${k}`, { x: side * (300 + arc * 0.8 * Math.cos(th)), y, label: label(k), color: color(k) });
+        y += rad[i] + gap;
       });
     };
-    const divs = [...new Set(nodes.filter((n) => n.side === 'spec').map((n) => n.group))].sort();
+    const divs = [...new Set(nodes.filter((n) => n.side === 'spec').map((n) => n.group))].sort((a, b) => (a === 'AD' ? -1 : b === 'AD' ? 1 : a.localeCompare(b)));
     const trades = [...new Set(nodes.filter((n) => n.side === 'drawing').map((n) => n.group))].sort((a, b) => 'SP A ID S M P FP E C L #'.indexOf(a) - 'SP A ID S M P FP E C L #'.indexOf(b));
-    place(divs, -1, (k) => `${k} ${DIVISIONS[k] ?? ''}`, specColor);
+    place(divs, -1, (k) => (k === 'AD' ? 'Addenda' : `${k} — ${DIVISIONS[k] ?? 'Division'}`), specColor);
     place(trades, 1, (k) => TRADES[k] ?? k, (k) => TRADE_COLORS[k] ?? '#c7cbd6');
     return out;
   }, [nodes]);
-  // The whole map in view to start with.
+  // The whole map in view to start with, arrived at from far out: the documents as a galaxy.
   const fitted = useRef(false);
+  const fitView = () => {
+    const r = wrapRef.current!.getBoundingClientRect();
+    const as = [...anchors.values()];
+    const x0 = Math.min(...as.map((a) => a.x)) - 380;
+    const x1 = Math.max(...as.map((a) => a.x)) + 300;
+    const y0 = Math.min(...as.map((a) => a.y)) - 230;
+    const y1 = Math.max(...as.map((a) => a.y)) + 120;
+    const k = Math.min(1.2, r.width / (x1 - x0), (r.height - 150) / (y1 - y0));
+    return { k, x: -(x0 + x1) / 2, y: -(y0 + y1) / 2 + 5 / k };
+  };
+  /** Moves the view to `to`, eased. */
+  const glide = (to: { x: number; y: number; k: number }, ms = 500) => {
+    const from = { ...view.current };
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / ms);
+      const e = 1 - Math.pow(1 - p, 3);
+      view.current = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, k: from.k * Math.pow(to.k / from.k, e) };
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+  const zoomBy = (f: number) => {
+    const v = view.current;
+    glide({ ...v, k: Math.min(5, Math.max(0.12, v.k * f)) }, 260);
+  };
   useEffect(() => {
     if (fitted.current || !wrapRef.current || !anchors.size) return;
     const r = wrapRef.current.getBoundingClientRect();
     const as = [...anchors.values()];
     const x0 = Math.min(...as.map((a) => a.x)) - 380;
     const x1 = Math.max(...as.map((a) => a.x)) + 300;
-    const y0 = Math.min(...as.map((a) => a.y)) - 150;
+    const y0 = Math.min(...as.map((a) => a.y)) - 230;
     const y1 = Math.max(...as.map((a) => a.y)) + 120;
     const k = Math.min(1.2, r.width / (x1 - x0), (r.height - 150) / (y1 - y0));
-    view.current = { k, x: -(x0 + x1) / 2, y: -(y0 + y1) / 2 + 5 / k };
+    const to = { k, x: -(x0 + x1) / 2, y: -(y0 + y1) / 2 + 5 / k };
     fitted.current = true;
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / 1800);
+      const e = 1 - Math.pow(1 - p, 4);
+      view.current = { x: to.x, y: to.y, k: to.k * (0.08 + 0.92 * e) };
+      if (p < 1) requestAnimationFrame(step);
+    };
+    view.current = { ...to, k: to.k * 0.08 };
+    requestAnimationFrame(step);
   }, [anchors]);
+  /** Where each node is drawn this frame (its cluster sways slowly), for the pointer to find it. */
+  const shown = useRef(new Map<string, { x: number; y: number }>());
+  const born = useRef(performance.now());
+  /** The picked node's links as drawn this frame, so a click on one goes to its other end. */
+  const edgeHits = useRef<{ other: string; a: { x: number; y: number }; c: { x: number; y: number }; b: { x: number; y: number } }[]>([]);
+  const hoverEdge = useRef<{ other: string; x: number; y: number } | null>(null);
   const anchorOf = (n: SimNode) => anchors.get(`${n.side === 'spec' ? -1 : 1}:${n.group}`) ?? { x: 0, y: 0 };
 
   // The layout, settling live.
@@ -160,7 +230,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       .force('link', forceLink<SimNode, SimEdge>(edges).strength((e) => (e.kind === 'contains' ? 0.25 : e.kind === 'spec-spec' ? 0.01 : 0.012)).distance((e) => (e.kind === 'contains' ? 26 : 200)))
       .force('x', forceX<SimNode>((n) => anchorOf(n).x).strength(0.16))
       .force('y', forceY<SimNode>((n) => anchorOf(n).y).strength(0.16))
-      .force('collide', forceCollide<SimNode>((n) => n.r + 2.5))
+      .force('collide', forceCollide<SimNode>((n) => n.r + 4.5))
       .alphaDecay(0.03);
     sim.current = s;
     return () => {
@@ -178,6 +248,12 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
   queryRef.current = query;
   const showRef = useRef(show);
   showRef.current = show;
+  // A sky to set it in: stars at three depths, drifting slower than the map as it pans.
+  const stars = useMemo(() => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    return Array.from({ length: 1100 }, () => ({ x: (rnd() - 0.5) * 6000, y: (rnd() - 0.5) * 4000, z: 0.15 + rnd() * 0.5, r: 0.3 + rnd() * 1.1, p: rnd() * Math.PI * 2, s: 0.4 + rnd() * 1.6, c: rnd() < 0.15 ? '#ffd9b0' : rnd() < 0.3 ? '#b9d4ff' : '#ffffff' }));
+  }, []);
   useEffect(() => {
     if (mode !== '2d') return;
     const canvas = canvasRef.current!;
@@ -198,6 +274,9 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(wrapRef.current!);
+    const spaced = (px: number) => {
+      (ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${px}px`;
+    };
     const frame = (time: number) => {
       const focus = hoverRef.current ?? selRef.current;
       const near = focus ? (neighbours.get(focus) ?? new Set<string>()) : null;
@@ -205,154 +284,307 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       const found = q ? new Set(nodes.filter((n) => `${n.label} ${n.sub}`.toLowerCase().includes(q)).map((n) => n.id)) : null;
       const lit = (id: string) => (!focus || id === focus || near!.has(id)) && (!found || found.has(id) || id === focus);
       const v = view.current;
+      const intro = Math.min(1, (time - born.current) / 1400);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // The ground: deep blue, a faint grid.
-      const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.75);
-      g.addColorStop(0, '#111a2e');
-      g.addColorStop(1, '#05070d');
+      ctx.globalCompositeOperation = 'source-over';
+      // Deep space.
+      const g = ctx.createRadialGradient(w / 2, h * 0.45, 0, w / 2, h / 2, Math.max(w, h) * 0.8);
+      g.addColorStop(0, '#0b1226');
+      g.addColorStop(0.55, '#050915');
+      g.addColorStop(1, '#020309');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, h);
+      // Stars, twinkling, each layer moving with the map at its own depth.
+      for (const st of stars) {
+        const sx = w / 2 + (st.x + v.x * st.z) * Math.min(1, 0.35 + v.k * st.z);
+        const sy = h / 2 + (st.y + v.y * st.z) * Math.min(1, 0.35 + v.k * st.z);
+        if (sx < -4 || sy < -4 || sx > w + 4 || sy > h + 4) continue;
+        const a = (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(time / 1000 * st.s + st.p))) * st.z * 1.6 * intro;
+        ctx.globalAlpha = Math.min(1, a);
+        ctx.fillStyle = st.c;
+        ctx.fillRect(sx, sy, st.r, st.r);
+      }
+      ctx.globalAlpha = 1;
       ctx.save();
       ctx.translate(w / 2 + v.x * v.k, h / 2 + v.y * v.k);
       ctx.scale(v.k, v.k);
-      // The seam down the middle, where the two documents meet.
-      const seam = ctx.createLinearGradient(-60, 0, 60, 0);
-      seam.addColorStop(0, 'rgba(120,160,255,0)');
-      seam.addColorStop(0.5, 'rgba(120,160,255,0.07)');
-      seam.addColorStop(1, 'rgba(120,160,255,0)');
-      ctx.fillStyle = seam;
-      ctx.fillRect(-60, -900, 120, 1800);
-      // Cluster names, on the outside edge of each cluster, level with its middle.
+      // The band of light down the middle, where the two documents meet.
+      ctx.save();
+      ctx.scale(0.22, 1);
+      const band = ctx.createRadialGradient(0, 0, 0, 0, 0, 1100);
+      band.addColorStop(0, 'rgba(150,170,255,0.10)');
+      band.addColorStop(0.5, 'rgba(120,140,255,0.04)');
+      band.addColorStop(1, 'rgba(120,140,255,0)');
+      ctx.fillStyle = band;
+      ctx.fillRect(-1100, -1100, 2200, 2200);
+      ctx.restore();
+      // Each cluster a slow-turning nebula: its centre, and a gentle sway of its stars about it.
       const boxes = new Map<string, [number, number, number, number]>();
+      const keyOf = (n: SimNode) => `${n.side === 'spec' ? -1 : 1}:${n.group}`;
       for (const n of nodes) {
-        const key = `${n.side === 'spec' ? -1 : 1}:${n.group}`;
+        const key = keyOf(n);
         const b = boxes.get(key);
         if (!b) boxes.set(key, [n.x!, n.y!, n.x!, n.y!]);
         else boxes.set(key, [Math.min(b[0], n.x!), Math.min(b[1], n.y!), Math.max(b[2], n.x!), Math.max(b[3], n.y!)]);
       }
-      const placed: [number, number, number, number][] = [];
-      const cfs = 10.5 / v.k;
-      ctx.font = `700 ${cfs}px -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif`;
+      const centre = new Map([...boxes].map(([k, b]) => [k, [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] as const]));
+      const pos = shown.current;
+      let ci = 0;
+      const sway = new Map<string, number>();
+      for (const k of boxes.keys()) sway.set(k, 0.035 * Math.sin(time / 7000 + ci++ * 1.7));
+      for (const n of nodes) {
+        const k = keyOf(n);
+        const [cx, cy] = centre.get(k)!;
+        const a = sway.get(k)! * (n.fx != null ? 0 : 1);
+        const dx = n.x! - cx;
+        const dy = n.y! - cy;
+        pos.set(n.id, { x: cx + dx * Math.cos(a) - dy * Math.sin(a), y: cy + dx * Math.sin(a) + dy * Math.cos(a) });
+      }
+      const P = (n: SimNode) => pos.get(n.id)!;
+      ctx.globalCompositeOperation = 'lighter';
       for (const [key, a] of anchors) {
         const b = boxes.get(key);
         if (!b) continue;
-        // A soft halo behind the cluster, in its colour.
-        const cx = (b[0] + b[2]) / 2;
-        const cy = (b[1] + b[3]) / 2;
-        const rr = Math.max(40, Math.hypot(b[2] - b[0], b[3] - b[1]) / 2 + 30);
-        const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, rr);
-        halo.addColorStop(0, hexA(a.color, focus ? 0.02 : 0.07));
-        halo.addColorStop(1, hexA(a.color, 0));
-        ctx.fillStyle = halo;
-        ctx.fillRect(cx - rr, cy - rr, rr * 2, rr * 2);
-        ctx.textAlign = 'center';
-        ctx.fillStyle = hexA(a.color, focus ? 0.15 : 0.55);
-        const lbl = a.label.toUpperCase();
-        const lw = ctx.measureText(lbl).width;
-        placed.push([cx - lw / 2, b[1] - 12 / v.k - cfs, cx + lw / 2, b[1] - 12 / v.k + cfs * 0.3]);
-        ctx.fillText(lbl, cx, b[1] - 12 / v.k);
+        const [cx, cy] = centre.get(key)!;
+        const rr = Math.max(60, Math.hypot(b[2] - b[0], b[3] - b[1]) / 2 + 50);
+        for (const [ox, oy, rs, al] of [
+          [0, 0, 1, 0.09],
+          [rr * 0.25, -rr * 0.15, 0.7, 0.06],
+          [-rr * 0.2, rr * 0.2, 0.6, 0.05],
+        ] as const) {
+          const neb = ctx.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, rr * rs);
+          neb.addColorStop(0, hexA(a.color, (focus ? al * 0.35 : al) * intro));
+          neb.addColorStop(1, hexA(a.color, 0));
+          ctx.fillStyle = neb;
+          ctx.fillRect(cx + ox - rr * rs, cy + oy - rr * rs, rr * rs * 2, rr * rs * 2);
+        }
       }
-      ctx.font = `700 ${18 / v.k}px -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif`;
-      ctx.fillStyle = 'rgba(255,255,255,0.18)';
-      const top = Math.min(...[...anchors.values()].map((a) => a.y)) - 110;
-      ctx.fillText('SPECIFICATION', -620, top);
-      ctx.fillText('DRAWINGS', 620, top);
-      // Links.
+      ctx.globalCompositeOperation = 'source-over';
+      // Cluster names, spaced capitals above each.
+      const placed: [number, number, number, number][] = [];
+      // How much to name at this zoom: far out the clusters only, then each cluster's main nodes, close in everything.
+      const lod = v.k < 0.42 ? 0 : v.k < 0.85 ? 1 : 2;
+      const cfs = (lod === 0 ? 13 : 10) / v.k;
+      ctx.font = `600 ${cfs}px ${FONT}`;
+      spaced(2.2 / v.k);
+      ctx.textAlign = 'center';
+      // Biggest clusters named first; a name that would sit on another moves up clear of it.
+      const byCount = [...anchors].sort((x, y) => {
+        const bx = boxes.get(x[0]);
+        const by = boxes.get(y[0]);
+        return (by ? by[3] - by[1] : 0) - (bx ? bx[3] - bx[1] : 0);
+      });
+      for (const [key, a] of byCount) {
+        const b = boxes.get(key);
+        if (!b) continue;
+        const [cx] = centre.get(key)!;
+        const lbl = up(a.label);
+        const lw = ctx.measureText(lbl).width;
+        let ly = b[1] - 16 / v.k;
+        for (let t = 0; t < 4; t++) {
+          const hit = placed.find((p) => cx - lw / 2 < p[2] && cx + lw / 2 > p[0] && ly - cfs < p[3] && ly + cfs * 0.3 > p[1]);
+          if (!hit) break;
+          ly = hit[1] - cfs * 0.45;
+        }
+        placed.push([cx - lw / 2, ly - cfs, cx + lw / 2, ly + cfs * 0.3]);
+        ctx.fillStyle = hexA(a.color, (focus ? 0.18 : lod === 2 ? 0.5 : 0.8) * intro);
+        ctx.fillText(lbl, cx, ly);
+      }
+      ctx.font = `700 ${15 / v.k}px ${FONT}`;
+      spaced(7 / v.k);
+      ctx.fillStyle = `rgba(255,255,255,${0.22 * intro})`;
+      const top = Math.min(...[...anchors.values()].map((a) => a.y)) - 200;
+      const sideX = (sd: string) => {
+        const xs = [...anchors].filter(([k]) => k.startsWith(sd)).map(([, a]) => a.x);
+        return xs.length ? xs.reduce((p, q) => p + q, 0) / xs.length : sd === '-1' ? -620 : 620;
+      };
+      ctx.fillText('SPECIFICATION', sideX('-1'), top);
+      ctx.fillText('DRAWINGS', sideX('1:'), top);
+      spaced(0);
+      // Links: faint light arcs; a traced one bright, with light flowing along it.
       const sh = showRef.current;
+      ctx.lineCap = 'round';
+      const hits: typeof edgeHits.current = [];
+      const picked = selRef.current;
       for (const e of edges) {
         if (!sh[e.kind]) continue;
-        const a = e.source as SimNode;
-        const b = e.target as SimNode;
-        const on = focus ? (e.a === focus || e.b === focus) : !found || found.has(a.id) || found.has(b.id);
-        const base = e.kind === 'written' ? 0.42 : e.kind === 'matched' ? 0.3 : e.kind === 'contains' ? 0.08 : 0.09;
-        const alpha = focus ? (on ? 0.95 : 0.025) : found ? (on ? 0.7 : 0.03) : base;
-        if (alpha < 0.02) continue;
-        const mx = (a.x! + b.x!) / 2;
-        const my = (a.y! + b.y!) / 2;
+        const sa = e.source as SimNode;
+        const sb = e.target as SimNode;
+        const a = P(sa);
+        const b = P(sb);
+        const on = focus ? e.a === focus || e.b === focus : !found || found.has(sa.id) || found.has(sb.id);
+        const base = e.kind === 'written' ? 0.4 : e.kind === 'revises' ? 0.38 : e.kind === 'matched' ? 0.26 : e.kind === 'contains' ? 0.1 : 0.08;
+        const alpha = (focus ? (on ? 0.95 : 0.02) : found ? (on ? 0.7 : 0.025) : base) * intro;
+        if (alpha < 0.015) continue;
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
         const bend = e.kind === 'contains' ? 0 : 0.18;
-        const cx = mx - (b.y! - a.y!) * bend;
-        const cy = my + (b.x! - a.x!) * bend * 0.4;
-        const grad = ctx.createLinearGradient(a.x!, a.y!, b.x!, b.y!);
-        grad.addColorStop(0, hexA(a.color, alpha));
-        grad.addColorStop(1, hexA(b.color, alpha));
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = (on && focus ? 1.8 : e.kind === 'written' ? 1.1 : 0.8) / Math.sqrt(v.k);
-        ctx.setLineDash(e.kind === 'matched' ? [5, 4] : []);
-        ctx.beginPath();
-        ctx.moveTo(a.x!, a.y!);
-        ctx.quadraticCurveTo(cx, cy, b.x!, b.y!);
-        ctx.stroke();
-        // What flows along a traced link: dots from the spec to the drawing.
-        if (focus && on && (e.kind === 'written' || e.kind === 'matched')) {
+        const cx = mx - (b.y - a.y) * bend;
+        const cy = my + (b.x - a.x) * bend * 0.4;
+        if (picked && (e.a === picked || e.b === picked)) hits.push({ other: e.a === picked ? e.b : e.a, a, c: { x: cx, y: cy }, b });
+        const hov = hoverEdge.current && picked && (e.a === picked || e.b === picked) && hoverEdge.current.other === (e.a === picked ? e.b : e.a);
+        if (hov) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = 4 / Math.sqrt(v.k);
           ctx.setLineDash([]);
-          for (let k = 0; k < 2; k++) {
-            const t = ((time / 1600 + k * 0.5 + (a.index ?? 0) * 0.13) % 1 + 1) % 1;
-            const px = (1 - t) * (1 - t) * a.x! + 2 * (1 - t) * t * cx + t * t * b.x!;
-            const py = (1 - t) * (1 - t) * a.y! + 2 * (1 - t) * t * cy + t * t * b.y!;
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(px, py, 2.1 / Math.sqrt(v.k), 0, Math.PI * 2);
-            ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.quadraticCurveTo(cx, cy, b.x, b.y);
+          ctx.stroke();
+        }
+        const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+        const ca = e.kind === 'revises' ? ADD_COLOR : sa.color;
+        grad.addColorStop(0, hexA(ca, alpha));
+        grad.addColorStop(1, hexA(sb.color, alpha));
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = (on && focus ? 1.6 : e.kind === 'written' || e.kind === 'revises' ? 1 : 0.7) / Math.sqrt(v.k);
+        ctx.setLineDash(e.kind === 'matched' ? [4 / Math.sqrt(v.k), 4 / Math.sqrt(v.k)] : []);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.quadraticCurveTo(cx, cy, b.x, b.y);
+        ctx.stroke();
+        if (focus && on && e.kind !== 'contains') {
+          ctx.setLineDash([]);
+          for (let k = 0; k < 3; k++) {
+            const t = ((time / 1800 + k / 3 + (sa.index ?? 0) * 0.13) % 1 + 1) % 1;
+            const px = (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * cx + t * t * b.x;
+            const py = (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * cy + t * t * b.y;
+            const rr = 4 / Math.sqrt(v.k);
+            const dot = ctx.createRadialGradient(px, py, 0, px, py, rr);
+            dot.addColorStop(0, 'rgba(255,255,255,0.95)');
+            dot.addColorStop(1, hexA(EDGE_COLOR[e.kind], 0));
+            ctx.fillStyle = dot;
+            ctx.fillRect(px - rr, py - rr, rr * 2, rr * 2);
           }
         }
       }
       ctx.setLineDash([]);
-      // Nodes.
+      edgeHits.current = hits;
+      // Nodes as stars: a glow in their colour, a bright core; schedules ringed like planets,
+      // addenda flaring, sections still to follow dark and dashed.
       for (const n of nodes) {
+        const { x, y } = P(n);
         const on = lit(n.id);
-        const a = on ? 1 : 0.12;
+        const a = (on ? 1 : 0.14) * intro;
         const isFocus = n.id === focus;
+        const r = n.r * (isFocus ? 1.25 : 1);
         if (n.missing) {
-          ctx.setLineDash([3, 3]);
-          ctx.strokeStyle = hexA(n.color, 0.85 * a);
-          ctx.lineWidth = 1.4 / Math.sqrt(v.k);
+          ctx.setLineDash([2.5 / Math.sqrt(v.k), 2.5 / Math.sqrt(v.k)]);
+          ctx.strokeStyle = hexA(n.color, 0.8 * a);
+          ctx.lineWidth = 1.2 / Math.sqrt(v.k);
           ctx.beginPath();
-          ctx.arc(n.x!, n.y!, n.r, 0, Math.PI * 2);
+          ctx.arc(x, y, r * 0.9, 0, Math.PI * 2);
           ctx.stroke();
           ctx.setLineDash([]);
           continue;
         }
-        if ((isFocus || (focus && on) || (found && on)) && a === 1) {
-          ctx.shadowColor = n.color;
-          ctx.shadowBlur = isFocus ? 28 : 14;
+        ctx.globalCompositeOperation = 'lighter';
+        const gr = r * (isFocus ? 4.2 : on && focus ? 3.4 : 2.6);
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, gr);
+        glow.addColorStop(0, hexA(n.color, 0.55 * a));
+        glow.addColorStop(0.35, hexA(n.color, 0.18 * a));
+        glow.addColorStop(1, hexA(n.color, 0));
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - gr, y - gr, gr * 2, gr * 2);
+        if (n.kind === 'addendum') {
+          // A four-point flare.
+          const f = r * (2.6 + 0.4 * Math.sin(time / 500));
+          ctx.strokeStyle = hexA('#ffffff', 0.7 * a);
+          ctx.lineWidth = 1 / Math.sqrt(v.k);
+          ctx.beginPath();
+          ctx.moveTo(x - f, y);
+          ctx.lineTo(x + f, y);
+          ctx.moveTo(x, y - f);
+          ctx.lineTo(x, y + f);
+          ctx.stroke();
         }
-        ctx.fillStyle = hexA(n.color, a * (n.kind === 'sheet' ? 0.75 : 0.95));
+        ctx.globalCompositeOperation = 'source-over';
+        const core = ctx.createRadialGradient(x - r * 0.25, y - r * 0.25, 0, x, y, r * 0.75);
+        core.addColorStop(0, `rgba(255,255,255,${a})`);
+        core.addColorStop(1, hexA(n.color, a));
+        ctx.fillStyle = core;
         ctx.beginPath();
-        if (n.kind === 'schedule' || n.kind === 'sheet') roundRect(ctx, n.x! - n.r, n.y! - n.r, n.r * 2, n.r * 2, n.r * 0.35);
-        else if (n.kind === 'type' || n.kind === 'finish') diamond(ctx, n.x!, n.y!, n.r * 1.15);
-        else ctx.arc(n.x!, n.y!, n.r, 0, Math.PI * 2);
+        if (n.kind === 'sheet') roundRect(ctx, x - r * 0.6, y - r * 0.6, r * 1.2, r * 1.2, r * 0.2);
+        else if (n.kind === 'type' || n.kind === 'finish') diamond(ctx, x, y, r * 0.85);
+        else ctx.arc(x, y, r * 0.62, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = `rgba(255,255,255,${0.35 * a})`;
-        ctx.lineWidth = (isFocus ? 2 : 0.8) / Math.sqrt(v.k);
-        ctx.stroke();
+        if (n.kind === 'schedule') {
+          ctx.strokeStyle = hexA(n.color, 0.75 * a);
+          ctx.lineWidth = 1.1 / Math.sqrt(v.k);
+          ctx.beginPath();
+          ctx.ellipse(x, y, r * 1.35, r * 0.5, -0.45, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        if (isFocus) {
+          ctx.strokeStyle = `rgba(255,255,255,${0.9 * a})`;
+          ctx.lineWidth = 1.2 / Math.sqrt(v.k);
+          ctx.beginPath();
+          ctx.arc(x, y, r * 1.6 + Math.sin(time / 300) * 1.2 / Math.sqrt(v.k), 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
-      // Labels, most important first, none on top of another.
-      const want = (n: SimNode) => (n.id === focus ? 1e9 : (focus && near!.has(n.id)) || (found && found.has(n.id)) ? 1e6 + n.degree : focus || found ? -1 : n.degree + (n.kind === 'schedule' ? 3 : 0));
-      const order = nodes.map((n) => [want(n), n] as const).filter(([w]) => w >= 0).sort((x, y) => y[0] - x[0]);
-      const budget = focus || found ? 80 : v.k > 1.4 ? 120 : 34;
+      // Labels in spaced capitals, most important first, none on top of another.
+      const want = (n: SimNode) =>
+        n.id === focus
+          ? 1e9
+          : (focus && near!.has(n.id)) || (found && found.has(n.id))
+            ? 1e6 + n.degree
+            : focus || found || lod === 0 || (lod === 1 && (rankIn.get(n.id) ?? 9) > 1)
+              ? -1
+              : n.degree + (n.kind === 'schedule' ? 3 : n.kind === 'addendum' ? 6 : 0);
+      const order = nodes.map((n) => [want(n), n] as const).filter(([wt]) => wt >= 0).sort((x, y) => y[0] - x[0]);
+      const budget = focus || found ? 80 : lod === 2 ? 220 : 60;
       for (const [, n] of order) {
-        if (placed.length >= budget + anchors.size) break;
+        if (placed.length >= budget + anchors.size || intro < 0.6) break;
+        const { x, y } = P(n);
         const isFocus = n.id === focus;
-        const fs = (isFocus ? 13 : 11) / v.k;
-        ctx.font = `${isFocus ? 700 : 500} ${fs}px -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif`;
-        const text = n.kind === 'section' ? `${n.label}  ${short(n.sub, 34)}` : n.kind === 'sheet' ? n.label : `${n.label}${n.sub && n.kind !== 'schedule' ? `  ${short(n.sub, 26)}` : ''}`;
+        const fs = (isFocus ? 12.5 : 10.5) / v.k;
+        ctx.font = `${isFocus ? 700 : 500} ${fs}px ${FONT}`;
+        spaced((isFocus ? 1.2 : 0.9) / v.k);
+        const text = up(n.kind === 'section' ? `${n.label}  ${short(n.sub, 34)}` : n.kind === 'sheet' ? n.label : n.kind === 'addendum' ? n.label : `${n.label}${n.sub && n.kind !== 'schedule' ? `  ${short(n.sub, 26)}` : ''}`);
         const tw = ctx.measureText(text).width;
         const left = n.side === 'spec';
-        const tx = n.x! + (left ? -(n.r + 5) : n.r + 5);
-        const box: [number, number, number, number] = [left ? tx - tw : tx, n.y! - fs * 0.7, left ? tx : tx + tw, n.y! + fs * (n.missing ? 1.7 : 0.6)];
+        const tx = x + (left ? -(n.r + 6 / v.k) : n.r + 6 / v.k);
+        const box: [number, number, number, number] = [left ? tx - tw : tx, y - fs * 0.75, left ? tx : tx + tw, y + fs * (n.missing ? 1.7 : 0.6)];
         if (!isFocus && placed.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) continue;
         placed.push(box);
         ctx.textAlign = left ? 'right' : 'left';
-        ctx.lineWidth = 3 / v.k;
-        ctx.strokeStyle = 'rgba(5,7,13,0.85)';
-        ctx.strokeText(text, tx, n.y! + fs * 0.35);
-        ctx.fillStyle = 'rgba(235,240,255,1)';
-        ctx.fillText(text, tx, n.y! + fs * 0.35);
+        ctx.shadowColor = 'rgba(2,3,9,0.95)';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = isFocus ? '#ffffff' : `rgba(226,232,255,${(focus || found) && !isFocus ? 0.92 : 0.82})`;
+        ctx.fillText(text, tx, y + fs * 0.35);
+        ctx.shadowBlur = 0;
         if (n.missing) {
           ctx.fillStyle = 'rgba(255,190,90,1)';
-          ctx.font = `600 ${9 / v.k}px -apple-system, Inter, sans-serif`;
-          ctx.fillText('TO FOLLOW', tx, n.y! + fs * 1.45);
+          ctx.font = `600 ${8.5 / v.k}px ${FONT}`;
+          spaced(1.4 / v.k);
+          ctx.fillText('NOT ISSUED', tx, y + fs * 1.45);
+        }
+      }
+      spaced(0);
+      // A hovered link says where it goes.
+      const he = hoverEdge.current;
+      if (he && picked) {
+        const o = byId.get(he.other);
+        if (o) {
+          const fs = 11 / v.k;
+          ctx.font = `600 ${fs}px ${FONT}`;
+          spaced(1 / v.k);
+          const text = `GO TO  ${up(o.label)}${o.sub && o.kind !== 'schedule' ? `  ${up(short(o.sub, 30))}` : ''}  →`;
+          const tw = ctx.measureText(text).width;
+          const px = he.x + 12 / v.k;
+          const py = he.y - 12 / v.k;
+          ctx.fillStyle = 'rgba(10,14,30,0.92)';
+          ctx.strokeStyle = hexA(o.color, 0.8);
+          ctx.lineWidth = 1 / v.k;
+          ctx.beginPath();
+          roundRect(ctx, px - 8 / v.k, py - fs * 1.2, tw + 16 / v.k, fs * 1.9, 6 / v.k);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'left';
+          ctx.fillText(text, px, py);
+          spaced(0);
         }
       }
       ctx.restore();
@@ -363,7 +595,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [mode, nodes, edges, anchors, neighbours]);
+  }, [mode, nodes, edges, anchors, neighbours, stars, rankIn, byId]);
 
   // The 3D map, loaded when asked for: the same graph in space, labelled, glowing, turning slowly.
   type G3 = {
@@ -381,7 +613,15 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
   useEffect(() => {
     if (mode !== '3d' || !threeRef.current) return;
     let gone = false;
-    void Promise.all([import('3d-force-graph'), import('three/examples/jsm/postprocessing/UnrealBloomPass.js'), import('three'), import('three-spritetext')]).then(
+    void Promise.all([
+      import('3d-force-graph'),
+      import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
+      import('three'),
+      import('three-spritetext'),
+      // The labels are drawn once: their face loaded first.
+      document.fonts?.load(`600 16px ${FONT}`).catch(() => undefined),
+      document.fonts?.load(`500 16px ${FONT}`).catch(() => undefined),
+    ]).then(
       ([{ default: ForceGraph3D }, { UnrealBloomPass }, THREE, { default: SpriteText }]) => {
         if (gone || !threeRef.current) return;
         const el = threeRef.current;
@@ -394,21 +634,21 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
           .backgroundColor('#000002')
           .showNavInfo(false)
           .graphData({
-            nodes: nodes.filter((n) => used.has(n.id)).map((n) => ({ id: n.id, label: n.label, sub: n.sub, kind: n.kind, color: n.missing ? '#6b7080' : n.color, val: (n.kind === 'section' ? 2.5 : n.kind === 'schedule' ? 3 : 1) + n.degree * 0.9, side: n.side })),
+            nodes: nodes.filter((n) => used.has(n.id)).map((n) => ({ id: n.id, label: n.label, sub: n.sub, kind: n.kind, color: n.missing ? '#6b7080' : n.color, val: (n.kind === 'section' ? 2 : n.kind === 'schedule' || n.kind === 'addendum' ? 3 : 1) + Math.min(n.degree, 12) * 0.4, side: n.side })),
             links: shownEdges.map((e) => ({ source: e.a, target: e.b, kind: e.kind })),
           })
-          .nodeLabel((n: object) => `<div class="map3d-tip">${escapeHtml(`${(n as { label: string }).label}  ${(n as { sub: string }).sub}`)}</div>`)
+          .nodeLabel((n: object) => `<div class="map3d-tip">${escapeHtml(up(`${(n as { label: string }).label}  ${(n as { sub: string }).sub}`))}</div>`)
           .nodeColor((n: object) => (n as { color: string }).color)
-          .nodeOpacity(0.92)
+          .nodeOpacity(0.85)
           .nodeResolution(16)
           // A label on every node: big for sections and schedules, small for tags.
           .nodeThreeObjectExtend(true)
           .nodeThreeObject((n: object) => {
             const d = n as { id: string; label: string; sub: string; kind: string; color: string };
             const big = d.kind === 'section' || d.kind === 'schedule' || d.kind === 'sheet';
-            const text = d.kind === 'section' ? `${d.label} ${short(d.sub, 28)}` : d.kind === 'item' || d.kind === 'type' || d.kind === 'finish' ? d.label : short(d.label, 30);
-            const sp = new SpriteText(text, big ? 4.2 : 2.6, big ? '#eef2ff' : 'rgba(220,228,255,0.8)');
-            sp.fontFace = '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif';
+            const text = up(d.kind === 'section' ? `${d.label}  ${short(d.sub, 28)}` : d.kind === 'item' || d.kind === 'type' || d.kind === 'finish' ? d.label : short(d.label, 30));
+            const sp = new SpriteText(text, big ? 3.2 : 2.1, big ? 'rgba(214,222,245,0.92)' : 'rgba(190,200,230,0.75)');
+            sp.fontFace = FONT;
             sp.fontWeight = big ? '600' : '500';
             sp.center.set(0.5, -0.9);
             (sp.material as { depthWrite: boolean }).depthWrite = false;
@@ -417,7 +657,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
             sprites.current.set(d.id, sp as never);
             return sp;
           })
-          .linkColor((l: object) => ({ written: '#7cc4ff', matched: '#c58cff', 'spec-spec': '#5a6280', contains: '#2c3550' })[(l as { kind: MapEdgeKind }).kind])
+          .linkColor((l: object) => EDGE_COLOR[(l as { kind: MapEdgeKind }).kind])
           .linkOpacity(0.6)
           .linkWidth((l: object) => ((l as { kind: string }).kind === 'written' ? 1.4 : (l as { kind: string }).kind === 'matched' ? 0.7 : 0.25))
           .linkCurvature((l: object) => ((l as { kind: string }).kind === 'contains' ? 0 : 0.2))
@@ -429,18 +669,32 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
           .onBackgroundClick(() => setSelected(null))
           .cooldownTime(6000);
         g.d3Force('x', forceX<SimulationNodeDatum & { side?: string }>((n) => (n.side === 'spec' ? -170 : 170)).strength(0.06) as never);
-        const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 1.1, 0.5, 0.18);
+        // A sky around it: a shell of stars.
+        const starGeo = new THREE.BufferGeometry();
+        const pts = new Float32Array(5000 * 3);
+        for (let i = 0; i < 5000; i++) {
+          const u = Math.random() * 2 - 1;
+          const th = Math.random() * Math.PI * 2;
+          const rad = 1800 + Math.random() * 2600;
+          const sq = Math.sqrt(1 - u * u);
+          pts.set([rad * sq * Math.cos(th), rad * u, rad * sq * Math.sin(th)], i * 3);
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+        g.scene().add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0.75 })));
+        const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.65, 0.35, 0.4);
         g.postProcessingComposer().addPass(bloom);
         const controls = g.controls() as { autoRotate?: boolean; autoRotateSpeed?: number; addEventListener?: (t: string, f: () => void) => void };
         controls.autoRotate = true;
         controls.autoRotateSpeed = 0.5;
         controls.addEventListener?.('start', () => (controls.autoRotate = false));
+        // In from far out.
+        g.cameraPosition({ x: 0, y: 0, z: 5200 });
         let fitted3d = false;
         g.onEngineStop(() => {
           if (fitted3d) return;
           fitted3d = true;
           if (selRef.current) restyleRef.current();
-          else g.zoomToFit(900, 60);
+          else g.zoomToFit(2200, 60);
         });
         g3.current = g as unknown as G3;
         restyle3d();
@@ -471,7 +725,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       const d = l as { source: unknown; target: unknown; kind: MapEdgeKind };
       const on = !focus || idOf(d.source) === focus || idOf(d.target) === focus;
       if (!on) return '#0c0f18';
-      return ({ written: '#7cc4ff', matched: '#c58cff', 'spec-spec': '#8a93b5', contains: focus ? '#6b7aa8' : '#2c3550' })[d.kind];
+      return d.kind === 'contains' ? (focus ? '#6b7aa8' : '#2c3550') : EDGE_COLOR[d.kind];
     });
     g.linkWidth((l: object) => {
       const d = l as { source: unknown; target: unknown; kind: string };
@@ -513,13 +767,30 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     let best: SimNode | null = null;
     let bd = Infinity;
     for (const n of nodes) {
-      const d = Math.hypot(n.x! - x, n.y! - y) - n.r;
+      const p = shown.current.get(n.id) ?? { x: n.x!, y: n.y! };
+      const d = Math.hypot(p.x - x, p.y - y) - n.r;
       if (d < bd) {
         bd = d;
         best = n;
       }
     }
     return best && bd < 8 / view.current.k ? best : null;
+  };
+  /** A link of the picked node under the pointer: the node at its other end, and where along it. */
+  const edgeAt = (cx: number, cy: number) => {
+    const [x, y] = toWorld(cx, cy);
+    const tol = 7 / view.current.k;
+    let best: { other: string; x: number; y: number; d: number } | null = null;
+    for (const h of edgeHits.current) {
+      for (let i = 1; i < 24; i++) {
+        const t = i / 24;
+        const px = (1 - t) * (1 - t) * h.a.x + 2 * (1 - t) * t * h.c.x + t * t * h.b.x;
+        const py = (1 - t) * (1 - t) * h.a.y + 2 * (1 - t) * t * h.c.y + t * t * h.b.y;
+        const d = Math.hypot(px - x, py - y);
+        if (d < tol && (!best || d < best.d)) best = { other: h.other, x, y, d };
+      }
+    }
+    return best;
   };
   const flyTo = (id: string) => {
     const n = byId.get(id);
@@ -554,6 +825,23 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.n]);
 
+  // Keys: + and − zoom, 0 shows it all, Escape lets go, Backspace goes back.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.closest('input,textarea') || mode !== '2d') return;
+      if (e.key === '+' || e.key === '=') zoomBy(1.5);
+      else if (e.key === '-' || e.key === '_') zoomBy(1 / 1.5);
+      else if (e.key === '0') glide(fitView(), 600);
+      else if (e.key === 'Escape') setSelected(null);
+      else if (e.key === 'Backspace') stepRef.current(-1);
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, anchors]);
+
   const sel = selected ? (byId.get(selected) ?? null) : null;
   // Following the map: where you have been, Back and Forward.
   const [hist, setHist] = useState<{ back: string[]; fwd: string[] }>({ back: [], fwd: [] });
@@ -567,6 +855,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
   };
   const pickRef = useRef(pick);
   pickRef.current = pick;
+  const stepRef = useRef((_d: -1 | 1) => {});
   const stepHistory = (dir: -1 | 1) => {
     const from = dir < 0 ? hist.back : hist.fwd;
     const id = from[from.length - 1];
@@ -578,41 +867,47 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     setSelected(id);
     flyTo(id);
   };
+  stepRef.current = stepHistory;
 
   /** What a node is tied to, grouped: what it is part of, what it holds, its own links, and links it has through those. */
   const relationsOf = (id: string) => {
     const node = (x: string) => data.nodes.find((n) => n.id === x);
-    type Rel = { other: MapNode; badge: string; kind: string; why: string; at?: Place };
+    type Rel = { other: MapNode; badge: string; kind: string; why: string; at?: Place; page?: { docId: string; page: number } };
     const seen = new Set<string>([id]);
     const once = (list: Rel[]) => list.filter((r) => r.other && !seen.has(r.other.id) && (seen.add(r.other.id), true));
-    const up = (x: string) => data.edges.filter((e) => e.kind === 'contains' && e.a === x);
+    const parentsOf = (x: string) => data.edges.filter((e) => e.kind === 'contains' && e.a === x);
     const down = (x: string) => data.edges.filter((e) => e.kind === 'contains' && e.b === x);
     const direct = (x: string) => data.edges.filter((e) => (e.a === x || e.b === x) && (e.kind === 'written' || e.kind === 'matched'));
     // Up the chain: an equipment tag is in a schedule, the schedule on a sheet.
     const ancestors: Rel[] = [];
-    let level = up(id);
+    let level = parentsOf(id);
     for (let depth = 0; level.length && depth < 3; depth++) {
-      for (const e of level) ancestors.push({ other: node(e.b)!, badge: depth ? 'Above' : 'Part of', kind: 'parent', why: e.why });
-      level = level.flatMap((e) => up(e.b));
+      for (const e of level) ancestors.push({ other: node(e.b)!, badge: depth ? 'Grandparent' : 'Parent', kind: 'parent', why: e.why });
+      level = level.flatMap((e) => parentsOf(e.b));
     }
     const own = direct(id).map((e) => ({ other: node(e.a === id ? e.b : e.a)!, badge: e.kind === 'written' ? 'Written' : 'Matched', kind: e.kind, why: e.why, at: e.at }));
-    const children = down(id).map((e) => ({ other: node(e.a)!, badge: 'Holds', kind: 'child', why: e.why }));
-    const grand = down(id).flatMap((e) => down(e.a)).map((e) => ({ other: node(e.a)!, badge: 'Holds', kind: 'child', why: e.why }));
+    const children = down(id).map((e) => ({ other: node(e.a)!, badge: 'Child', kind: 'child', why: e.why }));
+    const grand = down(id).flatMap((e) => down(e.a)).map((e) => ({ other: node(e.a)!, badge: 'Grandchild', kind: 'child', why: e.why }));
     // Links it has through what holds it and what it holds.
     const via: Rel[] = [];
     for (const r of [...ancestors, ...children, ...grand])
       for (const e of direct(r.other?.id ?? ''))
         via.push({ other: node(e.a === r.other.id ? e.b : e.a)!, badge: 'Via', kind: 'via', why: `through ${r.other.label}: ${e.why}`, at: e.at });
+    // Addenda: what one changes; what changed something.
+    const changes = data.edges
+      .filter((e) => e.kind === 'revises' && (e.a === id || e.b === id))
+      .map((e) => ({ other: node(e.a === id ? e.b : e.a)!, badge: up(e.why.split(' · ')[0] || 'changed'), kind: 'revises', why: e.why.includes(' · ') ? e.why.split(' · ').slice(1).join(' · ') : e.why, page: e.page }));
     const specSpec = data.edges
       .filter((e) => e.kind === 'spec-spec' && (e.a === id || e.b === id))
       .map((e) => ({ other: node(e.a === id ? e.b : e.a)!, badge: e.a === id ? 'Refers to' : 'Referred by', kind: 'spec-spec', why: e.why }));
     const me = node(id);
     const groups = [
-      { title: 'Part of', items: once(ancestors) },
+      { title: 'Parent', items: once(ancestors) },
+      { title: 'Children', items: once([...children, ...grand]) },
+      { title: me?.kind === 'addendum' ? 'Changes' : 'Changed by addenda', items: once(changes) },
       { title: me?.side === 'spec' ? 'On the drawings' : 'In the specification', items: once(own.filter((r) => r.other && r.other.side !== me?.side)) },
       { title: 'Linked', items: once(own) },
-      { title: 'Holds', items: once([...children, ...grand]) },
-      { title: 'Related through these', items: once(via) },
+      { title: 'Related through parent and children', items: once(via) },
       { title: 'Other sections', items: once(specSpec) },
     ];
     return groups.filter((g) => g.items.length);
@@ -629,6 +924,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       sections: sections.length,
       written: data.edges.filter((e) => e.kind === 'written').length,
       matched: data.edges.filter((e) => e.kind === 'matched').length,
+      addenda: data.nodes.filter((n) => n.kind === 'addendum').length,
       missing,
       missingUsed,
       orphans,
@@ -637,7 +933,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    const kindRank: Record<MapNode['kind'], number> = { section: 0, schedule: 1, item: 2, type: 2, finish: 2, sheet: 3 };
+    const kindRank: Record<MapNode['kind'], number> = { addendum: 0, section: 0, schedule: 1, item: 2, type: 2, finish: 2, sheet: 3 };
     const score = (n: SimNode) => {
       const l = n.label.toLowerCase();
       return (l === q ? 0 : l.startsWith(q) ? 10 : l.includes(q) ? 20 : 30) + kindRank[n.kind] - Math.min(5, n.degree) * 0.1;
@@ -657,7 +953,8 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
             onWheel={(e) => {
               const v = view.current;
               const [wx, wy] = toWorld(e.clientX, e.clientY);
-              const k = Math.min(5, Math.max(0.25, v.k * (e.deltaY < 0 ? 1.12 : 0.89)));
+              // Smooth: a trackpad's many small steps and a wheel's few big ones zoom alike; a pinch zooms faster.
+              const k = Math.min(5, Math.max(0.12, v.k * Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0016))));
               const r = wrapRef.current!.getBoundingClientRect();
               view.current = { k, x: (e.clientX - r.left - r.width / 2) / k - wx, y: (e.clientY - r.top - r.height / 2) / k - wy };
             }}
@@ -680,7 +977,9 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
               }
               const n = nodeAt(e.clientX, e.clientY);
               setHover(n?.id ?? null);
-              (e.target as HTMLCanvasElement).style.cursor = n ? 'pointer' : 'grab';
+              const le = n ? null : edgeAt(e.clientX, e.clientY);
+              hoverEdge.current = le ? { other: le.other, x: le.x, y: le.y } : null;
+              (e.target as HTMLCanvasElement).style.cursor = n || le ? 'pointer' : 'grab';
             }}
             onPointerUp={(e) => {
               const d = drag.current;
@@ -692,11 +991,23 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
               }
               if (d && !d.moved) {
                 const n = nodeAt(e.clientX, e.clientY);
+                // A click on one of the picked node's links goes to the node at its other end.
+                const le = n ? null : edgeAt(e.clientX, e.clientY);
                 if (n) pick(n.id, false);
-                else setSelected(null);
+                else if (le) {
+                  hoverEdge.current = null;
+                  pick(le.other);
+                } else setSelected(null);
               }
             }}
             onPointerLeave={() => setHover(null)}
+            onDoubleClick={(e) => {
+              // Double-click: into that spot, closer.
+              const [wx, wy] = toWorld(e.clientX, e.clientY);
+              const k = Math.min(5, view.current.k * 1.8);
+              const r = wrapRef.current!.getBoundingClientRect();
+              glide({ k, x: (e.clientX - r.left - r.width / 2) / k - wx, y: (e.clientY - r.top - r.height / 2) / k - wy }, 380);
+            }}
           />
         ) : (
           <div className="pmap-3d" ref={threeRef} />
@@ -708,7 +1019,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
           <Icon name="graph" size={16} />
           <strong>Project map</strong>
           <span className="pmap-sub">
-            {stats.sections} spec sections · {stats.written} written links · {stats.matched} matched
+            {stats.sections} sections · {stats.written} written · {stats.matched} matched{stats.addenda ? ` · ${stats.addenda} addenda` : ''}
           </span>
         </div>
         <div className="pmap-search">
@@ -750,6 +1061,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
               ['written', 'Written', 'One names the other: a section names a schedule, a note names a section'],
               ['matched', 'Matched', 'About the same thing, by their own words'],
               ['spec-spec', 'Spec ↔ spec', 'Sections that refer to other sections'],
+              ...(stats.addenda ? ([['revises', 'Addenda', 'What each addendum changed']] as const) : []),
               ['items', 'Tags', 'Equipment, types and finishes, not just schedules and sheets'],
             ] as const
           ).map(([k, label, tip]) => (
@@ -845,9 +1157,9 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
           <p className="muted">{groupName(sel)}</p>
           {sel.missing && <div className="pmap-warn">In the table of contents as “To follow”: this section is not in the spec book. Worth an RFI if the drawings rely on it.</div>}
           <div className="pmap-buttons">
-            {sel.kind === 'section' && sel.pages?.length ? (
-              <button className="primary small" onClick={() => onOpenSpec(sel.pages![0].docId, sel.pages![0].page, sel.id.slice(5))}>
-                Read in the spec
+            {(sel.kind === 'section' || sel.kind === 'addendum') && sel.pages?.length ? (
+              <button className="primary small" onClick={() => onOpenSpec(sel.pages![0].docId, sel.pages![0].page, sel.kind === 'section' ? sel.id.slice(5) : '')}>
+                {sel.kind === 'addendum' ? 'Read the addendum' : 'Read in the spec'}
               </button>
             ) : null}
             {sel.places?.length ? (
@@ -868,7 +1180,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
                     {g.title} <span className="n">{g.items.length}</span>
                   </h4>
                   <ul className="pmap-links">
-                    {shown.map(({ other, badge, kind, why, at }, i) => {
+                    {shown.map(({ other, badge, kind, why, at, page }, i) => {
                       const to = at && other.side === 'drawing' ? [at] : other.places;
                       return (
                         <li key={`${other.id}${i}`}>
@@ -879,12 +1191,16 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
                               <small>{why}</small>
                             </span>
                           </button>
-                          {other.side === 'drawing' && to?.length ? (
+                          {page && sel.kind !== 'addendum' ? (
+                            <button className="pmap-go" onClick={() => onOpenSpec(page.docId, page.page, '')} title="Read it in the addendum" aria-label="Read it in the addendum">
+                              <Icon name="forward" size={13} />
+                            </button>
+                          ) : other.side === 'drawing' && to?.length ? (
                             <button className="pmap-go" onClick={() => onOpenDrawing(to, other.label)} title="Open on the drawings" aria-label={`Open ${other.label} on the drawings`}>
                               <Icon name="forward" size={13} />
                             </button>
                           ) : other.side === 'spec' && other.pages?.length ? (
-                            <button className="pmap-go" onClick={() => onOpenSpec(other.pages![0].docId, other.pages![0].page, other.id.slice(5))} title="Read in the spec" aria-label={`Read ${other.label} in the spec`}>
+                            <button className="pmap-go" onClick={() => onOpenSpec(other.pages![0].docId, other.pages![0].page, other.kind === 'section' ? other.id.slice(5) : '')} title="Read in the spec" aria-label={`Read ${other.label} in the spec`}>
                               <Icon name="forward" size={13} />
                             </button>
                           ) : null}
@@ -904,6 +1220,20 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
         </div>
       )}
 
+      {mode === '2d' && (
+        <div className="pmap-zoom" role="group" aria-label="Zoom">
+          <button onClick={() => zoomBy(1.5)} aria-label="Zoom in" title="Zoom in (+)">
+            +
+          </button>
+          <button onClick={() => zoomBy(1 / 1.5)} aria-label="Zoom out" title="Zoom out (−)">
+            −
+          </button>
+          <button onClick={() => glide(fitView(), 600)} aria-label="Fit the map" title="Whole map (0)">
+            <Icon name="fit" size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="pmap-legend">
         <span>
           <i className="l written" /> written
@@ -918,11 +1248,19 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
           <i className="s ring" /> to follow
         </span>
         <span>
-          <i className="s square" /> sheet / schedule
+          <i className="s square" /> sheet
+        </span>
+        <span>
+          <i className="s planet" /> schedule
         </span>
         <span>
           <i className="s diamond" /> type / finish
         </span>
+        {stats.addenda > 0 && (
+          <span>
+            <i className="s flare" /> addendum
+          </span>
+        )}
       </div>
     </div>
   );

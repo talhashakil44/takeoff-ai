@@ -67,7 +67,7 @@ export function FileManager({ docs, specs, sheets, measurements, onRename, onReo
     onReorder(kind, ids);
   };
 
-  const section = (kind: 'drawings' | 'specs', title: string, list: Doc[], pickedIds: string[]) => (
+  const section = (kind: 'drawings' | 'specs', title: string, list: Doc[], pickedIds: string[], fixed = false) => (
     <section className="fm-section">
       <div className="fm-section-head">
         <h4>
@@ -100,7 +100,7 @@ export function FileManager({ docs, specs, sheets, measurements, onRename, onReo
               <li
                 key={d.id}
                 className={`fm-row ${over === d.id && drag?.id !== d.id ? 'over' : ''} ${drag?.id === d.id ? 'dragging' : ''} ${picked.has(d.id) ? 'picked' : ''}`}
-                draggable
+                draggable={!fixed}
                 onDragStart={(e: DragEvent) => {
                   setDrag({ kind, id: d.id });
                   e.dataTransfer.effectAllowed = 'move';
@@ -123,8 +123,8 @@ export function FileManager({ docs, specs, sheets, measurements, onRename, onReo
                 }}
               >
                 <div className="fm-line">
-                  <span className="fm-grip" aria-hidden="true" title="Drag to reorder">
-                    ⋮⋮
+                  <span className="fm-grip" aria-hidden="true" title={fixed ? 'In order of issue' : 'Drag to reorder'}>
+                    {fixed ? '' : '⋮⋮'}
                   </span>
                   <input type="checkbox" checked={picked.has(d.id)} onChange={() => toggle(d.id)} aria-label={`Select ${d.name}`} />
                   {kind === 'drawings' ? (
@@ -158,16 +158,20 @@ export function FileManager({ docs, specs, sheets, measurements, onRename, onReo
                     {kind === 'drawings'
                       ? `${own.length} sheet${own.length === 1 ? '' : 's'}${takeoffs ? ` · ${takeoffs} takeoff${takeoffs === 1 ? '' : 's'}` : ''}`
                       : book
-                        ? `${book.pages} page${book.pages === 1 ? '' : 's'} · ${book.sections.filter((s) => !s.missing).length} section${book.sections.filter((s) => !s.missing).length === 1 ? '' : 's'}`
+                        ? `${book.addendum !== undefined ? `Addendum ${book.addendum} · ${book.changes?.length ?? 0} items · ` : ''}${book.pages} page${book.pages === 1 ? '' : 's'} · ${book.sections.filter((s) => !s.missing).length} section${book.sections.filter((s) => !s.missing).length === 1 ? '' : 's'}`
                         : 'Not read'}
                   </span>
                   <span className="fm-actions">
-                    <button className="icon-button small" onClick={() => move(kind, list, d.id, -1)} disabled={i === 0} aria-label="Move up" title="Move up">
-                      ↑
-                    </button>
-                    <button className="icon-button small" onClick={() => move(kind, list, d.id, 1)} disabled={i === list.length - 1} aria-label="Move down" title="Move down">
-                      ↓
-                    </button>
+                    {!fixed && (
+                      <>
+                        <button className="icon-button small" onClick={() => move(kind, list, d.id, -1)} disabled={i === 0} aria-label="Move up" title="Move up">
+                          ↑
+                        </button>
+                        <button className="icon-button small" onClick={() => move(kind, list, d.id, 1)} disabled={i === list.length - 1} aria-label="Move down" title="Move down">
+                          ↓
+                        </button>
+                      </>
+                    )}
                     <button className="icon-button small fm-del" onClick={() => onRemove(kind, [d.id])} aria-label={`Remove ${d.name}`} title="Remove">
                       <Icon name="trash" size={14} />
                     </button>
@@ -191,9 +195,22 @@ export function FileManager({ docs, specs, sheets, measurements, onRename, onReo
             Done
           </button>
         </div>
-        <p className="muted small">Drag to reorder. Click a name to rename it. Removing a drawing set removes its takeoffs too; Undo brings everything back.</p>
+        <p className="muted small">Drag to reorder. Click a name to rename it. Removing a drawing set removes its takeoffs too; Undo brings everything back. A file named “Addendum N” is read as that addendum.</p>
         {section('drawings', 'Drawings', docs, pickedDocs)}
-        {section('specs', 'Specification', specs, pickedSpecs)}
+        {section(
+          'specs',
+          'Specification',
+          specs.filter((d) => d.book?.addendum === undefined),
+          pickedSpecs.filter((id) => specs.find((d) => d.id === id)?.book?.addendum === undefined),
+        )}
+        {specs.some((d) => d.book?.addendum !== undefined) &&
+          section(
+            'specs',
+            'Addenda',
+            specs.filter((d) => d.book?.addendum !== undefined).sort((a, b) => a.book!.addendum! - b.book!.addendum!),
+            pickedSpecs.filter((id) => specs.find((d) => d.id === id)?.book?.addendum !== undefined),
+            true,
+          )}
       </div>
     </div>
   );

@@ -44,7 +44,7 @@ export function scheduleKind(title: string): ScheduleKind {
 
 /** A schedule's title, not a note pointing at one (PER SCHEDULE, SEE DOOR SCHEDULE). */
 const TITLE = /\bSCHEDULE\b|^(WALL|PARTITION|FLOOR|ROOF|CEILING)\s+(ASSEMBLIES|TYPES)$/i;
-const NOT_TITLE = /\b(PER|SEE|REFER|AS|TO|IN|ON|WITH|FOR|FROM|OF|AND)\s+(THE\s+)?([A-Z/&]+\s+){0,3}SCHEDULES?\b|^(SCHEDULES?|AND SCHEDULES?)$|\bNOTES?\b/i;
+const NOT_TITLE = /\b(PER|SEE|REFER|AS|TO|IN|ON|WITH|FOR|FROM|OF|AND)\s+(THE\s+)?([A-Z/&]+\s+){0,3}SCHEDULES?\b|^(SCHEDULES?|AND SCHEDULES?)$|\bNOTES?\b|^SCHEDULES?\s+(AND|FOR|TO|ON|IN|AT|WITH|IS|ARE)\b|\bSCHEDULES?\s+(INDICATES?|SHOWS?|IS|ARE)\b|[.&,:;]\s*$/i;
 
 /** A row's mark: D101, 101A, D000.1, W1, SC-2, EF-1, 000, B12, a fixture type A or J1. */
 const MARK = /^(?:[A-Z]{0,4}[-.]?\d{1,4}[A-Z]{0,2}(?:[-.]\d{1,3}[A-Z]?)?|[A-Z]{1,3}[-.]?\d{0,2}[A-Z]?)$/;

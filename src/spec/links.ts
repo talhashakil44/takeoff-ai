@@ -1,7 +1,7 @@
 import type { Sheet } from '../model';
 import { nameOf, type DrawingGraph, type Place } from '../graph/graph';
 import { entries, entryName, norm, type Entry } from '../smart/index';
-import { mergeSections, stem, wordsOf, type SpecBook, type SpecSection } from './parse';
+import { addendumNumber, mergeSections, stem, wordsOf, type SpecBook, type SpecSection } from './parse';
 import type { SpecRef } from './refs';
 export type { SpecRef } from './refs';
 
@@ -19,7 +19,7 @@ export type { SpecRef } from './refs';
  */
 
 export type MapSide = 'spec' | 'drawing';
-export type MapNodeKind = 'section' | 'sheet' | 'schedule' | 'type' | 'finish' | 'item';
+export type MapNodeKind = 'section' | 'sheet' | 'schedule' | 'type' | 'finish' | 'item' | 'addendum';
 
 export interface MapNode {
   id: string;
@@ -40,7 +40,7 @@ export interface MapNode {
   entryKey?: string;
 }
 
-export type MapEdgeKind = 'written' | 'matched' | 'spec-spec' | 'contains';
+export type MapEdgeKind = 'written' | 'matched' | 'spec-spec' | 'contains' | 'revises';
 
 export interface MapEdge {
   a: string;
@@ -52,6 +52,8 @@ export interface MapEdge {
   score?: number;
   /** Where the link is written on a drawing, when it is. */
   at?: Place;
+  /** Where it is written in a spec or addendum file. */
+  page?: { docId: string; page: number };
 }
 
 export interface ProjectMap {
@@ -111,12 +113,13 @@ function about(main: string, rest = ''): Words {
 }
 
 /** Builds the map from the drawings' graph (when read) and the spec books. */
-export function buildProjectMap(graph: DrawingGraph | null, books: SpecBook[], sheets: Sheet[], specRefs: SpecRef[] = []): ProjectMap {
+export function buildProjectMap(graph: DrawingGraph | null, books: SpecBook[], sheets: Sheet[], specRefs: SpecRef[] = [], docs: { id: string; name: string }[] = []): ProjectMap {
   const nodes = new Map<string, MapNode>();
   const edges: MapEdge[] = [];
   const add = (n: MapNode) => (nodes.has(n.id) ? nodes.get(n.id)! : (nodes.set(n.id, n), n));
   const live = sheets.filter((s) => !s.superseded);
   const tradeOf = (name: string) => {
+    if (/^Page \d+$/i.test(name)) return '#';
     const l = (/^[A-Z]+/i.exec(name)?.[0] ?? '').toUpperCase();
     return l ? (l.length > 1 && !['SP', 'FP', 'ID'].includes(l) ? l[0] : l) : '#';
   };
@@ -193,20 +196,48 @@ export function buildProjectMap(graph: DrawingGraph | null, books: SpecBook[], s
     for (const k of r.keys) if (sections.has(k)) edges.push({ a: `spec:${k}`, b: sheetNode(sh).id, kind: 'written', why: `${sh.name}: "${r.text.slice(0, 80)}"`, at: { sheetId: sh.id, box: r.box, label: r.text.slice(0, 60) } });
   }
 
+  // Addenda: what each one changes. Its items name sections and sheets; the sections and sheets
+  // it re-issued are its too.
+  for (const b of books) {
+    if (b.addendum === undefined) continue;
+    const id = `add:${b.docId}`;
+    add({ id, kind: 'addendum', side: 'spec', label: `Addendum ${b.addendum}`, sub: b.name.replace(/\.pdf$/i, ''), group: 'AD', pages: [{ docId: b.docId, page: 1 }] });
+    for (const c of b.changes ?? []) {
+      const at = { docId: b.docId, page: c.page };
+      for (const k of c.sections) if (sections.has(k)) edges.push({ a: id, b: `spec:${k}`, kind: 'revises', why: `${c.action} · ${c.label} ${c.text.slice(0, 140)}`, page: at });
+      for (const tok of c.sheets) {
+        const sh = sheetByName.get(norm(tok));
+        if (sh) edges.push({ a: id, b: sheetNode(sh).id, kind: 'revises', why: `${c.action} · ${c.label} ${c.text.slice(0, 140)}`, page: at });
+      }
+    }
+    for (const s of sections.values()) if (s.revisions?.some((r) => r.docId === b.docId)) edges.push({ a: id, b: `spec:${s.key}`, kind: 'revises', why: `re-issued in Addendum ${b.addendum}` });
+    // Drawings that came with it: a drawing file of the same addendum.
+    for (const d of docs) {
+      if (addendumNumber(d.name) !== b.addendum) continue;
+      for (const sh of live.filter((x) => x.docId === d.id)) edges.push({ a: id, b: sheetNode(sh).id, kind: 'revises', why: `issued with Addendum ${b.addendum}` });
+    }
+  }
+
   // Matched links: each drawing element to the section about the same thing.
   const pool = [...sections.values()].filter((s) => !/^0[01]$/.test(s.division));
+  // A section's words with the drawings' names for the same things (PACKAGED OUTDOOR ERV: heat recovery ventilator).
+  const titleOf = new Map(pool.map((s) => [s.key, new Set([...wordsOf(s.title), ...expand(s.title)])]));
+  const wordsIn = new Map(pool.map((s) => [s.key, new Set([...s.words, ...titleOf.get(s.key)!])]));
+  // The noun a title is about: FANS in HVAC FANS, PUMPS in HYDRONIC PUMPS.
+  const headOf = new Map(pool.map((s) => [s.key, wordsOf(s.title.replace(/\s+[-–(].*$/, '')).slice(-1)[0]]));
   const df = new Map<string, number>();
-  for (const s of pool) for (const w of new Set(s.words)) df.set(w, (df.get(w) ?? 0) + 1);
+  for (const s of pool) for (const w of wordsIn.get(s.key)!) df.set(w, (df.get(w) ?? 0) + 1);
   const idf = (w: string) => Math.log((pool.length + 1) / ((df.get(w) ?? 0) + 0.5));
   for (const el of elements) {
     const scored = pool
       .map((s) => {
-        const titleWords = new Set(wordsOf(s.title));
-        const words = new Set(s.words);
+        const titleWords = titleOf.get(s.key)!;
+        const words = wordsIn.get(s.key)!;
         const hits = el.words.filter((x) => words.has(x.w));
         const score = hits.reduce((n, x) => n + x.wt * idf(x.w) * (titleWords.has(x.w) ? 1 : 0.3), 0);
-        // One word alone is a match only when it is the section's whole title (WINDOWS, FIRESTOPPING).
-        if (hits.length < 2 && titleWords.size > 1) return { s, score: 0, hits: [] as string[] };
+        // One word alone is a match only when it is what the section is about (WINDOWS; FANS in HVAC FANS).
+        // (A schedule's own subject only: a FAN schedule to HVAC FANS, not a lintel's "masonry unit" to AIR TERMINAL UNITS.)
+        if (hits.length < 2 && titleWords.size > 1 && !(el.node.kind === 'schedule' && hits[0]?.w === headOf.get(s.key) && hits[0].wt === 2)) return { s, score: 0, hits: [] as string[] };
         return { s, score, hits: hits.map((x) => x.w) };
       })
       .filter((x) => x.score > 0)
@@ -228,7 +259,7 @@ export function buildProjectMap(graph: DrawingGraph | null, books: SpecBook[], s
 
 function dedupe(edges: MapEdge[]): MapEdge[] {
   const seen = new Map<string, MapEdge>();
-  const rank: Record<MapEdgeKind, number> = { written: 3, matched: 2, 'spec-spec': 1, contains: 0 };
+  const rank: Record<MapEdgeKind, number> = { revises: 4, written: 3, matched: 2, 'spec-spec': 1, contains: 0 };
   for (const e of edges) {
     const k = [e.a, e.b].sort().join('|');
     const had = seen.get(k);
