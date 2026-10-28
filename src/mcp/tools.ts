@@ -1,5 +1,6 @@
 import type { Automation } from '../automate/result';
 import { sheetEdges, type DrawingGraph } from '../graph/graph';
+import type { ProjectMap } from '../spec/links';
 import { describe, entries, entryName, indexStats, norm, searchEntries, type DrawingIndex } from '../smart/index';
 import type { SetAccess } from '../automate/set';
 import { PALETTE } from '../automate/set';
@@ -83,6 +84,8 @@ export interface McpContext {
   showTag?(key: string): void;
   /** The set's link graph (bubbles, sheet references, schedules, tags), read once. */
   drawingGraph?(): Promise<DrawingGraph | null>;
+  /** The specification tied to the drawings (sections, and their links to sheets, schedules and tags). */
+  projectMap?(): Promise<ProjectMap | null>;
 }
 
 const text = (t: string, structured?: Record<string, unknown>): ToolResult => ({ content: [{ type: 'text', text: t }], ...(structured ? { structuredContent: structured } : {}) });
@@ -310,6 +313,14 @@ export const TOOL_DEFS: ToolDef[] = [
     description:
       'The drawing set as a graph of what points at what: detail and section bubbles (5/A5.0 → drawing 5 on A5.0), sheet references in notes (SEE A5.0, PER STRUCTURAL), schedule references (SEE DOOR SCHEDULE), tags (D101, P3, EF-1) and the schedule row or legend that defines them. With sheet_id: every link on that sheet and where it goes. Without: the references between sheets (from, to, how many) and each sheet\'s drawings by number and title.',
     inputSchema: obj({ sheet_id: str('A sheet id from list_sheets (optional)'), include_tags: { type: 'boolean', description: 'Include tag and definition links (many on a busy plan). Default false.' } }),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'spec_map',
+    title: 'Specification tied to the drawings',
+    description:
+      'The project specification read into its sections and tied to the drawings. Links are "written" (one names the other: a section names a sheet or a schedule, a drawing note names a section) or "matched" (about the same thing by their own words: 08100 HOLLOW METAL WORK and the door schedule). Without section: every section (number, title, pages, how many drawing links) plus the gaps: sections listed "To follow" in the table of contents, and drawing items with no spec section. With section (08100 or 22 11 16): its articles, the sections it refers to, and everything on the drawings tied to it with why and where.',
+    inputSchema: obj({ section: str('A section number, e.g. 08100 or 22 11 16 (optional)') }),
     annotations: { readOnlyHint: true },
   },
   {
@@ -739,6 +750,49 @@ async function dispatch(ctx: McpContext, name: string, a: Record<string, unknown
         legends: index.legends.map((l) => ({ sheet: name(l.sheetId), code: l.code, kind: l.kind, heading: l.lines[0] })),
         abbreviations: Object.keys(index.abbreviations).length,
         tags: stats,
+      };
+      return text(json(out), out);
+    }
+
+    case 'spec_map': {
+      const p = need(ctx);
+      if (!ctx.projectMap) throw new ToolError('This version of the app cannot read specifications.');
+      if (!(p.specs ?? []).some((d) => d.book)) throw new ToolError('No specification in this project yet. Add the spec PDF on the Specs tab.');
+      const m = await ctx.projectMap();
+      if (!m) throw new ToolError('The specification could not be tied to the drawings.');
+      const byId = new Map(m.nodes.map((n) => [n.id, n]));
+      const sections = m.books.flatMap((b) => b.sections);
+      const nm = (id: string) => p.sheets.find((x) => x.id === id)?.name ?? id;
+      const tied = (id: string) => m.edges.filter((e) => (e.a === id || e.b === id) && (e.kind === 'written' || e.kind === 'matched'));
+      if (a.section) {
+        const key = String(a.section).replace(/\s+/g, '');
+        const s = sections.find((x) => x.key === key) ?? sections.find((x) => x.key.startsWith(key));
+        if (!s) throw new ToolError(`No section ${a.section} in the specification.`);
+        const id = `spec:${s.key}`;
+        const out = {
+          section: s.number,
+          title: s.title,
+          missing: !!s.missing,
+          pages: s.pages.length ? [s.pages[0], s.pages[s.pages.length - 1]] : [],
+          articles: s.articles.map((x) => `${x.number} ${x.title}`),
+          refers_to: s.sections.map((k) => {
+            const o = sections.find((x) => x.key === k);
+            return o ? `${o.number} ${o.title}${o.missing ? ' (to follow)' : ''}` : `${k} (not in this spec)`;
+          }),
+          on_drawings: tied(id).map((e) => {
+            const o = byId.get(e.a === id ? e.b : e.a)!;
+            return { kind: e.kind, item: o.label, what: o.sub, why: e.why, sheets: [...new Set((e.at ? [e.at] : (o.places ?? [])).map((pl) => nm(pl.sheetId)))].slice(0, 12) };
+          }),
+        };
+        return text(json(out), out);
+      }
+      const linked = new Set(m.edges.filter((e) => e.kind === 'written' || e.kind === 'matched').flatMap((e) => [e.a, e.b]));
+      const out = {
+        sections: sections.map((s) => ({ number: s.number, title: s.title, ...(s.missing ? { to_follow: true } : { pages: s.pages.length }), drawing_links: tied(`spec:${s.key}`).length })),
+        gaps: {
+          to_follow: sections.filter((s) => s.missing).map((s) => `${s.number} ${s.title}${linked.has(`spec:${s.key}`) ? ' (the drawings show its work)' : ''}`),
+          on_drawings_without_a_section: m.nodes.filter((n) => n.side === 'drawing' && n.kind !== 'sheet' && !linked.has(n.id)).map((n) => `${n.label} ${n.sub}`.trim()),
+        },
       };
       return text(json(out), out);
     }

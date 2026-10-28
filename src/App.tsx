@@ -41,9 +41,13 @@ import { isHosted, saveFile } from './host';
 import { RoomFinder } from './workers/rooms';
 import { FollowBar, LinksBar, TagCard, kindColor, linkTitle } from './components/LinksPanel';
 import { DrawingMap } from './components/DrawingMap';
+import { ProjectMap } from './components/ProjectMap';
+import { SpecView, type SpecTarget } from './components/SpecView';
+import { readSpec } from './spec/parse';
+import { buildProjectMap } from './spec/links';
 import { buildGraph, definitionsOf, type DrawingGraph, type Link, type Place } from './graph/graph';
-import { entries, type Entry } from './smart/index';
-import { defaultTypes, newId, newProject, type Kind, type Measurement, type Project, type Pt, type Sheet, type TakeoffType, type Units } from './model';
+import { entries, norm, type Entry } from './smart/index';
+import { defaultTypes, filesOf, newId, newProject, type Kind, type Measurement, type Project, type Pt, type Sheet, type TakeoffType, type Units } from './model';
 import { openPdf, type PDFDocumentProxy, type PDFPageProxy } from './pdf';
 import { measurementVars, primaryOf, primaryUnit, sheetRepeat, typeTotals, type TypeTotals } from './quantities';
 import { clearStarterTypes, deleteProject, listProjects, type ProjectSummary, loadActivity, loadCurrentProject, deletePdf, loadPdf, loadProjectById, loadStarterTypes, persistStorage, saveActivity, savePdf, saveProject, saveStarterTypes, setStorageHooks, getSyncMark, setSyncMark } from './storage';
@@ -178,6 +182,13 @@ export function App() {
   const [trail, setTrail] = useState<{ label: string; to: Place[]; i: number; entry?: Entry } | null>(null);
   const [cardEntry, setCardEntry] = useState<Entry | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  /** The workspace shown: the drawings, the specification, or the map tying them together. */
+  const [view, setView] = useState<'drawings' | 'specs' | 'map'>('drawings');
+  const [specTarget, setSpecTarget] = useState<SpecTarget | null>(null);
+  const [specReading, setSpecReading] = useState<{ name: string; page: number; of: number } | null>(null);
+  const [mapFocus, setMapFocus] = useState<{ id: string; n: number } | null>(null);
+  const specPdfs = useRef(new Map<string, Promise<PDFDocumentProxy | null>>());
+  const specInput = useRef<HTMLInputElement>(null);
   const [flash, setFlash] = useState<{ sheetId: string; box: Box; n: number } | null>(null);
   /** Where you were before each link followed (Back), and where Back came from (Forward). */
   const navBack = useRef<{ sheetId: string; box: Box }[]>([]);
@@ -340,6 +351,19 @@ export function App() {
   const graphByKey = useMemo(() => new Map([...graphDict.values()].map((e) => [e.key, e] as const)), [graphDict]);
   const defsOf = useCallback((e: Entry) => (graph ? definitionsOf(e, graph) : []), [graph]);
   const sheetLinks = linksOn && graph && sheet ? (graph.links[sheet.id] ?? []) : [];
+  // The spec tied to the drawings: built when the spec or the map is looked at.
+  const specBooks = useMemo(() => (project?.specs ?? []).flatMap((d) => (d.book ? [d.book] : [])), [project?.specs]);
+  const projectMap = useMemo(
+    () => (view !== 'drawings' && project && (specBooks.length || graph) ? buildProjectMap(graph, specBooks, project.sheets, graph?.specRefs ?? []) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [view === 'drawings', graph, specBooks, project?.sheets],
+  );
+  const sheetByNumber = useMemo(() => new Map((project?.sheets ?? []).filter((s) => !s.superseded && /\d/.test(s.name)).map((s) => [norm(s.name), s])), [project?.sheets]);
+  // The spec or the map opened: the drawings are read into their graph for it.
+  useEffect(() => {
+    if (view !== 'drawings' && project?.sheets.length && !graphRef.current && !graphBuilding.current) void openLinks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
   // Drawings added or removed while links are on: read the set again.
   useEffect(() => {
     if (linksOn && !graphBuilding.current && graphRef.current?.key !== graphKey && graphKey) void openLinks();
@@ -863,6 +887,52 @@ export function App() {
     return { sheets, noText };
   }
 
+  /** A spec file's PDF, opened once. */
+  function specPdfOf(docId: string): Promise<PDFDocumentProxy | null> {
+    let p = specPdfs.current.get(docId);
+    if (!p) {
+      p = loadPdf(docId).then((d) => (d ? openPdf(d) : null)).catch(() => null);
+      specPdfs.current.set(docId, p);
+    }
+    return p;
+  }
+
+  /** Adds specification files: kept like drawings, each read into its sections once. */
+  async function addSpecs(files: FileList | File[]) {
+    for (const f of [...files]) {
+      if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) continue;
+      const docId = newId();
+      try {
+        const data = await f.arrayBuffer();
+        await savePdf(docId, data);
+        const pdf = await openPdf(data);
+        specPdfs.current.set(docId, Promise.resolve(pdf));
+        setSpecReading({ name: f.name, page: 0, of: pdf.numPages });
+        const book = await readSpec(
+          docId,
+          f.name,
+          pdf.numPages,
+          async (n) => pageTexts(await pdf.getPage(n)).catch(() => []),
+          (n) => setSpecReading({ name: f.name, page: n, of: pdf.numPages }),
+        );
+        commit((p) => ({ ...p, specs: [...(p.specs ?? []), { id: docId, name: f.name, book }] }), 'Add specification');
+        const first = book.sections.find((x) => !x.missing && x.pages.length && !/^00|^01/.test(x.key)) ?? book.sections.find((x) => x.pages.length);
+        setSpecTarget({ docId, page: first?.pages[0] ?? 1, key: first?.key, n: Date.now() });
+        const missing = book.sections.filter((x) => x.missing).length;
+        setToast({ text: `Read ${book.sections.length - missing} sections from ${f.name}${missing ? `; ${missing} listed as “To follow”` : ''}.`, undo: false });
+      } catch (e) {
+        setToast({ text: `Could not read ${f.name}: ${e instanceof Error ? e.message : String(e)}`, undo: false });
+      } finally {
+        setSpecReading(null);
+      }
+    }
+  }
+
+  function removeSpec(docId: string) {
+    commit((p) => ({ ...p, specs: (p.specs ?? []).filter((d) => d.id !== docId) }), 'Remove specification');
+    specPdfs.current.delete(docId);
+  }
+
   async function upload(files: FileList | File[]) {
     // Desktop app: drawings added to the blank starting project make it a real job with a
     // folder of its own, so it gets its name first (offered from the file name).
@@ -1057,7 +1127,7 @@ export function App() {
       const names = new Set((await listProjects()).map((x) => x.name));
       let name = `${p.name} (copy)`;
       for (let n = 2; names.has(name); n++) name = `${p.name} (copy ${n})`;
-      const docIds = new Map(p.docs.map((d) => [d.id, newId()]));
+      const docIds = new Map(filesOf(p).map((d) => [d.id, newId()]));
       // Storage writes don't throw (they're made safe for private windows), so each copy is
       // read back: a full disk must not leave a copy with blank sheets.
       const written: string[] = [];
@@ -1076,6 +1146,7 @@ export function App() {
         id: newId(),
         name,
         docs: p.docs.map((d) => ({ ...d, id: docIds.get(d.id)! })),
+        ...(p.specs ? { specs: p.specs.map((d) => ({ ...d, id: docIds.get(d.id)!, ...(d.book ? { book: { ...d.book, docId: docIds.get(d.id)!, sections: d.book.sections.map((x) => ({ ...x, docId: docIds.get(d.id)! })) } } : {}) })) } : {}),
         sheets: p.sheets.map((x) => ({ ...x, docId: docIds.get(x.docId) ?? x.docId })),
       };
       await saveProject(copy);
@@ -2400,6 +2471,12 @@ export function App() {
     wholeSet: (watch?: boolean) => takeOffEverything(!!watch),
     smartIndex: async () => (await openLinks())?.index ?? null,
     drawingGraph: () => openLinks(),
+    projectMap: async () => {
+      const g = await openLinks();
+      const q = projectRef.current;
+      if (!q) return null;
+      return buildProjectMap(g, (q.specs ?? []).flatMap((d) => (d.book ? [d.book] : [])), q.sheets, g?.specRefs ?? []);
+    },
     showTag: (key: string) => {
       const g = graphRef.current?.graph;
       const e = g ? [...entries(g.index).values()].find((x) => x.key === key) : undefined;
@@ -2454,9 +2531,23 @@ export function App() {
           >
             <Icon name="chevronDown" size={14} />
           </button>
+          <div className="segmented view-switch" role="tablist" aria-label="Workspace">
+            {(
+              [
+                ['drawings', 'Drawings', 'sheet'],
+                ['specs', 'Specs', 'doc'],
+                ['map', 'Map', 'graph'],
+              ] as const
+            ).map(([v, label, icon]) => (
+              <button key={v} role="tab" aria-label={label} aria-selected={view === v} className={view === v ? 'on' : ''} onClick={() => setView(v)} title={v === 'drawings' ? 'The drawings and the takeoff' : v === 'specs' ? 'The specification, read into its sections' : 'The spec and the drawings, tied together'}>
+                <Icon name={icon} size={14} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="tb-center">
+        <div className={`tb-center ${view !== 'drawings' ? 'hidden-view' : ''}`}>
           <div className="segmented tools" role="toolbar" aria-label="Tools">
             {TOOLS.map((t) => (
               <button
@@ -3120,6 +3211,77 @@ export function App() {
         )}
       </main>
 
+      <input
+        ref={specInput}
+        type="file"
+        accept="application/pdf"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files?.length) void addSpecs(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      {view === 'specs' && (
+        <div className="view-pane spec-pane">
+          <SpecView
+            specs={project.specs ?? []}
+            pdfOf={specPdfOf}
+            map={projectMap}
+            sheetByName={(n) => sheetByNumber.get(norm(n))}
+            target={specTarget}
+            reading={specReading}
+            onAdd={() => specInput.current?.click()}
+            onRemove={removeSpec}
+            onOpenDrawing={(to, label) => {
+              setView('drawings');
+              follow(to, label);
+            }}
+            onShowOnMap={(id) => {
+              setMapFocus({ id, n: Date.now() });
+              setView('map');
+            }}
+          />
+        </div>
+      )}
+      {view === 'map' && (
+        <div className="view-pane map-pane">
+          {projectMap && projectMap.nodes.length ? (
+            <ProjectMap
+              data={projectMap}
+              focus={mapFocus}
+              onOpenSpec={(docId, page, key) => {
+                setSpecTarget({ docId, page, key, n: Date.now() });
+                setView('specs');
+              }}
+              onOpenDrawing={(to, label) => {
+                setView('drawings');
+                follow(to, label);
+              }}
+              onClose={() => setView('drawings')}
+            />
+          ) : (
+            <div className="pmap-empty">
+              <div>
+                <h2>{busy ?? 'Nothing to map yet'}</h2>
+                <p>{project.sheets.length ? 'Add the specification to tie its sections to the drawings.' : 'Add the drawings and the specification; the map ties every section to what the drawings show.'}</p>
+                <div className="pmap-empty-actions">
+                  {!project.sheets.length && (
+                    <button className="secondary" onClick={() => fileInput.current?.click()}>
+                      Add drawings
+                    </button>
+                  )}
+                  {!(project.specs ?? []).length && (
+                    <button className="primary" onClick={() => specInput.current?.click()}>
+                      Add spec PDF
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <aside className="inspector-pane">
         {editingType ? (
           <TypeEditor

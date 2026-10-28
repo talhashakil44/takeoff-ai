@@ -3,6 +3,7 @@ import type { PageText } from '../pageText';
 import { pause, type SetAccess } from '../automate/set';
 import { buildIndex, entries, entryName, norm, tagsOn, type DrawingIndex, type Entry, type TagKind } from '../smart/index';
 import { findViews, type View } from './views';
+import { specRefsOn, type SpecRef } from '../spec/refs';
 
 /**
  * The drawing set as a graph: every sheet, every drawing on a sheet (by its title), every
@@ -45,6 +46,8 @@ export interface DrawingGraph {
   links: Record<string, Link[]>;
   /** The sheets read, by id, with their names (for edges and the map). */
   sheets: { id: string; name: string; title?: string }[];
+  /** Notes naming spec sections by number, for linking the specification. */
+  specRefs: SpecRef[];
 }
 
 const median = (xs: number[]) => {
@@ -94,7 +97,7 @@ export async function buildGraph(sheets: Sheet[], access: SetAccess): Promise<Dr
     texts.set(s.id, t);
     views[s.id] = findViews(t, s.width, s.height);
   }
-  const graph: DrawingGraph = { index, views, links: {}, sheets: live.map((s) => ({ id: s.id, name: s.name, title: s.title })) };
+  const graph: DrawingGraph = { index, views, links: {}, sheets: live.map((s) => ({ id: s.id, name: s.name, title: s.title })), specRefs: live.flatMap((s) => specRefsOn(s.id, texts.get(s.id) ?? [])) };
   const dict = entries(index);
   for (const [i, s] of live.entries()) {
     if (i % 8 === 0) {

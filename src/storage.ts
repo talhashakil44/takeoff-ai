@@ -1,6 +1,6 @@
 import { del, get, set } from 'idb-keyval';
 import type { ActivityEvent } from './activity';
-import { newId, type Project } from './model';
+import { filesOf, newId, type Project } from './model';
 
 /**
  * The app's database: IndexedDB in this browser. Each project is stored on its
@@ -142,7 +142,7 @@ export const deleteProject = (project: Project) =>
     if (!project.id) return;
     hooks?.deleted(project.id);
     await del(`sync:${project.id}`);
-    for (const d of project.docs) await del(pdfKey(d.id));
+    for (const d of filesOf(project)) await del(pdfKey(d.id));
     await del(projectKey(project.id));
     await del(activityKey(project.id));
     const index = (await get<ProjectSummary[]>(INDEX)) ?? [];

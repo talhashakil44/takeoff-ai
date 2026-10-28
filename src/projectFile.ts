@@ -1,5 +1,5 @@
 import type { ActivityEvent } from './activity';
-import { newId, type Project } from './model';
+import { filesOf, newId, type Project } from './model';
 
 /**
  * A project file (.takeoff): a zip holding the project, its activity log and its
@@ -19,7 +19,7 @@ export async function writeProjectFile(
   const zip = new JSZip();
   zip.file('project.json', JSON.stringify({ format: FORMAT, version: 1, savedAt: new Date().toISOString(), project, activity }));
   const missing: string[] = [];
-  for (const d of project.docs) {
+  for (const d of filesOf(project)) {
     const data = await loadPdf(d.id);
     if (data) zip.file(`drawings/${d.id}.pdf`, data);
     else missing.push(d.name);
@@ -52,7 +52,7 @@ export async function readProjectFile(data: ArrayBuffer): Promise<OpenedProject>
   if (!head) throw new Error('That file is not a Takeoff AI project file.');
   const parsed = JSON.parse(await head.async('string')) as { format?: string; project?: Project; activity?: ActivityEvent[] };
   if (parsed.format !== FORMAT || !parsed.project) throw new Error('That file is not a Takeoff AI project file.');
-  const docIds = new Map(parsed.project.docs.map((d) => [d.id, newId()]));
+  const docIds = new Map(filesOf(parsed.project).map((d) => [d.id, newId()]));
   const pdfs = new Map<string, ArrayBuffer>();
   for (const [oldId, id] of docIds) {
     const f = zip.file(`drawings/${oldId}.pdf`);
@@ -62,6 +62,7 @@ export async function readProjectFile(data: ArrayBuffer): Promise<OpenedProject>
     ...parsed.project,
     id: newId(),
     docs: parsed.project.docs.map((d) => ({ ...d, id: docIds.get(d.id)! })),
+    ...(parsed.project.specs ? { specs: parsed.project.specs.map((d) => ({ ...d, id: docIds.get(d.id)!, ...(d.book ? { book: { ...d.book, docId: docIds.get(d.id)!, sections: d.book.sections.map((x) => ({ ...x, docId: docIds.get(d.id)! })) } } : {}) })) } : {}),
     sheets: parsed.project.sheets.map((s) => ({ ...s, docId: docIds.get(s.docId) ?? s.docId })),
   };
   return { project, activity: parsed.activity ?? [], pdfs };

@@ -1,5 +1,5 @@
 import type { ActivityEvent } from './activity';
-import { newId, type Project } from './model';
+import { filesOf, newId, type Project } from './model';
 import type { ProjectSummary, SyncMark } from './storage';
 
 /**
@@ -128,7 +128,7 @@ export class FolderSync {
     let dir = entry?.dir ?? named;
     // A renamed project's folder follows its name.
     if (entry && entry.dir !== named && (await this.api.rename(entry.dir, named).catch(() => false))) dir = named;
-    for (const d of project.docs) {
+    for (const d of filesOf(project)) {
       if (await this.api.hasPdf(dir, d.id)) continue;
       const data = await this.store.loadPdf(d.id);
       if (data) await this.api.writePdf(dir, d.id, data);
@@ -203,7 +203,7 @@ export class FolderSync {
   private async bringIn(dir: string, id: string): Promise<boolean> {
     const copy = await this.readFolderCopy(dir);
     if (!copy || copy.project.id !== id) return false;
-    for (const d of copy.project.docs) {
+    for (const d of filesOf(copy.project)) {
       if (await this.store.loadPdf(d.id)) continue;
       const data = await this.api.readPdf(dir, d.id);
       // A drawing still on its way from the other computer: try again next time.
@@ -221,7 +221,7 @@ export class FolderSync {
   private async bringInAsCopy(dir: string): Promise<{ id: string; name: string } | null> {
     const copy = await this.readFolderCopy(dir);
     if (!copy) return null;
-    const docIds = new Map(copy.project.docs.map((d) => [d.id, newId()]));
+    const docIds = new Map(filesOf(copy.project).map((d) => [d.id, newId()]));
     for (const [oldId, nextId] of docIds) {
       const data = (await this.store.loadPdf(oldId)) ?? (await this.api.readPdf(dir, oldId));
       if (!data) return null;
@@ -234,6 +234,7 @@ export class FolderSync {
       id,
       name,
       docs: copy.project.docs.map((d) => ({ ...d, id: docIds.get(d.id)! })),
+      ...(copy.project.specs ? { specs: copy.project.specs.map((d) => ({ ...d, id: docIds.get(d.id)!, ...(d.book ? { book: { ...d.book, docId: docIds.get(d.id)!, sections: d.book.sections.map((x) => ({ ...x, docId: docIds.get(d.id)! })) } } : {}) })) } : {}),
       sheets: copy.project.sheets.map((s) => ({ ...s, docId: docIds.get(s.docId) ?? s.docId })),
     };
     await this.store.saveProject(project, { fromFolder: this.now() });

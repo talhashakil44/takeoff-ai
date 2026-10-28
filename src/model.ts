@@ -1,4 +1,5 @@
 import type { ExtractedAssembly } from './ai/schema';
+import type { SpecBook } from './spec/parse';
 
 export type Units = 'metric' | 'imperial';
 export type Kind = 'area' | 'linear' | 'count';
@@ -183,7 +184,17 @@ export interface Project {
   /** Groups the takeoff types are filed in, in the order they are listed. */
   groups?: TakeoffGroup[];
   measurements: Measurement[];
+  /** The project's specification files, each read into its sections once. */
+  specs?: SpecDoc[];
 }
+
+/** A specification file: its PDF is kept like a drawing's, its reading with the project. */
+export interface SpecDoc extends Doc {
+  book?: SpecBook;
+}
+
+/** Every PDF the project keeps: its drawings and its specifications. */
+export const filesOf = (p: Pick<Project, 'docs' | 'specs'>): Doc[] => [...p.docs, ...(p.specs ?? [])];
 
 export const newId = (): string => crypto.randomUUID();
 
