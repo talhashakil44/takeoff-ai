@@ -4,7 +4,7 @@ import type { SpecDoc } from '../model';
 import type { PageText } from '../pageText';
 import { pageTexts } from '../pageText';
 import type { PDFDocumentProxy } from '../pdf';
-import { keyOf, linesOf, type SpecSection } from '../spec/parse';
+import { keyOf, linesOf, mergeSections, type SpecSection } from '../spec/parse';
 import type { MapNode, ProjectMap } from '../spec/links';
 import { Icon } from './Icons';
 
@@ -32,6 +32,7 @@ interface Props {
   reading: { name: string; page: number; of: number } | null;
   onAdd: () => void;
   onRemove: (docId: string) => void;
+  onManage: () => void;
   onOpenDrawing: (places: Place[], label: string) => void;
   onShowOnMap: (nodeId: string) => void;
 }
@@ -71,7 +72,7 @@ const SECTION_RE = new RegExp(`\\bSections?\\s+${NUM}|(?<=,\\s*|and\\s+|or\\s+)$
 const SHEET_RE = /\b([A-Z]{1,2}-?\d{1,2}\.\d{1,2}|[A-Z]{1,2}\d{3})\b/g;
 const SCHEDULE_RE = /\b((?:[A-Z][A-Za-z]+\s+){1,3})Schedules?\b/g;
 
-export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAdd, onRemove, onOpenDrawing, onShowOnMap }: Props) {
+export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAdd, onManage, onOpenDrawing, onShowOnMap }: Props) {
   const books = specs.filter((d) => d.book);
   const [docId, setDocId] = useState<string | null>(target?.docId ?? books[0]?.id ?? null);
   const [page, setPage] = useState(target?.page ?? 1);
@@ -96,17 +97,18 @@ export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAd
 
   const sectionKey = book?.pageSection[page - 1] ?? null;
   const section = book?.sections.find((s) => s.key === sectionKey) ?? null;
-  const all = useMemo(() => books.flatMap((d) => d.book!.sections), [books]);
+  // Every file's sections as one book.
+  const all = useMemo(() => mergeSections(books.map((d) => d.book!)), [books]);
   const sectionByKey = useMemo(() => new Map(all.map((s) => [s.key, s])), [all]);
 
   // The table of contents, by division, filtered.
   const divisions = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = (book?.sections ?? []).filter((s) => !q || `${s.number} ${s.key} ${s.title} ${s.articles.map((a) => a.title).join(' ')}`.toLowerCase().includes(q));
+    const list = all.filter((s) => !q || `${s.number} ${s.key} ${s.title} ${s.articles.map((a) => a.title).join(' ')}`.toLowerCase().includes(q));
     const by = new Map<string, SpecSection[]>();
     for (const s of list) by.set(s.division, [...(by.get(s.division) ?? []), s]);
     return [...by.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [book, query]);
+  }, [all, query]);
 
   // How many drawing links each section has.
   const linkCount = useMemo(() => {
@@ -216,7 +218,7 @@ export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAd
           <h2>Add the specification</h2>
           <p>Drop in the project manual. Every section is read, its references to sheets, schedules and other sections linked, and tied to what the drawings show.</p>
           <button className="primary" onClick={onAdd}>
-            <Icon name="upload" size={16} /> Add spec PDF
+            <Icon name="upload" size={16} /> Add spec PDFs
           </button>
           {reading && <ReadingBar reading={reading} />}
         </div>
@@ -228,32 +230,30 @@ export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAd
     <div className="spec-view">
       <aside className="spec-toc">
         <div className="spec-toc-head">
-          {specs.length > 1 ? (
-            <select value={doc?.id ?? ''} onChange={(e) => (setDocId(e.target.value), setPage(1))} aria-label="Specification file">
-              {specs.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <strong title={doc?.name}>{doc?.name.replace(/\.pdf$/i, '')}</strong>
-          )}
-          <button className="icon-button small" onClick={onAdd} title="Add another spec file" aria-label="Add spec">
+          <strong title={specs.map((d) => d.name).join('\n')}>{specs.length > 1 ? 'Specification' : (doc?.name.replace(/\.pdf$/i, '') ?? 'Specification')}</strong>
+          <button className="icon-button small" onClick={onManage} title="Spec and drawing files: add, remove, reorder" aria-label="Manage files">
+            <Icon name="folder" size={14} />
+          </button>
+          <button className="icon-button small" onClick={onAdd} title="Add spec files" aria-label="Add spec">
             <Icon name="plus" size={14} />
           </button>
         </div>
-        {book && (
+        {all.length > 0 && (
           <div className="spec-toc-stats">
             <span>
-              <b>{book.sections.filter((s) => !s.missing).length}</b> sections
+              <b>{all.filter((s) => !s.missing).length}</b> sections
             </span>
             <span>
-              <b>{book.pages}</b> pages
+              <b>{books.reduce((n, d) => n + d.book!.pages, 0)}</b> pages
             </span>
-            {book.sections.some((s) => s.missing) && (
+            {specs.length > 1 && (
+              <span>
+                <b>{specs.length}</b> files
+              </span>
+            )}
+            {all.some((s) => s.missing) && (
               <span className="warn">
-                <b>{book.sections.filter((s) => s.missing).length}</b> to follow
+                <b>{all.filter((s) => s.missing).length}</b> to follow
               </span>
             )}
           </div>
@@ -293,11 +293,9 @@ export function SpecView({ specs, pdfOf, map, sheetByName, target, reading, onAd
             );
           })}
         </div>
-        {doc && (
-          <button className="link-button spec-remove" onClick={() => onRemove(doc.id)}>
-            Remove this spec
-          </button>
-        )}
+        <button className="link-button spec-remove" onClick={onManage}>
+          Manage files…
+        </button>
       </aside>
 
       <section className="spec-page-pane">

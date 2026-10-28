@@ -43,11 +43,12 @@ import { FollowBar, LinksBar, TagCard, kindColor, linkTitle } from './components
 import { DrawingMap } from './components/DrawingMap';
 import { ProjectMap } from './components/ProjectMap';
 import { SpecView, type SpecTarget } from './components/SpecView';
-import { readSpec } from './spec/parse';
+import { FileManager } from './components/FileManager';
+import { mergeSections, readSpec } from './spec/parse';
 import { buildProjectMap } from './spec/links';
 import { buildGraph, definitionsOf, type DrawingGraph, type Link, type Place } from './graph/graph';
 import { entries, norm, type Entry } from './smart/index';
-import { defaultTypes, filesOf, newId, newProject, type Kind, type Measurement, type Project, type Pt, type Sheet, type TakeoffType, type Units } from './model';
+import { defaultTypes, filesOf, newId, newProject, type SpecDoc, type Kind, type Measurement, type Project, type Pt, type Sheet, type TakeoffType, type Units } from './model';
 import { openPdf, type PDFDocumentProxy, type PDFPageProxy } from './pdf';
 import { measurementVars, primaryOf, primaryUnit, sheetRepeat, typeTotals, type TypeTotals } from './quantities';
 import { clearStarterTypes, deleteProject, listProjects, type ProjectSummary, loadActivity, loadCurrentProject, deletePdf, loadPdf, loadProjectById, loadStarterTypes, persistStorage, saveActivity, savePdf, saveProject, saveStarterTypes, setStorageHooks, getSyncMark, setSyncMark } from './storage';
@@ -189,6 +190,7 @@ export function App() {
   const [mapFocus, setMapFocus] = useState<{ id: string; n: number } | null>(null);
   const specPdfs = useRef(new Map<string, Promise<PDFDocumentProxy | null>>());
   const specInput = useRef<HTMLInputElement>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
   const [flash, setFlash] = useState<{ sheetId: string; box: Box; n: number } | null>(null);
   /** Where you were before each link followed (Back), and where Back came from (Forward). */
   const navBack = useRef<{ sheetId: string; box: Box }[]>([]);
@@ -899,38 +901,105 @@ export function App() {
 
   /** Adds specification files: kept like drawings, each read into its sections once. */
   async function addSpecs(files: FileList | File[]) {
-    for (const f of [...files]) {
-      if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) continue;
+    const list = [...files].filter((f) => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name));
+    const added: SpecDoc[] = [];
+    const failed: string[] = [];
+    for (const [i, f] of list.entries()) {
       const docId = newId();
+      const label = list.length > 1 ? `${f.name} (file ${i + 1} of ${list.length})` : f.name;
       try {
         const data = await f.arrayBuffer();
         await savePdf(docId, data);
         const pdf = await openPdf(data);
         specPdfs.current.set(docId, Promise.resolve(pdf));
-        setSpecReading({ name: f.name, page: 0, of: pdf.numPages });
+        setSpecReading({ name: label, page: 0, of: pdf.numPages });
         const book = await readSpec(
           docId,
           f.name,
           pdf.numPages,
           async (n) => pageTexts(await pdf.getPage(n)).catch(() => []),
-          (n) => setSpecReading({ name: f.name, page: n, of: pdf.numPages }),
+          (n) => setSpecReading({ name: label, page: n, of: pdf.numPages }),
         );
-        commit((p) => ({ ...p, specs: [...(p.specs ?? []), { id: docId, name: f.name, book }] }), 'Add specification');
-        const first = book.sections.find((x) => !x.missing && x.pages.length && !/^00|^01/.test(x.key)) ?? book.sections.find((x) => x.pages.length);
-        setSpecTarget({ docId, page: first?.pages[0] ?? 1, key: first?.key, n: Date.now() });
-        const missing = book.sections.filter((x) => x.missing).length;
-        setToast({ text: `Read ${book.sections.length - missing} sections from ${f.name}${missing ? `; ${missing} listed as “To follow”` : ''}.`, undo: false });
-      } catch (e) {
-        setToast({ text: `Could not read ${f.name}: ${e instanceof Error ? e.message : String(e)}`, undo: false });
-      } finally {
-        setSpecReading(null);
+        added.push({ id: docId, name: f.name, book });
+      } catch {
+        failed.push(f.name);
       }
     }
+    setSpecReading(null);
+    if (!added.length) {
+      if (failed.length) setToast({ text: `Could not read ${failed.join(', ')}`, undo: false });
+      return;
+    }
+    commit((p) => ({ ...p, specs: [...(p.specs ?? []), ...added] }), added.length === 1 ? 'Add specification' : `Add ${added.length} spec files`);
+    const sections = mergeSections(added.map((d) => d.book!));
+    const first = sections.find((x) => !x.missing && x.pages.length && !/^00|^01/.test(x.key)) ?? sections.find((x) => x.pages.length);
+    if (first) setSpecTarget({ docId: first.docId, page: first.pages[0], key: first.key, n: Date.now() });
+    const missing = sections.filter((x) => x.missing).length;
+    setToast({
+      text: `Read ${sections.length - missing} section${sections.length - missing === 1 ? '' : 's'} from ${added.length === 1 ? added[0].name : `${added.length} files`}${missing ? `; ${missing} listed as “To follow”` : ''}${failed.length ? `. Could not read ${failed.join(', ')}` : ''}.`,
+      undo: false,
+    });
   }
 
   function removeSpec(docId: string) {
-    commit((p) => ({ ...p, specs: (p.specs ?? []).filter((d) => d.id !== docId) }), 'Remove specification');
-    specPdfs.current.delete(docId);
+    removeFiles('specs', [docId]);
+  }
+
+  /** Files: renamed, reordered, removed (drawing sets with their sheets and takeoffs). */
+  function renameFile(kind: 'drawings' | 'specs', id: string, name: string) {
+    if (kind === 'drawings') commit((p) => ({ ...p, docs: p.docs.map((d) => (d.id === id ? { ...d, name } : d)) }), 'Rename drawing file');
+    else commit((p) => ({ ...p, specs: (p.specs ?? []).map((d) => (d.id === id ? { ...d, name, ...(d.book ? { book: { ...d.book, name } } : {}) } : d)) }), 'Rename spec file');
+  }
+  function reorderFiles(kind: 'drawings' | 'specs', ids: string[]) {
+    const rank = new Map(ids.map((id, i) => [id, i]));
+    const by = <T extends { id: string }>(list: T[]) => [...list].sort((a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9));
+    if (kind === 'specs') return commit((p) => ({ ...p, specs: by(p.specs ?? []) }), 'Reorder spec files');
+    commit((p) => {
+      const docs = by(p.docs);
+      const at = new Map(docs.map((d, i) => [d.id, i]));
+      // Sheets follow their files; within a file they keep their order.
+      const sheets = p.sheets.map((sh, i) => ({ sh, i })).sort((a, b) => (at.get(a.sh.docId) ?? 1e9) - (at.get(b.sh.docId) ?? 1e9) || a.i - b.i).map((x) => x.sh);
+      return { ...p, docs, sheets };
+    }, 'Reorder drawing files');
+  }
+  async function removeFiles(kind: 'drawings' | 'specs', ids: string[]) {
+    const p0 = projectRef.current!;
+    const gone = new Set(ids);
+    if (kind === 'specs') {
+      const names = (p0.specs ?? []).filter((d) => gone.has(d.id)).map((d) => d.name);
+      commit((p) => ({ ...p, specs: (p.specs ?? []).filter((d) => !gone.has(d.id)) }), names.length === 1 ? 'Remove specification' : `Remove ${names.length} spec files`);
+      setToast({ text: names.length === 1 ? `Removed ${names[0]}` : `Removed ${names.length} spec files`, undo: true });
+      return;
+    }
+    const sheetIds = new Set(p0.sheets.filter((x) => gone.has(x.docId)).map((x) => x.id));
+    const count = p0.measurements.filter((m) => sheetIds.has(m.sheetId)).length;
+    const names = p0.docs.filter((d) => gone.has(d.id)).map((d) => d.name);
+    if (count) {
+      const ok = await askConfirm(`Remove ${names.length === 1 ? names[0] : `${names.length} drawing files`} and ${count} takeoff${count === 1 ? '' : 's'} on ${names.length === 1 ? 'it' : 'them'}?`, { confirmLabel: 'Remove', danger: true });
+      if (!ok) return;
+    }
+    commit((p) => ({ ...p, docs: p.docs.filter((d) => !gone.has(d.id)), sheets: p.sheets.filter((x) => !gone.has(x.docId)), measurements: p.measurements.filter((m) => !sheetIds.has(m.sheetId)) }), names.length === 1 ? 'Remove drawings' : `Remove ${names.length} drawing files`);
+    if (sheetId && sheetIds.has(sheetId)) setSheetId(projectRef.current!.sheets[0]?.id ?? null);
+    setToast({ text: names.length === 1 ? `Removed ${names[0]}` : `Removed ${names.length} drawing files`, undo: true });
+  }
+  function reorderSheets(docId: string, ids: string[]) {
+    commit((p) => {
+      const queue = ids.map((id) => p.sheets.find((x) => x.id === id)!).filter(Boolean);
+      return { ...p, sheets: p.sheets.map((x) => (x.docId === docId ? (queue.shift() ?? x) : x)) };
+    }, 'Reorder sheets');
+  }
+  async function removeSheets(ids: string[]) {
+    const p0 = projectRef.current!;
+    const gone = new Set(ids);
+    const count = p0.measurements.filter((m) => gone.has(m.sheetId)).length;
+    const label = ids.length === 1 ? (p0.sheets.find((x) => x.id === ids[0])?.name ?? 'this sheet') : `${ids.length} sheets`;
+    if (count) {
+      const ok = await askConfirm(`Remove ${label} and ${count} takeoff${count === 1 ? '' : 's'} on ${ids.length === 1 ? 'it' : 'them'}?`, { confirmLabel: 'Remove', danger: true });
+      if (!ok) return;
+    }
+    commit((p) => ({ ...p, sheets: p.sheets.filter((x) => !gone.has(x.id)), measurements: p.measurements.filter((m) => !gone.has(m.sheetId)) }), `Remove ${label}`);
+    if (sheetId && gone.has(sheetId)) setSheetId(projectRef.current!.sheets[0]?.id ?? null);
+    setToast({ text: `Removed ${label}`, undo: true });
   }
 
   async function upload(files: FileList | File[]) {
@@ -2638,6 +2707,11 @@ export function App() {
         <section className="source sheets">
           <div className="source-head">
             <h2>Sheets</h2>
+            {project.sheets.length > 0 && (
+              <button className="link-button files-button" onClick={() => setFilesOpen(true)} title="Add, remove, rename and reorder drawing and spec files">
+                Files
+              </button>
+            )}
             {page && project.sheets.length > 0 && (
               <button className="link-button number-sheets" onClick={() => void autoNameSheets()} title="Name every sheet from its title block: sheet number, then drawing title">
                 Number sheets
@@ -3222,6 +3296,21 @@ export function App() {
           e.target.value = '';
         }}
       />
+      {filesOpen && (
+        <FileManager
+          docs={project.docs}
+          specs={project.specs ?? []}
+          sheets={project.sheets}
+          measurements={project.measurements}
+          onRename={renameFile}
+          onReorder={reorderFiles}
+          onRemove={(k, ids) => void removeFiles(k, ids)}
+          onReorderSheets={reorderSheets}
+          onRemoveSheets={(ids) => void removeSheets(ids)}
+          onAdd={(k) => (k === 'drawings' ? fileInput.current?.click() : specInput.current?.click())}
+          onClose={() => setFilesOpen(false)}
+        />
+      )}
       {view === 'specs' && (
         <div className="view-pane spec-pane">
           <SpecView
@@ -3233,6 +3322,7 @@ export function App() {
             reading={specReading}
             onAdd={() => specInput.current?.click()}
             onRemove={removeSpec}
+            onManage={() => setFilesOpen(true)}
             onOpenDrawing={(to, label) => {
               setView('drawings');
               follow(to, label);
@@ -3616,6 +3706,7 @@ export function App() {
           label="More"
           groups={[
             [
+              { label: 'Files…', hint: 'Add, remove, reorder', onSelect: () => setFilesOpen(true) },
               { label: 'History', hint: 'Every change', onSelect: () => setTab('history') },
               { label: 'Quick start', onSelect: () => setAiDialog('help') },
               { label: 'Keyboard shortcuts', onSelect: () => setAiDialog('shortcuts') },

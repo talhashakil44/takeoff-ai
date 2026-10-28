@@ -194,6 +194,15 @@ export async function readSpec(docId: string, name: string, pages: number, texts
       }
     }
   }
+  // A file of one section with no heading the reader knows (08 11 13 - Hollow Metal.pdf): the file's name says.
+  if (!sections.size && pages) {
+    const m = new RegExp(`^${NUM}\\s*[-–_ ]*\\s*(.*?)(?:\\.pdf)?$`, 'i').exec(name.trim());
+    if (m) {
+      const one = make(m[1], cleanTitle(m[2].replace(/[_]+/g, ' ')));
+      one.pages = Array.from({ length: pages }, (_, i) => i + 1);
+      pageSection.splice(0, pageSection.length, ...one.pages.map(() => one.key));
+    }
+  }
   // Sections the table of contents lists that the book does not hold yet.
   for (const t of toc) {
     const s = sections.get(keyOf(t.number));
@@ -226,4 +235,21 @@ function readToc(lines: Line[]): { number: string; title: string; missing: boole
     out.push({ number: m[1], title: cleanTitle(m[2].replace(/\s+(To follow)$/i, '')), missing: /to follow/i.test(l.text) });
   }
   return out;
+}
+
+/**
+ * Every section across the project's spec files, as one book: a manual split into a file per
+ * section reads the same as one PDF. A section listed "To follow" in one file's table of
+ * contents but present in another file is the one present.
+ */
+export function mergeSections(books: SpecBook[]): SpecSection[] {
+  const by = new Map<string, SpecSection>();
+  for (const b of books)
+    for (const s of b.sections) {
+      const had = by.get(s.key);
+      if (!had) by.set(s.key, s);
+      else if (had.missing && !s.missing) by.set(s.key, { ...s, title: s.title || had.title });
+      else if (!had.title && s.title) by.set(s.key, { ...had, title: s.title });
+    }
+  return [...by.values()].sort((a, b) => a.key.localeCompare(b.key));
 }

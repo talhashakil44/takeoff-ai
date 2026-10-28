@@ -1,7 +1,7 @@
 import type { Sheet } from '../model';
 import { nameOf, type DrawingGraph, type Place } from '../graph/graph';
 import { entries, entryName, norm, type Entry } from '../smart/index';
-import { stem, wordsOf, type SpecBook, type SpecSection } from './parse';
+import { mergeSections, stem, wordsOf, type SpecBook, type SpecSection } from './parse';
 import type { SpecRef } from './refs';
 export type { SpecRef } from './refs';
 
@@ -125,12 +125,10 @@ export function buildProjectMap(graph: DrawingGraph | null, books: SpecBook[], s
 
   // Spec sections.
   const sections = new Map<string, SpecSection>();
-  for (const b of books)
-    for (const s of b.sections) {
-      if (sections.has(s.key)) continue;
-      sections.set(s.key, s);
-      add({ id: `spec:${s.key}`, kind: 'section', side: 'spec', label: s.number, sub: s.title, group: s.division, missing: s.missing, pages: s.pages.map((page) => ({ docId: s.docId, page })) });
-    }
+  for (const s of mergeSections(books)) {
+    sections.set(s.key, s);
+    add({ id: `spec:${s.key}`, kind: 'section', side: 'spec', label: s.number, sub: s.title, group: s.division, missing: s.missing, pages: s.pages.map((page) => ({ docId: s.docId, page })) });
+  }
   // Sections naming each other.
   for (const s of sections.values())
     for (const k of s.sections) if (sections.has(k)) edges.push({ a: `spec:${s.key}`, b: `spec:${k}`, kind: 'spec-spec', why: `${s.number} refers to Section ${sections.get(k)!.number}` });
