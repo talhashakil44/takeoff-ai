@@ -38,8 +38,10 @@ import { readTitleBlock, titleBlockBox } from './titleBlock';
 import { middleOf, roomLocator } from './locate';
 import { buildingOfDoc, buildingsOf, fileLabel, onBuilding, quantitySections, type QtyGrouping } from './buildings';
 import { isHosted, saveFile } from './host';
-import { SmartPanel, kindColor } from './components/SmartPanel';
-import { buildIndex, entries, searchEntries, tagsOn, TAG_KINDS, type DrawingIndex, type Entry, type SmartTag, type TagKind } from './smart/index';
+import { FollowBar, LinksBar, TagCard, kindColor, linkTitle } from './components/LinksPanel';
+import { DrawingMap } from './components/DrawingMap';
+import { buildGraph, definitionsOf, type DrawingGraph, type Link, type Place } from './graph/graph';
+import { entries, type Entry } from './smart/index';
 import { defaultTypes, newId, newProject, type Kind, type Measurement, type Project, type Pt, type Sheet, type TakeoffType, type Units } from './model';
 import { openPdf, type PDFDocumentProxy, type PDFPageProxy } from './pdf';
 import { measurementVars, primaryOf, primaryUnit, sheetRepeat, typeTotals, type TypeTotals } from './quantities';
@@ -166,17 +168,21 @@ export function App() {
   const [wholeSetReport, setWholeSetReport] = useState<{ text: string; rfis: string } | null>(null);
 
   const [busy, setBusy] = useState<string | null>(null);
-  /** Smart view: the set's schedules and legends read once, every tag on a sheet clickable. */
-  const [smartOn, setSmartOn] = useState(false);
-  const [smartIndex, setSmartIndex] = useState<{ index: DrawingIndex; key: string } | null>(null);
-  const [smartKinds, setSmartKinds] = useState<Set<TagKind>>(() => new Set(TAG_KINDS.map((k) => k.kind)));
-  const [smartQuery, setSmartQuery] = useState('');
-  const [smartPick, setSmartPick] = useState<string | null>(null);
-  const [smartTags, setSmartTags] = useState<SmartTag[]>([]);
-  /** A tag to bring into view once its sheet's tags are read. */
-  const smartFocus = useRef<string | null>(null);
-  const smartIndexRef = useRef<{ index: DrawingIndex; key: string } | null>(null);
-  const smartBuilding = useRef(false);
+  /** Linked drawings: the set read into a graph of what points at what, its links clickable on every sheet. */
+  const [linksOn, setLinksOn] = useState(false);
+  const [graphState, setGraphState] = useState<{ graph: DrawingGraph; key: string } | null>(null);
+  const graphRef = useRef<{ graph: DrawingGraph; key: string } | null>(null);
+  const graphBuilding = useRef(false);
+  /** The last link followed: where it went, and which of its places is shown. */
+  const [trail, setTrail] = useState<{ label: string; to: Place[]; i: number; entry?: Entry } | null>(null);
+  const [cardEntry, setCardEntry] = useState<Entry | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [flash, setFlash] = useState<{ sheetId: string; box: Box; n: number } | null>(null);
+  /** Where you were before each link followed (Back), and where Back came from (Forward). */
+  const navBack = useRef<{ sheetId: string; box: Box }[]>([]);
+  const navFwd = useRef<{ sheetId: string; box: Box }[]>([]);
+  const navHere = useRef<{ sheetId: string; box: Box } | null>(null);
+  const [, setNavTick] = useState(0);
   const [toast, setToastState] = useState<Toast | null>(null);
   /** The latest chooseTool, for the keyboard handler. */
   const chooseToolRef = useRef<(id: Tool) => void>(() => {});
@@ -326,41 +332,18 @@ export function App() {
   }, [project]);
 
   const sheet = project?.sheets.find((s) => s.id === sheetId) ?? null;
-  const smartKey = project ? project.sheets.filter((s) => !s.superseded).map((s) => s.id).join(',') : '';
+  const graphKey = project ? project.sheets.filter((s) => !s.superseded).map((s) => s.id).join(',') : '';
   // The last reading, while a newer one (drawings added) is under way.
-  const smartData = smartIndex ? smartIndex.index : null;
-  const smartDict = useMemo(() => (smartData ? entries(smartData) : new Map<string, Entry>()), [smartData]);
-  const smartByKey = useMemo(() => new Map([...smartDict.values()].map((e) => [e.key, e] as const)), [smartDict]);
-  const smartLit = useMemo(() => (smartQuery.trim() ? new Set(searchEntries(smartByKey, smartQuery, 500).map((e) => e.key)) : null), [smartByKey, smartQuery]);
-  const tagView = (box: [number, number, number, number]): [number, number, number, number] => [box[0] - 160, box[1] - 110, box[2] + 160, box[3] + 110];
-  // Drawings added or removed while Smart view is on: read the set again.
+  const graph = graphState ? graphState.graph : null;
+  const graphDict = useMemo(() => (graph ? entries(graph.index) : new Map<string, Entry>()), [graph]);
+  const graphByKey = useMemo(() => new Map([...graphDict.values()].map((e) => [e.key, e] as const)), [graphDict]);
+  const defsOf = useCallback((e: Entry) => (graph ? definitionsOf(e, graph) : []), [graph]);
+  const sheetLinks = linksOn && graph && sheet ? (graph.links[sheet.id] ?? []) : [];
+  // Drawings added or removed while links are on: read the set again.
   useEffect(() => {
-    if (smartOn && !smartBuilding.current && smartIndexRef.current?.key !== smartKey && smartKey) void openSmart();
+    if (linksOn && !graphBuilding.current && graphRef.current?.key !== graphKey && graphKey) void openLinks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [smartKey]);
-  // The open sheet's tags, once the set is read.
-  useEffect(() => {
-    if (!smartOn || !smartData || !sheet || !project) {
-      setSmartTags([]);
-      return;
-    }
-    let stop = false;
-    void sheetTexts(sheet).then((t) => {
-      if (stop) return;
-      const tags = tagsOn(sheet, t, smartData, project.sheets, smartDict);
-      setSmartTags(tags);
-      const k = smartFocus.current;
-      if (k) {
-        smartFocus.current = null;
-        const hit = tags.find((x) => x.key === k);
-        if (hit) setFocus({ box: tagView(hit.box), n: Date.now() });
-      }
-    });
-    return () => {
-      stop = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [smartOn, smartData, sheet?.id, pdfs]);
+  }, [graphKey]);
 
   // A sheet with almost no linework is a scanned image: the automatic tools can't read it.
   const [scanned, setScanned] = useState<{ sheetId: string; dismissed: boolean } | null>(null);
@@ -1563,19 +1546,19 @@ export function App() {
     }
   }
 
-  /** Turns Smart view on, reading the set's schedules, legends and tags first when they are not read yet. */
-  async function openSmart(rebuild = false): Promise<DrawingIndex | null> {
+  /** Turns the links on, reading the set into its graph first when it is not read yet. */
+  async function openLinks(rebuild = false): Promise<DrawingGraph | null> {
     const p = projectRef.current;
     if (!p?.sheets.length) return null;
-    setSmartOn(true);
+    setLinksOn(true);
     const key = p.sheets.filter((s) => !s.superseded).map((s) => s.id).join(',');
-    const had = smartIndexRef.current;
-    if (!rebuild && had?.key === key) return had.index;
-    if (smartBuilding.current) return had?.index ?? null;
-    smartBuilding.current = true;
-    setBusy('Smart view: reading the set…');
+    const had = graphRef.current;
+    if (!rebuild && had?.key === key) return had.graph;
+    if (graphBuilding.current) return had?.graph ?? null;
+    graphBuilding.current = true;
+    setBusy('Linking the drawings: reading the set…');
     try {
-      let index = await buildIndex(p.sheets, setAccess());
+      let g = await buildGraph(p.sheets, setAccess());
       let at = key;
       // Drawings still coming in while it read: read the set as it is now.
       for (let n = 0; n < 3; n++) {
@@ -1583,42 +1566,64 @@ export function App() {
         const now = q.sheets.filter((s) => !s.superseded).map((s) => s.id).join(',');
         if (now === at) break;
         at = now;
-        index = await buildIndex(q.sheets, setAccess());
+        g = await buildGraph(q.sheets, setAccess());
       }
-      setSmartIndex({ index, key: at });
-      smartIndexRef.current = { index, key: at };
-      const n = index.schedules.length + index.legends.length;
+      setGraphState({ graph: g, key: at });
+      graphRef.current = { graph: g, key: at };
+      const n = Object.values(g.links).reduce((k, ls) => k + ls.filter((l) => l.kind !== 'definition').length, 0);
       setToast({
-        text: n
-          ? `Read ${index.schedules.length} schedule${index.schedules.length === 1 ? '' : 's'} and ${index.legends.length} legend type${index.legends.length === 1 ? '' : 's'}. Click any tag on a sheet.`
-          : 'No schedules or legends found in this set’s text. A scanned set has no text to read.',
+        text: n ? `Linked ${n} references across ${g.sheets.length} sheets. Click a bubble, a note, a tag or a schedule row to follow it.` : 'No references found in this set’s text. A scanned set has no text to read.',
         undo: false,
       });
-      return index;
+      return g;
     } catch (e) {
-      setSmartOn(false);
-      setToast({ text: `Smart view could not read the set: ${e instanceof Error ? e.message : String(e)}`, undo: false });
+      setLinksOn(false);
+      setToast({ text: `Could not link the drawings: ${e instanceof Error ? e.message : String(e)}`, undo: false });
       return null;
     } finally {
-      smartBuilding.current = false;
+      graphBuilding.current = false;
       setBusy(null);
     }
   }
 
-  /** Shows what the drawings say about a code: its card, and its tag brought into view (on its sheet, if it is not on this one). */
-  function pickSmart(e: Entry | null) {
-    setSmartPick(e?.key ?? null);
-    if (!e) return;
-    const here = smartTags.find((t) => t.key === e.key);
-    if (here) {
-      setFocus({ box: tagView(here.box), n: Date.now() });
-      return;
+  /** Brings a place into view (its sheet opened, the spot zoomed to and flashed); `from` is remembered for Back. */
+  function goTo(place: Place, from?: { sheetId: string; box: Box }) {
+    const s = projectRef.current?.sheets.find((x) => x.id === place.sheetId);
+    if (!s) return;
+    if (from) {
+      navBack.current.push(from);
+      navFwd.current = [];
+      setNavTick((n) => n + 1);
     }
-    const first = Object.keys(smartData?.where[e.key] ?? {})[0];
-    if (first && first !== sheet?.id) {
-      smartFocus.current = e.key;
-      setSheetId(first);
-    }
+    const whole = place.box[2] - place.box[0] >= s.width * 0.9 && place.box[3] - place.box[1] >= s.height * 0.9;
+    const box: Box = whole ? [0, 0, s.width, s.height] : [place.box[0] - 120, place.box[1] - 80, place.box[2] + 120, place.box[3] + 80];
+    navHere.current = { sheetId: s.id, box: whole ? box : place.box };
+    if (s.id !== sheetId) setSheetId(s.id);
+    setFocus({ box, n: Date.now() });
+    if (!whole) setFlash({ sheetId: s.id, box: place.mark ?? place.box, n: Date.now() });
+  }
+
+  /** Follows a link (or a search hit): to its one place, or to the first of its places, the rest a step away. */
+  function follow(to: Place[], label: string, entry?: Entry, fromBox?: Box) {
+    if (!to.length) return;
+    const here = sheet ? { sheetId: sheet.id, box: fromBox ?? navHere.current?.box ?? ([0, 0, sheet.width, sheet.height] as Box) } : undefined;
+    setTrail({ label, to, i: 0, entry });
+    goTo(to[0], here);
+  }
+
+  function followLink(l: Link) {
+    const e = l.kind === 'tag' || l.kind === 'definition' ? graphByKey.get(l.node) : undefined;
+    follow(l.to, l.label, e, l.box);
+  }
+
+  function navigate(dir: 'back' | 'forward') {
+    const from = dir === 'back' ? navBack.current : navFwd.current;
+    const to = dir === 'back' ? navFwd.current : navBack.current;
+    const p = from.pop();
+    if (!p) return;
+    if (sheet) to.push({ sheetId: sheet.id, box: navHere.current?.sheetId === sheet.id ? navHere.current.box : [0, 0, sheet.width, sheet.height] });
+    setNavTick((n) => n + 1);
+    goTo({ sheetId: p.sheetId, box: p.box });
   }
 
   /** The open drawings, as the automations read them. `keepOpen`: the open sheet's linework is kept for the tools. */
@@ -2387,19 +2392,16 @@ export function App() {
     },
     maxOpening: () => maxOpening,
     wholeSet: (watch?: boolean) => takeOffEverything(!!watch),
-    smartIndex: () => openSmart(),
+    smartIndex: async () => (await openLinks())?.index ?? null,
+    drawingGraph: () => openLinks(),
     showTag: (key: string) => {
-      const index = smartIndexRef.current?.index;
-      setSmartOn(true);
-      setSmartPick(key);
-      const where = Object.keys(index?.where[key] ?? {});
-      if (!where.length) return;
-      const target = where.includes(sheetId ?? '') ? sheetId! : where[0];
-      smartFocus.current = key;
-      if (target === sheetId) {
-        const hit = smartTags.find((x) => x.key === key);
-        if (hit) setFocus({ box: tagView(hit.box), n: Date.now() });
-      } else setSheetId(target);
+      const g = graphRef.current?.graph;
+      const e = g ? [...entries(g.index).values()].find((x) => x.key === key) : undefined;
+      if (!g || !e) return;
+      setLinksOn(true);
+      setCardEntry(e);
+      const defs = definitionsOf(e, g);
+      follow(defs.length ? defs : (g.index.places[key] ?? []), e.code, e);
     },
   };
 
@@ -2889,59 +2891,80 @@ export function App() {
           onTrace={(at, reach) => void traceAt(at, reach)}
           focus={focus}
           highlights={sheet ? hitsOn(sheet.id) : undefined}
-          smart={
-            smartOn && smartData
-              ? {
-                  tags: smartTags.filter((t) => smartKinds.has(t.kind)),
-                  color: (t) => kindColor(t.kind),
-                  lit: smartLit,
-                  picked: smartPick,
-                  onPick: (t) => {
-                    if (t.kind === 'sheet' && t.target) setSheetId(t.target);
-                    else setSmartPick(t.key);
-                  },
-                }
-              : undefined
-          }
+          links={sheetLinks.length ? { items: sheetLinks, title: (l) => linkTitle(l, graph!), color: (l) => (l.tagKind ? kindColor(l.tagKind) : l.kind === 'view' ? '#8a3fc6' : '#0071e3'), onFollow: followLink } : undefined}
+          flash={flash && sheet && flash.sheetId === sheet.id ? flash : undefined}
         />
 
-        {sheet && !smartOn && (
-          <button className="smart-fab" onClick={() => void openSmart()} title="Click any door, room, window, wall type or equipment tag to see what the drawings say about it">
-            <Icon name="tag" size={16} />
-            Smart view
+        {(navBack.current.length > 0 || navFwd.current.length > 0) && (
+          <div className="nav-buttons" role="group" aria-label="Back and forward">
+            <button className="icon-button" onClick={() => navigate('back')} disabled={!navBack.current.length} title="Back to where you were" aria-label="Back">
+              <Icon name="back" size={16} />
+            </button>
+            <button className="icon-button" onClick={() => navigate('forward')} disabled={!navFwd.current.length} title="Forward" aria-label="Forward">
+              <Icon name="forward" size={16} />
+            </button>
+          </div>
+        )}
+
+        {sheet && !linksOn && (
+          <button className={`links-fab ${navBack.current.length || navFwd.current.length ? 'shifted' : ''}`} onClick={() => void openLinks()} title="Link the set: detail bubbles, sheet references, schedules and tags become clickable">
+            <Icon name="link" size={16} />
+            Links
           </button>
         )}
 
-        {smartOn && smartData && (
-          <SmartPanel
-            index={smartData}
-            dict={smartDict}
-            byKey={smartByKey}
-            sheets={project.sheets}
-            sheet={sheet}
-            tags={smartTags}
-            kinds={smartKinds}
-            onKinds={setSmartKinds}
-            query={smartQuery}
-            onQuery={setSmartQuery}
-            picked={smartPick ? (smartByKey.get(smartPick) ?? null) : null}
-            onPick={pickSmart}
-            onOpenSheet={(id, key) => {
-              if (id === sheet?.id) {
-                const hit = key ? smartTags.find((t) => t.key === key) : undefined;
-                if (hit) setFocus({ box: tagView(hit.box), n: Date.now() });
-                return;
-              }
-              smartFocus.current = key ?? null;
-              setSheetId(id);
+        {linksOn && graph && (
+          <LinksBar graph={graph} byKey={graphByKey} defs={defsOf} onGo={(to, label, e) => follow(to, label, e)} onMap={() => setMapOpen(true)} onRebuild={() => void openLinks(true)} onClose={() => setLinksOn(false)} />
+        )}
+
+        {graph && trail && (
+          <FollowBar
+            graph={graph}
+            trail={trail}
+            onStep={(i) => {
+              setTrail({ ...trail, i });
+              goTo(trail.to[i]);
             }}
-            onRebuild={() => void openSmart(true)}
-            onClose={() => setSmartOn(false)}
+            onDetails={trail.entry ? () => setCardEntry(trail.entry!) : undefined}
+            onClose={() => setTrail(null)}
+          />
+        )}
+
+        {graph && cardEntry && (
+          <TagCard
+            graph={graph}
+            dict={graphDict}
+            sheets={project.sheets}
+            entry={cardEntry}
+            onPick={(e) => {
+              setCardEntry(e);
+              const d = definitionsOf(e, graph);
+              follow(d.length ? d : (graph.index.places[e.key] ?? []), e.code, e);
+            }}
+            onGo={(to, label, e) => follow(to, label, e)}
+            onClose={() => setCardEntry(null)}
+          />
+        )}
+
+        {graph && mapOpen && (
+          <DrawingMap
+            graph={graph}
+            currentSheet={sheetId}
+            onOpenSheet={(id) => {
+              setMapOpen(false);
+              const s = project.sheets.find((x) => x.id === id);
+              if (s) follow([{ sheetId: id, box: [0, 0, s.width, s.height], label: `${s.name}${s.title ? ` · ${s.title}` : ''}` }], s.name);
+            }}
+            onGo={(to, label) => {
+              setMapOpen(false);
+              follow(to, label);
+            }}
+            onClose={() => setMapOpen(false)}
           />
         )}
 
         {picked.length > 0 && (
-          <div className={`selection-bar ${smartOn ? 'below-smart' : ''}`} role="toolbar" aria-label="Selected takeoffs">
+          <div className={`selection-bar ${linksOn ? 'below-smart' : ''}`} role="toolbar" aria-label="Selected takeoffs">
             <span className="selection-count">{picked.length} selected</span>
             <span className="selection-types">{pickedSummary(picked, project.types)}</span>
             <button onClick={() => setMultiIds([])}>Clear</button>

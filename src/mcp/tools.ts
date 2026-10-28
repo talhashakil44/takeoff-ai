@@ -1,4 +1,5 @@
 import type { Automation } from '../automate/result';
+import { sheetEdges, type DrawingGraph } from '../graph/graph';
 import { describe, entries, entryName, indexStats, norm, searchEntries, type DrawingIndex } from '../smart/index';
 import type { SetAccess } from '../automate/set';
 import { PALETTE } from '../automate/set';
@@ -80,6 +81,8 @@ export interface McpContext {
   smartIndex?(): Promise<DrawingIndex | null>;
   /** Shows a tag's card in the window, on its sheet. */
   showTag?(key: string): void;
+  /** The set's link graph (bubbles, sheet references, schedules, tags), read once. */
+  drawingGraph?(): Promise<DrawingGraph | null>;
 }
 
 const text = (t: string, structured?: Record<string, unknown>): ToolResult => ({ content: [{ type: 'text', text: t }], ...(structured ? { structuredContent: structured } : {}) });
@@ -299,6 +302,14 @@ export const TOOL_DEFS: ToolDef[] = [
     description:
       'Every schedule (door, window, room finish, equipment, structural…), type legend and abbreviation list read from the set\'s text, with counts by kind of how many listed tags were found on the plans and which were not (a door in the schedule with no tag on any plan is worth an RFI).',
     inputSchema: obj({}),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'drawing_links',
+    title: 'Links between the drawings',
+    description:
+      'The drawing set as a graph of what points at what: detail and section bubbles (5/A5.0 → drawing 5 on A5.0), sheet references in notes (SEE A5.0, PER STRUCTURAL), schedule references (SEE DOOR SCHEDULE), tags (D101, P3, EF-1) and the schedule row or legend that defines them. With sheet_id: every link on that sheet and where it goes. Without: the references between sheets (from, to, how many) and each sheet\'s drawings by number and title.',
+    inputSchema: obj({ sheet_id: str('A sheet id from list_sheets (optional)'), include_tags: { type: 'boolean', description: 'Include tag and definition links (many on a busy plan). Default false.' } }),
     annotations: { readOnlyHint: true },
   },
   {
@@ -689,6 +700,29 @@ async function dispatch(ctx: McpContext, name: string, a: Record<string, unknown
       const info = describe(e, index, p.sheets, dict);
       if (a.show !== false) ctx.showTag?.(e.key);
       const out = { code: info.code, kind: info.kind, title: info.title, source: info.source, sections: info.sections.map((s) => ({ title: s.title ?? null, rows: s.rows.map((r) => ({ [r.label]: r.value })) })) };
+      return text(json(out), out);
+    }
+
+    case 'drawing_links': {
+      const p = need(ctx);
+      if (!ctx.drawingGraph) throw new ToolError('This version of the app cannot link the drawings.');
+      const g = await ctx.drawingGraph();
+      if (!g) throw new ToolError('The set could not be read.');
+      const nm = (id: string) => p.sheets.find((x) => x.id === id)?.name ?? id;
+      const tags = a.include_tags === true;
+      if (a.sheet_id) {
+        const s = sheetOf(p, a.sheet_id);
+        const links = (g.links[s.id] ?? [])
+          .filter((l) => tags || (l.kind !== 'tag' && l.kind !== 'definition'))
+          .map((l) => ({ kind: l.kind, says: l.label, at: l.box.map((v) => Math.round(v)), goes_to: l.to.slice(0, 20).map((t) => ({ sheet: nm(t.sheetId), sheet_id: t.sheetId, what: t.label ?? null })), ...(l.to.length > 20 ? { more: l.to.length - 20 } : {}) }));
+        const out = { sheet: s.name, drawings: (g.views[s.id] ?? []).map((v) => ({ number: v.number, title: v.title })), links };
+        return text(json(out), out);
+      }
+      const edges = sheetEdges(g)
+        .filter((e) => tags || [...e.kinds].some((k) => k !== 'tag'))
+        .map((e) => ({ from: nm(e.from), to: nm(e.to), references: e.n, kinds: [...e.kinds] }))
+        .sort((x, y) => y.references - x.references);
+      const out = { sheets: g.sheets.length, drawings: Object.fromEntries(Object.entries(g.views).filter(([, v]) => v.length).map(([id, v]) => [nm(id), v.map((x) => `${x.number} ${x.title}`)])), references: edges };
       return text(json(out), out);
     }
 

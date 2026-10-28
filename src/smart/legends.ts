@@ -18,6 +18,8 @@ export interface LegendEntry {
   /** A dimension written with it (the wall's overall thickness: 4 7/8"). */
   size?: string;
   at: [number, number];
+  /** The tag and its lines on the sheet: x0, y0, x1, y1. */
+  box?: [number, number, number, number];
 }
 
 const level = (t: PageText) => !t.angle || Math.abs(Math.sin(t.angle)) < 0.1;
@@ -90,7 +92,9 @@ export function readTypeLegends(texts: PageText[], segs: Segment[], exclude: [nu
       .filter((o) => DIMENSION.test(o.str.trim()) && o.cy < c.cy && c.cy - o.cy < 16 * h && o.cx > c.cx && o.cx < x0)
       .sort((a, b) => b.cy - a.cy)[0];
     seen.add(code);
-    out.push({ code, legend: legendName, lines: lines.map((l) => l.str.replace(/\s+/g, ' ').trim()), ...(size ? { size: size.str.trim() } : {}), at: [c.cx, c.cy] });
+    const parts = [c, ...lines];
+    const box: [number, number, number, number] = [Math.min(...parts.map((t) => t.cx - t.w / 2)) - 4, Math.min(...parts.map((t) => t.cy - t.h)) - 4, Math.max(...parts.map((t) => t.cx + t.w / 2)) + 4, Math.max(...parts.map((t) => t.cy + t.h)) + 4];
+    out.push({ box, code, legend: legendName, lines: lines.map((l) => l.str.replace(/\s+/g, ' ').trim()), ...(size ? { size: size.str.trim() } : {}), at: [c.cx, c.cy] });
   }
   return out;
 }

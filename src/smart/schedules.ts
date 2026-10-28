@@ -15,6 +15,8 @@ export interface ScheduleRow {
   mark: string;
   /** One cell per column, '' when empty; a bullet or check is "✓". */
   cells: string[];
+  /** The row on its sheet: x0, y0, x1, y1. */
+  box?: [number, number, number, number];
 }
 
 export interface Schedule {
@@ -261,12 +263,12 @@ function readOne(title: PageText, texts: PageText[], titles: PageText[], vert: S
         }
       for (const w of words) cells[w.c].push(clean(w.s));
     }
-    return { mark: r.str.trim(), cells: cells.map(joinCell) };
+    return { mark: r.str.trim(), cells: cells.map(joinCell), box: [L, y0, R, y1] as [number, number, number, number] };
   });
   // A column with no heading and nothing in it is a gap.
   const keep = cols.map((_, i) => columns[i].length > 0 || rows.some((r) => r.cells[i]));
   const columnsKept = columns.filter((_, i) => keep[i]);
-  const rowsKept = rows.map((r) => ({ mark: r.mark, cells: r.cells.filter((_, i) => keep[i]) }));
+  const rowsKept = rows.map((r) => ({ ...r, cells: r.cells.filter((_, i) => keep[i]) }));
   const markKept = keep.slice(0, markColumn).filter(Boolean).length;
   // A schedule has things in its rows beyond the marks.
   const filled = rowsKept.filter((r) => r.cells.some((c, i) => i !== markKept && c)).length;

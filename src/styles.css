@@ -2903,3 +2903,281 @@ button.link-button:hover {
   min-height: 26px;
   padding: 0 10px;
 }
+
+/* ---------- Linked drawings: links on the sheet, back and forward, the bar, the map ---------- */
+
+.viewer .link-box {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: none;
+}
+.viewer .link-layer.live .link-box {
+  pointer-events: all;
+  cursor: pointer;
+}
+.viewer .link-box.callout,
+.viewer .link-box.sheet,
+.viewer .link-box.schedule {
+  fill: color-mix(in srgb, var(--tag) 12%, transparent);
+  stroke: color-mix(in srgb, var(--tag) 70%, transparent);
+}
+.viewer .link-box.tag {
+  stroke: color-mix(in srgb, var(--tag) 55%, transparent);
+}
+.viewer .link-box.view {
+  stroke: color-mix(in srgb, var(--tag) 60%, transparent);
+  stroke-dasharray: 4 3;
+}
+.viewer .link-layer.live .link-box:hover {
+  fill: color-mix(in srgb, var(--tag) 26%, transparent);
+  stroke: var(--tag);
+}
+.viewer .link-layer.live .link-box.definition:hover {
+  fill: color-mix(in srgb, var(--tag) 14%, transparent);
+}
+.viewer .link-flash {
+  fill: rgba(255, 204, 0, 0.28);
+  stroke: #f5a300;
+  pointer-events: none;
+  animation: link-flash 2.6s ease-out forwards;
+}
+@keyframes link-flash {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.links-fab {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  min-height: 32px;
+  border-radius: 16px;
+  color: var(--accent);
+  font-weight: 600;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+.links-fab.shifted {
+  left: 92px;
+}
+.nav-buttons {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 7;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+.nav-buttons .icon-button {
+  width: 32px;
+  height: 28px;
+  border-radius: 14px;
+}
+.links-bar {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+.app:has(.nav-buttons) .links-bar {
+  left: 92px;
+}
+.links-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.links-bar .smart-search {
+  max-width: 520px;
+}
+.follow-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 104px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 40px);
+  padding: 6px 6px 6px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  white-space: nowrap;
+}
+.follow-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.follow-steps {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.follow-steps .num {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.icon-svg.flip {
+  transform: rotate(180deg);
+}
+.map-overlay {
+  position: absolute;
+  inset: 8px;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  overflow: hidden;
+}
+.map-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.map-head strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-head .icon-button {
+  margin-left: auto;
+}
+.map-kinds {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-2);
+  flex-wrap: wrap;
+}
+.map-kinds label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.map-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--window);
+}
+.map-body svg {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  user-select: none;
+}
+.map-trade {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.map-edge {
+  stroke: #8e8e93;
+  stroke-opacity: 0.4;
+}
+.map-edge.dim {
+  stroke-opacity: 0.06;
+}
+.map-node {
+  cursor: pointer;
+}
+.map-node circle {
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.map-node text {
+  font-size: 9px;
+  fill: var(--text);
+  pointer-events: none;
+}
+.map-node.dim {
+  opacity: 0.2;
+}
+.map-node.here circle {
+  stroke: var(--text);
+  stroke-width: 2.5;
+}
+.map-node:hover circle {
+  stroke: var(--text);
+}
+.map-tip {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-width: 360px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+}
+.map-help {
+  position: absolute;
+  bottom: 8px;
+  left: 14px;
+  margin: 0;
+  font-size: 12px;
+}
+.map-table {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 14px;
+}
+.map-filter {
+  max-width: 420px;
+  margin-bottom: 8px;
+}
+.map-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.map-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.map-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+}

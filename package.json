@@ -20,6 +20,8 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
+    "@types/d3-force": "^3.0.10",
+    "d3-force": "^3.0.0",
     "exceljs": "^4.4.0",
     "idb-keyval": "^6.3.0",
     "jszip": "^3.10.2",

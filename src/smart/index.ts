@@ -38,6 +38,8 @@ export interface DrawingIndex {
   abbreviations: Record<string, string>;
   /** Where each tag is on the set: entry key → sheet id → times. */
   where: Record<string, Record<string, number>>;
+  /** Each tag's places on the sheets: entry key → sheet and box. */
+  places: Record<string, { sheetId: string; box: [number, number, number, number] }[]>;
   /** Sheets read. */
   sheets: number;
 }
@@ -103,13 +105,12 @@ export function readSheetInto(index: DrawingIndex, sheet: Sheet, texts: PageText
   for (const [a, m] of readAbbreviations(texts)) if (!index.abbreviations[a]) index.abbreviations[a] = m;
 }
 
-export const emptyIndex = (): DrawingIndex => ({ schedules: [], legends: [], abbreviations: {}, where: {}, sheets: 0 });
+export const emptyIndex = (): DrawingIndex => ({ schedules: [], legends: [], abbreviations: {}, where: {}, places: {}, sheets: 0 });
 
 /** Reads the whole set: its schedules and legends, then where each tag is on every sheet. */
-export async function buildIndex(sheets: Sheet[], access: SetAccess): Promise<DrawingIndex> {
+export async function buildIndex(sheets: Sheet[], access: SetAccess, texts = new Map<string, PageText[]>()): Promise<DrawingIndex> {
   const index = emptyIndex();
   const live = sheets.filter((s) => !s.superseded);
-  const texts = new Map<string, PageText[]>();
   for (const [i, s] of live.entries()) {
     access.progress?.(`Reading schedules and legends… ${s.name} (${i + 1} of ${live.length})`);
     if (i % 4 === 0) await pause();
@@ -134,6 +135,7 @@ export async function buildIndex(sheets: Sheet[], access: SetAccess): Promise<Dr
       if (tag.kind === 'sheet') continue;
       const w = (index.where[tag.key] ??= {});
       w[s.id] = (w[s.id] ?? 0) + 1;
+      (index.places[tag.key] ??= []).push({ sheetId: s.id, box: tag.box });
     }
   }
   return index;

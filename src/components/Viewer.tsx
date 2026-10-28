@@ -9,7 +9,7 @@ import { askText, notify } from './Dialogs';
 import { Icon } from './Icons';
 import { fillRoom, type WallModel } from '../fill/roomFill';
 import { boxSelect, isCrossing } from '../boxSelect';
-import type { SmartTag } from '../smart/index';
+import type { Link } from '../graph/graph';
 
 export type Tool = 'select' | 'box' | 'measure' | 'calibrate' | 'cutout' | 'fill' | 'symbol' | 'trace';
 
@@ -67,8 +67,10 @@ interface Props {
   onFindSymbols: (box: [number, number, number, number]) => void;
   /** Count by symbol with one click on it (no box), and how near (sheet points) counts as on it. */
   onPickSymbol?: (at: Pt, reach: number) => void;
-  /** Smart view: the sheet's tags outlined, clickable in Select; `lit` the ones a search found (all when null). */
-  smart?: { tags: SmartTag[]; color: (t: SmartTag) => string; lit: Set<string> | null; picked: string | null; onPick: (t: SmartTag) => void };
+  /** Linked drawings: the sheet's links (bubbles, references, tags, schedule rows), followed with a click in Select. */
+  links?: { items: Link[]; title: (l: Link) => string; color: (l: Link) => string; onFollow: (l: Link) => void };
+  /** A spot just arrived at by a link, flashed so the eye finds it; a new `n` flashes again. */
+  flash?: { box: [number, number, number, number]; n: number };
 }
 
 /** Longest edge of the low-resolution page bitmap used for instant pan and zoom. */
@@ -673,36 +675,44 @@ export function Viewer(props: Props) {
               transform={t.angle ? `rotate(${(t.angle * 180) / Math.PI} ${t.cx} ${t.cy})` : undefined}
             />
           ))}
-          {props.smart && (
-            <g className={`smart-layer ${tool === 'select' ? 'live' : ''}`}>
-              {props.smart.tags.map((t, i) => {
-                const lit = !props.smart!.lit || props.smart!.lit.has(t.key);
-                const on = props.smart!.picked === t.key;
-                return (
-                  <rect
-                    key={`st${i}`}
-                    className={`smart-tag ${lit ? 'lit' : 'dim'} ${on ? 'on' : ''}`}
-                    x={t.box[0]}
-                    y={t.box[1]}
-                    width={t.box[2] - t.box[0]}
-                    height={t.box[3] - t.box[1]}
-                    rx={2 / z}
-                    style={{ ['--tag' as string]: props.smart!.color(t) }}
-                    strokeWidth={(on ? 2.5 : 1.25) / z}
-                    onPointerDown={(e) => {
-                      if (tool === 'select' && e.button === 0) e.stopPropagation();
-                    }}
-                    onClick={(e) => {
-                      if (tool !== 'select') return;
-                      e.stopPropagation();
-                      props.smart!.onPick(t);
-                    }}
-                  >
-                    <title>{t.kind === 'sheet' ? `Open ${t.code}` : t.code}</title>
-                  </rect>
-                );
-              })}
+          {props.links && (
+            <g className={`link-layer ${tool === 'select' ? 'live' : ''}`}>
+              {props.links.items.map((l, i) => (
+                <rect
+                  key={`lk${i}`}
+                  className={`link-box ${l.kind}`}
+                  x={l.box[0]}
+                  y={l.box[1]}
+                  width={l.box[2] - l.box[0]}
+                  height={l.box[3] - l.box[1]}
+                  rx={l.kind === 'definition' ? 0 : 2 / z}
+                  style={{ ['--tag' as string]: props.links!.color(l) }}
+                  strokeWidth={1.25 / z}
+                  onPointerDown={(e) => {
+                    if (tool === 'select' && e.button === 0) e.stopPropagation();
+                  }}
+                  onClick={(e) => {
+                    if (tool !== 'select') return;
+                    e.stopPropagation();
+                    props.links!.onFollow(l);
+                  }}
+                >
+                  <title>{props.links!.title(l)}</title>
+                </rect>
+              ))}
             </g>
+          )}
+          {props.flash && (
+            <rect
+              key={`flash${props.flash.n}`}
+              className="link-flash"
+              x={props.flash.box[0] - 4 / z}
+              y={props.flash.box[1] - 4 / z}
+              width={props.flash.box[2] - props.flash.box[0] + 8 / z}
+              height={props.flash.box[3] - props.flash.box[1] + 8 / z}
+              rx={4 / z}
+              strokeWidth={3 / z}
+            />
           )}
           {sheet && measurements.map((shown) => {
             const m = edit && edit.id === shown.id ? { ...shown, points: edit.points, holes: edit.holes ?? shown.holes } : shown;

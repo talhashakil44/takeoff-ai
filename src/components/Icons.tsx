@@ -6,6 +6,10 @@ const PATHS = {
   cutout: 'M6.5 6.5m-2.5 0a2.5 2.5 0 105 0 2.5 2.5 0 10-5 0M6.5 13.5m-2.5 0a2.5 2.5 0 105 0 2.5 2.5 0 10-5 0M8.6 7.9L17 15M8.6 12.1L17 5',
   scale: 'M2.5 7.5h15v5h-15zM5.5 7.5v2.5M8.5 7.5v1.5M11.5 7.5v2.5M14.5 7.5v1.5',
   calibrate: 'M3 10h14M3 7v6M17 7v6M10 3v3M10 14v3',
+  link: 'M8.5 11.5a3.5 3.5 0 005 0l2.5-2.5a3.5 3.5 0 00-5-5L9.8 5.2M11.5 8.5a3.5 3.5 0 00-5 0L4 11a3.5 3.5 0 005 5l1.2-1.2',
+  graph: 'M5 5m-2 0a2 2 0 104 0 2 2 0 10-4 0M15 6m-2 0a2 2 0 104 0 2 2 0 10-4 0M9 15m-2 0a2 2 0 104 0 2 2 0 10-4 0M6.8 5.6L13 6M5.8 6.8L8.2 13.2M14 7.8L10.2 13.4',
+  back: 'M12.5 4.5L7 10l5.5 5.5',
+  forward: 'M7.5 4.5L13 10l-5.5 5.5',
   tag: 'M3 3.5h6.2l7.3 7.3-5.7 5.7L3.5 9.2zM6.8 6.8m-1.1 0a1.1 1.1 0 102.2 0 1.1 1.1 0 10-2.2 0',
   sparkle: 'M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5l-1.6-4.4-4.4-1.6 4.4-1.6zM15.5 13l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z',
   walls: 'M3 4h14v12H3zM3 9h7M10 4v12M13 9h4',
@@ -44,10 +48,10 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS;
 
-export function Icon({ name, size = 18, title }: { name: IconName; size?: number; title?: string }) {
+export function Icon({ name, size = 18, title, className }: { name: IconName; size?: number; title?: string; className?: string }) {
   return (
     <svg
-      className="icon-svg"
+      className={`icon-svg${className ? ` ${className}` : ''}`}
       width={size}
       height={size}
       viewBox="0 0 20 20"
