@@ -35,9 +35,10 @@ import { sheetImage } from './sheetImage';
 import { compareSheets } from './compareSheets';
 import { pageTexts, type PageText } from './pageText';
 import { readTitleBlock, titleBlockBox } from './titleBlock';
-import { middleOf, roomLocator } from './locate';
+import { middleOf } from './locate';
 import { buildingOfDoc, buildingsOf, fileLabel, onBuilding, quantitySections, type QtyGrouping } from './buildings';
 import { isHosted, saveFile } from './host';
+import { RoomFinder } from './workers/rooms';
 import { FollowBar, LinksBar, TagCard, kindColor, linkTitle } from './components/LinksPanel';
 import { DrawingMap } from './components/DrawingMap';
 import { buildGraph, definitionsOf, type DrawingGraph, type Link, type Place } from './graph/graph';
@@ -508,12 +509,13 @@ export function App() {
   const [rooms, setRooms] = useState<Map<string, string | null>>(new Map());
   const roomsRef = useRef(rooms);
   roomsRef.current = rooms;
-  const locators = useRef(new Map<string, Promise<(at: Pt) => string | null>>());
+  const roomFinder = useRef<RoomFinder | null>(null);
   const placeKey = (m: Measurement) => `${m.id}:${m.points.length}:${m.points[0]?.[0]},${m.points[0]?.[1]}`;
   useEffect(() => {
     if (!project) return;
     let stop = false;
     const t = window.setTimeout(async () => {
+      roomFinder.current ??= new RoomFinder();
       const todo = new Map<string, Measurement[]>();
       for (const m of project.measurements) {
         if (roomsRef.current.has(placeKey(m))) continue;
@@ -521,26 +523,30 @@ export function App() {
         if (list) list.push(m);
         else todo.set(m.sheetId, [m]);
       }
-      for (const [sid, ms] of todo) {
+      // The open sheet first: its takeoffs are the ones on screen.
+      const order = [...todo.keys()].sort((a, b) => Number(b === sheetIdRef.current) - Number(a === sheetIdRef.current));
+      for (const sid of order) {
+        const ms = todo.get(sid)!;
         if (stop) return;
         const s = project.sheets.find((x) => x.id === sid);
         if (!s || !pdfsRef.current.get(s.docId)) continue;
         const key = `${s.docId}:${s.page}:${s.metersPerPoint ?? ''}`;
-        let loc = locators.current.get(key);
-        if (!loc) {
-          loc = (async () => {
-            const pg = await pdfsRef.current.get(s.docId)!.getPage(s.page);
-            const [segs, texts] = await Promise.all([segmentsOnce(pg), sheetTexts(s)]);
-            return roomLocator(texts, segs, s.metersPerPoint);
-          })();
-          locators.current.set(key, loc);
-          loc.catch(() => locators.current.delete(key));
-        }
-        const find = await loc.catch(() => null);
-        if (!find || stop) continue;
         const types = new Map(project.types.map((x) => [x.id, x]));
+        // The walls are found in the rooms worker, off the main thread (seconds on a busy trade plan).
+        const names = await roomFinder.current
+          .locate(
+            key,
+            async () => {
+              const pg = await pdfsRef.current.get(s.docId)!.getPage(s.page);
+              const [segs, texts] = await Promise.all([segmentsOnce(pg), sheetTexts(s)]);
+              return { texts, segs, mpp: s.metersPerPoint };
+            },
+            ms.map((m) => (m.points.length ? middleOf(m.points, types.get(m.typeId)?.kind === 'area') : null)),
+          )
+          .catch(() => null);
+        if (!names || stop) continue;
         const found = new Map(roomsRef.current);
-        for (const m of ms) found.set(placeKey(m), m.points.length ? find(middleOf(m.points, types.get(m.typeId)?.kind === 'area')) : null);
+        ms.forEach((m, i) => found.set(placeKey(m), names[i] ?? null));
         if (!stop) setRooms(found);
         await new Promise((r) => setTimeout(r, 0));
       }
