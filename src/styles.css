@@ -4452,3 +4452,37 @@ button.link-button:hover {
   font-weight: 600;
   background: var(--fill);
 }
+
+.pmap-hist {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pmap-hist .pmap-x:disabled {
+  opacity: 0.3;
+}
+.pmap-hist .pmap-kind {
+  margin-left: 4px;
+}
+.pmap-badge.parent {
+  color: #ffd38a;
+  background: rgba(255, 179, 64, 0.14);
+}
+.pmap-badge.child {
+  color: #6fe3c5;
+  background: rgba(111, 227, 197, 0.14);
+}
+.pmap-badge.via {
+  color: rgba(232, 236, 255, 0.75);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+}
+.pmap-more {
+  margin: 4px 0 0 8px;
+  padding: 2px 6px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: #8fd0ff;
+  font-size: 12px;
+}

@@ -365,62 +365,142 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     };
   }, [mode, nodes, edges, anchors, neighbours]);
 
-  // The 3D map, loaded when asked for: the same graph in space, glowing, turning slowly.
+  // The 3D map, loaded when asked for: the same graph in space, labelled, glowing, turning slowly.
+  type G3 = {
+    _destructor?: () => void;
+    nodeColor: (f: (n: object) => string) => G3;
+    linkColor: (f: (l: object) => string) => G3;
+    linkWidth: (f: (l: object) => number) => G3;
+    linkDirectionalParticles: (f: (l: object) => number) => G3;
+    cameraPosition: (pos: object, lookAt?: object, ms?: number) => G3;
+    graphData: () => { nodes: { id: string; x?: number; y?: number; z?: number }[] };
+    controls: () => { autoRotate?: boolean };
+  };
+  const g3 = useRef<G3 | null>(null);
+  const sprites = useRef(new Map<string, { material: { opacity: number }; visible: boolean }>());
   useEffect(() => {
     if (mode !== '3d' || !threeRef.current) return;
-    let graph: { _destructor?: () => void } | null = null;
     let gone = false;
-    void Promise.all([import('3d-force-graph'), import('three/examples/jsm/postprocessing/UnrealBloomPass.js'), import('three')]).then(([{ default: ForceGraph3D }, { UnrealBloomPass }, THREE]) => {
-      if (gone || !threeRef.current) return;
-      const el = threeRef.current;
-      const shownEdges = edges.filter((e) => show[e.kind]);
-      const used = new Set(shownEdges.flatMap((e) => [e.a, e.b]));
-      const g = new ForceGraph3D(el, { controlType: 'orbit' })
-        .width(el.clientWidth)
-        .height(el.clientHeight)
-        .backgroundColor('#000002')
-        .showNavInfo(false)
-        .graphData({
-          nodes: nodes.filter((n) => used.has(n.id)).map((n) => ({ id: n.id, name: `${n.label}  ${n.sub}`, color: n.missing ? '#6b7080' : n.color, val: (n.kind === 'section' ? 2.5 : n.kind === 'schedule' ? 3 : 1) + n.degree * 0.9, side: n.side })),
-          links: shownEdges.map((e) => ({ source: e.a, target: e.b, kind: e.kind })),
-        })
-        .nodeLabel((n: object) => `<div class="map3d-tip">${escapeHtml((n as { name: string }).name)}</div>`)
-        .nodeColor((n: object) => (n as { color: string }).color)
-        .nodeOpacity(0.92)
-        .nodeResolution(16)
-        .linkColor((l: object) => ({ written: '#7cc4ff', matched: '#c58cff', 'spec-spec': '#5a6280', contains: '#2c3550' })[(l as { kind: MapEdgeKind }).kind])
-        .linkOpacity(0.6)
-        .linkWidth((l: object) => ((l as { kind: string }).kind === 'written' ? 1.4 : (l as { kind: string }).kind === 'matched' ? 0.7 : 0.25))
-        .linkCurvature((l: object) => ((l as { kind: string }).kind === 'contains' ? 0 : 0.2))
-        .linkDirectionalParticles((l: object) => ((l as { kind: string }).kind === 'written' ? 3 : (l as { kind: string }).kind === 'matched' ? 2 : 0))
-        .linkDirectionalParticleWidth(2.2)
-        .linkDirectionalParticleSpeed(0.006)
-        .linkDirectionalParticleColor((l: object) => ((l as { kind: string }).kind === 'written' ? '#ffffff' : '#e6ccff'))
-        .onNodeClick((n: object) => setSelected((n as { id: string }).id))
-        .cooldownTime(6000);
-      g.d3Force('x', forceX<SimulationNodeDatum & { side?: string }>((n) => (n.side === 'spec' ? -170 : 170)).strength(0.06) as never);
-      // Glow.
-      const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 1.25, 0.55, 0.12);
-      g.postProcessingComposer().addPass(bloom);
-      // A slow turn until it is touched.
-      const controls = g.controls() as { autoRotate?: boolean; autoRotateSpeed?: number; addEventListener?: (t: string, f: () => void) => void };
-      controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.5;
-      controls.addEventListener?.('start', () => (controls.autoRotate = false));
-      let fitted3d = false;
-      g.onEngineStop(() => {
-        if (fitted3d) return;
-        fitted3d = true;
-        g.zoomToFit(900, 60);
-      });
-      graph = g as unknown as typeof graph;
-    });
+    void Promise.all([import('3d-force-graph'), import('three/examples/jsm/postprocessing/UnrealBloomPass.js'), import('three'), import('three-spritetext')]).then(
+      ([{ default: ForceGraph3D }, { UnrealBloomPass }, THREE, { default: SpriteText }]) => {
+        if (gone || !threeRef.current) return;
+        const el = threeRef.current;
+        const shownEdges = edges.filter((e) => show[e.kind]);
+        const used = new Set(shownEdges.flatMap((e) => [e.a, e.b]));
+        sprites.current.clear();
+        const g = new ForceGraph3D(el, { controlType: 'orbit' })
+          .width(el.clientWidth)
+          .height(el.clientHeight)
+          .backgroundColor('#000002')
+          .showNavInfo(false)
+          .graphData({
+            nodes: nodes.filter((n) => used.has(n.id)).map((n) => ({ id: n.id, label: n.label, sub: n.sub, kind: n.kind, color: n.missing ? '#6b7080' : n.color, val: (n.kind === 'section' ? 2.5 : n.kind === 'schedule' ? 3 : 1) + n.degree * 0.9, side: n.side })),
+            links: shownEdges.map((e) => ({ source: e.a, target: e.b, kind: e.kind })),
+          })
+          .nodeLabel((n: object) => `<div class="map3d-tip">${escapeHtml(`${(n as { label: string }).label}  ${(n as { sub: string }).sub}`)}</div>`)
+          .nodeColor((n: object) => (n as { color: string }).color)
+          .nodeOpacity(0.92)
+          .nodeResolution(16)
+          // A label on every node: big for sections and schedules, small for tags.
+          .nodeThreeObjectExtend(true)
+          .nodeThreeObject((n: object) => {
+            const d = n as { id: string; label: string; sub: string; kind: string; color: string };
+            const big = d.kind === 'section' || d.kind === 'schedule' || d.kind === 'sheet';
+            const text = d.kind === 'section' ? `${d.label} ${short(d.sub, 28)}` : d.kind === 'item' || d.kind === 'type' || d.kind === 'finish' ? d.label : short(d.label, 30);
+            const sp = new SpriteText(text, big ? 4.2 : 2.6, big ? '#eef2ff' : 'rgba(220,228,255,0.8)');
+            sp.fontFace = '-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, sans-serif';
+            sp.fontWeight = big ? '600' : '500';
+            sp.center.set(0.5, -0.9);
+            (sp.material as { depthWrite: boolean }).depthWrite = false;
+            const f = selRef.current;
+            if (f && f !== d.id && !neighbours.get(f)?.has(d.id)) (sp.material as { opacity: number }).opacity = 0.08;
+            sprites.current.set(d.id, sp as never);
+            return sp;
+          })
+          .linkColor((l: object) => ({ written: '#7cc4ff', matched: '#c58cff', 'spec-spec': '#5a6280', contains: '#2c3550' })[(l as { kind: MapEdgeKind }).kind])
+          .linkOpacity(0.6)
+          .linkWidth((l: object) => ((l as { kind: string }).kind === 'written' ? 1.4 : (l as { kind: string }).kind === 'matched' ? 0.7 : 0.25))
+          .linkCurvature((l: object) => ((l as { kind: string }).kind === 'contains' ? 0 : 0.2))
+          .linkDirectionalParticles((l: object) => ((l as { kind: string }).kind === 'written' ? 3 : (l as { kind: string }).kind === 'matched' ? 2 : 0))
+          .linkDirectionalParticleWidth(2.2)
+          .linkDirectionalParticleSpeed(0.006)
+          .linkDirectionalParticleColor((l: object) => ((l as { kind: string }).kind === 'written' ? '#ffffff' : '#e6ccff'))
+          .onNodeClick((n: object) => pickRef.current((n as { id: string }).id, false))
+          .onBackgroundClick(() => setSelected(null))
+          .cooldownTime(6000);
+        g.d3Force('x', forceX<SimulationNodeDatum & { side?: string }>((n) => (n.side === 'spec' ? -170 : 170)).strength(0.06) as never);
+        const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 1.1, 0.5, 0.18);
+        g.postProcessingComposer().addPass(bloom);
+        const controls = g.controls() as { autoRotate?: boolean; autoRotateSpeed?: number; addEventListener?: (t: string, f: () => void) => void };
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.5;
+        controls.addEventListener?.('start', () => (controls.autoRotate = false));
+        let fitted3d = false;
+        g.onEngineStop(() => {
+          if (fitted3d) return;
+          fitted3d = true;
+          if (selRef.current) restyleRef.current();
+          else g.zoomToFit(900, 60);
+        });
+        g3.current = g as unknown as G3;
+        restyle3d();
+      },
+    );
     return () => {
       gone = true;
-      graph?._destructor?.();
+      g3.current?._destructor?.();
+      g3.current = null;
       if (threeRef.current) threeRef.current.innerHTML = '';
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, nodes, edges, show]);
+
+  /** 3D: the picked node and what it is tied to stay lit, the rest fades; the camera goes to it. */
+  const restyle3d = () => {
+    const g = g3.current;
+    if (!g) return;
+    const focus = selRef.current;
+    const near = focus ? (neighbours.get(focus) ?? new Set<string>()) : null;
+    const lit = (id: string) => !focus || id === focus || near!.has(id);
+    const idOf = (x: unknown) => (typeof x === 'object' && x ? (x as { id: string }).id : (x as string));
+    g.nodeColor((n: object) => {
+      const d = n as { id: string; color: string };
+      return lit(d.id) ? d.color : '#1a1f2e';
+    });
+    g.linkColor((l: object) => {
+      const d = l as { source: unknown; target: unknown; kind: MapEdgeKind };
+      const on = !focus || idOf(d.source) === focus || idOf(d.target) === focus;
+      if (!on) return '#0c0f18';
+      return ({ written: '#7cc4ff', matched: '#c58cff', 'spec-spec': '#8a93b5', contains: focus ? '#6b7aa8' : '#2c3550' })[d.kind];
+    });
+    g.linkWidth((l: object) => {
+      const d = l as { source: unknown; target: unknown; kind: string };
+      const on = focus && (idOf(d.source) === focus || idOf(d.target) === focus);
+      return (d.kind === 'written' ? 1.4 : d.kind === 'matched' ? 0.7 : 0.25) * (on ? 2.2 : 1);
+    });
+    g.linkDirectionalParticles((l: object) => {
+      const d = l as { source: unknown; target: unknown; kind: string };
+      const on = !focus || idOf(d.source) === focus || idOf(d.target) === focus;
+      return on ? (d.kind === 'written' ? 3 : d.kind === 'matched' ? 2 : focus ? 1 : 0) : 0;
+    });
+    for (const [id, sp] of sprites.current) sp.material.opacity = lit(id) ? 1 : 0.08;
+    if (focus) {
+      g.controls().autoRotate = false;
+      const n = g.graphData().nodes.find((x) => x.id === focus);
+      if (n && n.x !== undefined) {
+        const r = Math.hypot(n.x, n.y ?? 0, n.z ?? 0) || 1;
+        const dist = 160;
+        const k = 1 + dist / r;
+        g.cameraPosition({ x: n.x * k, y: (n.y ?? 0) * k, z: (n.z ?? 0) * k }, { x: n.x, y: n.y, z: n.z }, 900);
+      }
+    }
+  };
+  const restyleRef = useRef(restyle3d);
+  restyleRef.current = restyle3d;
+  useEffect(() => {
+    if (mode === '3d') restyle3d();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, mode]);
 
   // Pointer: pan, zoom at the cursor, hover, click, drag a node.
   const toWorld = (cx: number, cy: number) => {
@@ -475,12 +555,69 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
   }, [focus?.n]);
 
   const sel = selected ? (byId.get(selected) ?? null) : null;
-  const linksOf = (id: string) =>
-    data.edges
-      .filter((e) => (e.a === id || e.b === id) && e.kind !== 'contains')
-      .map((e) => ({ e, other: data.nodes.find((n) => n.id === (e.a === id ? e.b : e.a))! }))
-      .filter((x) => x.other)
-      .sort((p, q) => rank(q.e.kind) - rank(p.e.kind) || (q.e.score ?? 0) - (p.e.score ?? 0));
+  // Following the map: where you have been, Back and Forward.
+  const [hist, setHist] = useState<{ back: string[]; fwd: string[] }>({ back: [], fwd: [] });
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const pick = (id: string, fly = true) => {
+    if (id === selRef.current) return;
+    if (selRef.current) setHist((h) => ({ back: [...h.back.slice(-40), selRef.current!], fwd: [] }));
+    setSelected(id);
+    setExpanded(new Set());
+    if (fly) flyTo(id);
+  };
+  const pickRef = useRef(pick);
+  pickRef.current = pick;
+  const stepHistory = (dir: -1 | 1) => {
+    const from = dir < 0 ? hist.back : hist.fwd;
+    const id = from[from.length - 1];
+    if (!id) return;
+    const cur = selRef.current;
+    setHist((h) =>
+      dir < 0 ? { back: h.back.slice(0, -1), fwd: cur ? [...h.fwd, cur] : h.fwd } : { back: cur ? [...h.back, cur] : h.back, fwd: h.fwd.slice(0, -1) },
+    );
+    setSelected(id);
+    flyTo(id);
+  };
+
+  /** What a node is tied to, grouped: what it is part of, what it holds, its own links, and links it has through those. */
+  const relationsOf = (id: string) => {
+    const node = (x: string) => data.nodes.find((n) => n.id === x);
+    type Rel = { other: MapNode; badge: string; kind: string; why: string; at?: Place };
+    const seen = new Set<string>([id]);
+    const once = (list: Rel[]) => list.filter((r) => r.other && !seen.has(r.other.id) && (seen.add(r.other.id), true));
+    const up = (x: string) => data.edges.filter((e) => e.kind === 'contains' && e.a === x);
+    const down = (x: string) => data.edges.filter((e) => e.kind === 'contains' && e.b === x);
+    const direct = (x: string) => data.edges.filter((e) => (e.a === x || e.b === x) && (e.kind === 'written' || e.kind === 'matched'));
+    // Up the chain: an equipment tag is in a schedule, the schedule on a sheet.
+    const ancestors: Rel[] = [];
+    let level = up(id);
+    for (let depth = 0; level.length && depth < 3; depth++) {
+      for (const e of level) ancestors.push({ other: node(e.b)!, badge: depth ? 'Above' : 'Part of', kind: 'parent', why: e.why });
+      level = level.flatMap((e) => up(e.b));
+    }
+    const own = direct(id).map((e) => ({ other: node(e.a === id ? e.b : e.a)!, badge: e.kind === 'written' ? 'Written' : 'Matched', kind: e.kind, why: e.why, at: e.at }));
+    const children = down(id).map((e) => ({ other: node(e.a)!, badge: 'Holds', kind: 'child', why: e.why }));
+    const grand = down(id).flatMap((e) => down(e.a)).map((e) => ({ other: node(e.a)!, badge: 'Holds', kind: 'child', why: e.why }));
+    // Links it has through what holds it and what it holds.
+    const via: Rel[] = [];
+    for (const r of [...ancestors, ...children, ...grand])
+      for (const e of direct(r.other?.id ?? ''))
+        via.push({ other: node(e.a === r.other.id ? e.b : e.a)!, badge: 'Via', kind: 'via', why: `through ${r.other.label}: ${e.why}`, at: e.at });
+    const specSpec = data.edges
+      .filter((e) => e.kind === 'spec-spec' && (e.a === id || e.b === id))
+      .map((e) => ({ other: node(e.a === id ? e.b : e.a)!, badge: e.a === id ? 'Refers to' : 'Referred by', kind: 'spec-spec', why: e.why }));
+    const me = node(id);
+    const groups = [
+      { title: 'Part of', items: once(ancestors) },
+      { title: me?.side === 'spec' ? 'On the drawings' : 'In the specification', items: once(own.filter((r) => r.other && r.other.side !== me?.side)) },
+      { title: 'Linked', items: once(own) },
+      { title: 'Holds', items: once([...children, ...grand]) },
+      { title: 'Related through these', items: once(via) },
+      { title: 'Other sections', items: once(specSpec) },
+    ];
+    return groups.filter((g) => g.items.length);
+  };
+
   const stats = useMemo(() => {
     const sections = data.nodes.filter((n) => n.kind === 'section');
     const missing = sections.filter((n) => n.missing);
@@ -555,7 +692,8 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
               }
               if (d && !d.moved) {
                 const n = nodeAt(e.clientX, e.clientY);
-                setSelected(n?.id ?? null);
+                if (n) pick(n.id, false);
+                else setSelected(null);
               }
             }}
             onPointerLeave={() => setHover(null)}
@@ -582,8 +720,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
             aria-label="Find on the map"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && results[0]) {
-                setSelected(results[0].id);
-                flyTo(results[0].id);
+                pick(results[0].id);
                 setQuery('');
               }
               if (e.key === 'Escape') setQuery('');
@@ -595,8 +732,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
                 <li key={n.id}>
                   <button
                     onClick={() => {
-                      setSelected(n.id);
-                      flyTo(n.id);
+                      pick(n.id);
                       setQuery('');
                     }}
                   >
@@ -656,8 +792,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
               <li key={n.id}>
                 <button
                   onClick={() => {
-                    setSelected(n.id);
-                    flyTo(n.id);
+                    pick(n.id);
                   }}
                 >
                   <span className="dot ring" style={{ borderColor: colorOf(n) }} />
@@ -673,8 +808,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
               <li key={n.id}>
                 <button
                   onClick={() => {
-                    setSelected(n.id);
-                    flyTo(n.id);
+                    pick(n.id);
                   }}
                 >
                   <span className="dot" style={{ background: colorOf(n) }} />
@@ -689,9 +823,17 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       {sel && (
         <div className="pmap-panel right">
           <div className="pmap-panel-head">
-            <span className="pmap-kind" style={{ ['--c' as string]: sel.color }}>
-              {KIND_NAME[sel.kind]}
-            </span>
+            <div className="pmap-hist">
+              <button className="pmap-x" onClick={() => stepHistory(-1)} disabled={!hist.back.length} aria-label="Back" title={hist.back.length ? `Back to ${byId.get(hist.back[hist.back.length - 1])?.label ?? ''}` : 'Back'}>
+                <Icon name="back" size={13} />
+              </button>
+              <button className="pmap-x" onClick={() => stepHistory(1)} disabled={!hist.fwd.length} aria-label="Forward" title="Forward">
+                <Icon name="forward" size={13} />
+              </button>
+              <span className="pmap-kind" style={{ ['--c' as string]: sel.color }}>
+                {KIND_NAME[sel.kind]}
+              </span>
+            </div>
             <button className="pmap-x" onClick={() => setSelected(null)} aria-label="Close">
               <Icon name="close" size={14} />
             </button>
@@ -715,36 +857,26 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
             ) : null}
           </div>
           {(() => {
-            const ls = linksOf(sel.id);
-            if (!ls.length) return <p className="muted">Nothing linked to it yet.</p>;
-            const groups = [
-              { title: 'On the drawings', items: ls.filter((x) => x.other.side === 'drawing') },
-              { title: sel.side === 'spec' ? 'Other sections' : 'In the specification', items: ls.filter((x) => x.other.side === 'spec') },
-            ];
-            return groups
-              .filter((g) => g.items.length)
-              .map((g) => (
+            const groups = relationsOf(sel.id);
+            if (!groups.length) return <p className="muted">Nothing linked to it yet.</p>;
+            return groups.map((g) => {
+              const all = expanded.has(g.title);
+              const shown = all ? g.items : g.items.slice(0, 12);
+              return (
                 <div key={g.title}>
                   <h4>
                     {g.title} <span className="n">{g.items.length}</span>
                   </h4>
                   <ul className="pmap-links">
-                    {g.items.map(({ e, other }, i) => {
-                      const to = e.at && other.side === 'drawing' ? [e.at] : other.places;
+                    {shown.map(({ other, badge, kind, why, at }, i) => {
+                      const to = at && other.side === 'drawing' ? [at] : other.places;
                       return (
-                        <li key={i}>
-                          <button
-                            className="pmap-link"
-                            onClick={() => {
-                              setSelected(other.id);
-                              flyTo(other.id);
-                            }}
-                            title="Show it on the map"
-                          >
-                            <span className={`pmap-badge ${e.kind}`}>{e.kind === 'written' ? 'Written' : e.kind === 'matched' ? 'Matched' : 'Refers'}</span>
+                        <li key={`${other.id}${i}`}>
+                          <button className="pmap-link" onClick={() => pick(other.id)} title="Go to it on the map">
+                            <span className={`pmap-badge ${kind}`}>{badge}</span>
                             <span className="pmap-link-main">
-                              <strong>{other.label}</strong> <span>{short(other.sub, 44)}</span>
-                              <small>{e.why}</small>
+                              <strong>{other.label}</strong> <span>{other.kind === 'schedule' ? '' : short(other.sub, 44)}</span>
+                              <small>{why}</small>
                             </span>
                           </button>
                           {other.side === 'drawing' && to?.length ? (
@@ -760,8 +892,14 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
                       );
                     })}
                   </ul>
+                  {g.items.length > 12 && (
+                    <button className="pmap-more" onClick={() => setExpanded((x) => (x.has(g.title) ? (x.delete(g.title), new Set(x)) : new Set(x).add(g.title)))}>
+                      {all ? 'Show fewer' : `Show all ${g.items.length}`}
+                    </button>
+                  )}
                 </div>
-              ));
+              );
+            });
           })()}
         </div>
       )}
@@ -790,7 +928,6 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
   );
 }
 
-const rank = (k: MapEdgeKind) => ({ written: 3, matched: 2, 'spec-spec': 1, contains: 0 })[k];
 const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 function hexA(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);
