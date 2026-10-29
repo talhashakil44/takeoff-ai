@@ -2802,7 +2802,7 @@ export function App() {
           />
           {!isHosted && (
             <button className={`secondary chat-toggle${chatOpen ? ' on' : ''}`} onClick={() => setChatOpen((o) => !o)} title="Ask Claude about this project" aria-pressed={chatOpen}>
-              <Icon name="sparkle" size={16} />
+              <Icon name="chat" size={16} />
               <span className="hide-narrow">Ask</span>
             </button>
           )}
@@ -3491,6 +3491,7 @@ export function App() {
         <div className="view-pane map-pane">
           {projectMap && projectMap.nodes.length ? (
             <ProjectMap
+              onAiSettings={isHosted ? undefined : () => setAiDialog('settings')}
               data={projectMap}
               focus={mapFocus}
               onOpenSpec={(docId, page, key) => {

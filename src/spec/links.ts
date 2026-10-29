@@ -40,6 +40,10 @@ export interface MapNode {
   entryKey?: string;
   /** What it is about, as stemmed words (for placing it by meaning). */
   words?: string[];
+  /** What its text is about: its most used words and how often (a spec section's body). */
+  about?: [string, number][];
+  /** The start of its text (a spec section's), for an AI to read what it is. */
+  text?: string;
 }
 
 export type MapEdgeKind = 'written' | 'matched' | 'spec-spec' | 'contains' | 'revises';
@@ -132,7 +136,7 @@ export function buildProjectMap(graph: DrawingGraph | null, books: SpecBook[], s
   const sections = new Map<string, SpecSection>();
   for (const s of mergeSections(books)) {
     sections.set(s.key, s);
-    add({ id: `spec:${s.key}`, kind: 'section', side: 'spec', label: s.number, sub: s.title, group: s.division, missing: s.missing, pages: s.pages.map((page) => ({ docId: s.docId, page })), words: [...new Set([...s.words, ...expand(s.title)])] });
+    add({ id: `spec:${s.key}`, kind: 'section', side: 'spec', label: s.number, sub: s.title, group: s.division, missing: s.missing, pages: s.pages.map((page) => ({ docId: s.docId, page })), words: [...new Set([...s.words, ...expand(s.title)])], ...(s.about ? { about: s.about } : {}), ...(s.excerpt ? { text: s.excerpt } : {}) });
   }
   // Sections naming each other.
   for (const s of sections.values())

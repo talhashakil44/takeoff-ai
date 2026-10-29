@@ -2,7 +2,9 @@ import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Place } from '../graph/graph';
 import type { MapEdge, MapEdgeKind, MapNode, ProjectMap as MapData } from '../spec/links';
-import { placeByMeaning } from '../spec/space';
+import { DIVISIONS, shortGroupName, TRADES } from '../spec/names';
+import { buildMeaning, type Meaning } from '../spec/meaning';
+import { embedAll, getEmbeddingsKey, PROVIDER_NAME, providerOf, textOf } from '../ai/embed';
 import { Icon } from './Icons';
 import '@fontsource/space-grotesk/500.css';
 import '@fontsource/space-grotesk/600.css';
@@ -20,40 +22,6 @@ const ADD_COLOR = '#ff5fa2';
  * PACKAGED EXHAUSTERS) dashed. Hover to trace a node's links, click for what it is and where to
  * go: the section in the spec, the schedule row on its sheet.
  */
-
-const DIVISIONS: Record<string, string> = {
-  '00': 'Procurement & contracting',
-  '01': 'General requirements',
-  '02': 'Existing conditions & site',
-  '03': 'Concrete',
-  '04': 'Masonry',
-  '05': 'Metals',
-  '06': 'Wood, plastics & composites',
-  '07': 'Thermal & moisture',
-  '08': 'Openings',
-  '09': 'Finishes',
-  '10': 'Specialties',
-  '11': 'Equipment',
-  '12': 'Furnishings',
-  '13': 'Special construction',
-  '14': 'Conveying',
-  '20': 'Mechanical general',
-  '21': 'Fire suppression',
-  '22': 'Plumbing',
-  '23': 'HVAC',
-  '25': 'Integrated automation',
-  '26': 'Electrical',
-  '27': 'Communications',
-  '28': 'Electronic safety & security',
-  '31': 'Earthwork',
-  '32': 'Exterior improvements',
-  '33': 'Utilities',
-  '34': 'Transportation',
-  '35': 'Waterway & marine',
-  '40': 'Process integration',
-  '48': 'Electrical power generation',
-};
-const TRADES: Record<string, string> = { A: 'Architectural', S: 'Structural', M: 'Mechanical', P: 'Plumbing', E: 'Electrical', FP: 'Fire protection', F: 'Fire', C: 'Civil', SP: 'Site', L: 'Landscape', ID: 'Interiors', '#': 'Other' };
 
 /** A division's colour: the colour of the trade that draws it, so a link reads end to end. */
 function specColor(div: string): string {
@@ -92,9 +60,11 @@ interface Props {
   onOpenSpec: (docId: string, page: number, sectionKey: string) => void;
   onOpenDrawing: (places: Place[], label: string) => void;
   onClose: () => void;
+  /** Opens AI settings (for the embeddings key). */
+  onAiSettings?: () => void;
 }
 
-export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: Props) {
+export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose, onAiSettings }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const threeRef = useRef<HTMLDivElement>(null);
@@ -598,8 +568,50 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     };
   }, [mode, nodes, edges, anchors, neighbours, stars, rankIn, byId]);
 
-  // The 3D map, loaded when asked for. Laid out by meaning (a vector space of what each thing is
-  // about), or by links (a force layout); labelled, glowing; links followed by a click.
+  // The project by meaning, worked out in the full space (neighbours, clusters, loners) and laid
+  // out for the 3D view; with an embeddings key, by an AI's reading of each thing.
+  const [meaning, setMeaning] = useState<Meaning | null>(null);
+  const [meaningNote, setMeaningNote] = useState<string | null>(null);
+  const [meaningBusy, setMeaningBusy] = useState<string | null>(null);
+  const [keyTick, setKeyTick] = useState(0);
+  useEffect(() => {
+    const on = () => setKeyTick((n) => n + 1);
+    window.addEventListener('takeoff-embeddings-key', on);
+    return () => window.removeEventListener('takeoff-embeddings-key', on);
+  }, []);
+  useEffect(() => {
+    let gone = false;
+    void (async () => {
+      let embeddings: Map<string, Float32Array> | undefined;
+      let note: string | null = null;
+      const key = getEmbeddingsKey();
+      if (key) {
+        const who = PROVIDER_NAME[providerOf(key)];
+        try {
+          setMeaningBusy(`Reading meaning with ${who}…`);
+          embeddings = await embedAll(
+            data.nodes.map((n) => ({ id: n.id, text: textOf(n, shortGroupName(n)) })),
+            (done, of) => !gone && of > 0 && setMeaningBusy(`Reading meaning with ${who}… ${done} of ${of}`),
+          );
+        } catch (e) {
+          note = `${e instanceof Error ? e.message : String(e)} Placed by shared words instead.`;
+        }
+      }
+      if (gone) return;
+      setMeaningBusy('Mapping meaning…');
+      const m = await buildMeaning(data.nodes, data.edges, { embeddings, groupName: shortGroupName });
+      if (gone) return;
+      setMeaning(m);
+      setMeaningNote(note);
+      setMeaningBusy(null);
+    })();
+    return () => {
+      gone = true;
+    };
+  }, [data, keyTick]);
+
+  // The 3D map, loaded when asked for. By meaning: clusters as nebulae, each thing beside what it
+  // is like; by links: a force layout. Labelled, glowing; links followed by a click.
   type G3 = {
     _destructor?: () => void;
     nodeColor: (f: (n: object) => string) => G3;
@@ -610,14 +622,26 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     graphData: () => { nodes: { id: string; x?: number; y?: number; z?: number }[] };
     controls: () => { autoRotate?: boolean; target?: { x: number; y: number; z: number } };
     zoomToFit: (ms?: number, pad?: number) => G3;
+    scene: () => { add: (o: unknown) => void; remove: (o: unknown) => void };
   };
   const [layout3d, setLayout3d] = useState<'meaning' | 'links'>('meaning');
+  const [colorBy, setColorBy] = useState<'cluster' | 'type'>('cluster');
   const [hover3d, setHover3d] = useState<string | null>(null);
-  const space = useMemo(() => (mode === '3d' && layout3d === 'meaning' ? placeByMeaning(nodes, data.edges.filter((e) => show[e.kind] || e.kind === 'contains')) : null), [mode, layout3d, nodes, data.edges, show]);
+  const [hoverCluster, setHoverCluster] = useState<number | null>(null);
+  const [showLoners, setShowLoners] = useState(true);
+  const [hudOpen, setHudOpen] = useState<'clusters' | 'loners' | null>('clusters');
+  const space = mode === '3d' && layout3d === 'meaning' ? meaning : null;
   const g3 = useRef<G3 | null>(null);
   const sprites = useRef(new Map<string, { material: { opacity: number }; visible: boolean; big: boolean }>());
+  /** Each cluster's glow and name, dimmed when another is in focus. */
+  const nebulae = useRef<{ i: number; mats: { opacity: number }[]; base: number[] }[]>([]);
+  const lonerRings = useRef<{ material: { opacity: number }; visible: boolean }[]>([]);
+  const threads = useRef<{ obj: unknown; dispose: () => void } | null>(null);
+  const three = useRef<typeof import('three') | null>(null);
+  const colorOfNode = (n: SimNode) => (n.missing ? '#6b7080' : space && colorBy === 'cluster' ? (space.clusters[space.clusterOf.get(n.id) ?? -1]?.color ?? '#8a93b5') : n.color);
   useEffect(() => {
     if (mode !== '3d' || !threeRef.current) return;
+    if (layout3d === 'meaning' && !meaning) return;
     let gone = false;
     let lod = 0;
     void Promise.all([
@@ -627,14 +651,17 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       import('three-spritetext'),
       // The labels are drawn once: their face loaded first.
       document.fonts?.load(`600 16px ${FONT}`).catch(() => undefined),
+      document.fonts?.load(`700 16px ${FONT}`).catch(() => undefined),
       document.fonts?.load(`500 16px ${FONT}`).catch(() => undefined),
     ]).then(([{ default: ForceGraph3D }, { UnrealBloomPass }, THREE, { default: SpriteText }]) => {
       if (gone || !threeRef.current) return;
+      three.current = THREE;
       const el = threeRef.current;
       const shownEdges = edges.filter((e) => show[e.kind]);
       const used = new Set(shownEdges.flatMap((e) => [e.a, e.b]));
-      // By meaning, everything with words has a place; by links, only what is linked.
-      const keep = nodes.filter((n) => (space ? space.pos.has(n.id) && (used.has(n.id) || (n.words?.length ?? 0) > 0) : used.has(n.id)));
+      // By meaning, everything that has a place; by links, only what is linked.
+      const keep = nodes.filter((n) => (space ? space.pos.has(n.id) : used.has(n.id)));
+      const kept = new Set(keep.map((n) => n.id));
       sprites.current.clear();
       const g = new ForceGraph3D(el, { controlType: 'orbit' })
         .width(el.clientWidth)
@@ -644,14 +671,14 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
         .graphData({
           nodes: keep.map((n) => {
             const p = space?.pos.get(n.id);
-            return { id: n.id, label: n.label, sub: n.sub, kind: n.kind, color: n.missing ? '#6b7080' : n.color, val: (n.kind === 'section' ? 2 : n.kind === 'schedule' || n.kind === 'addendum' ? 3 : 1) + Math.min(n.degree, 12) * 0.4, side: n.side, ...(p ? { x: p[0], y: p[1], z: p[2], fx: p[0], fy: p[1], fz: p[2] } : {}) };
+            return { id: n.id, label: n.label, sub: n.sub, kind: n.kind, color: colorOfNode(n), val: (n.kind === 'section' ? 2 : n.kind === 'schedule' || n.kind === 'addendum' ? 3 : 1) + Math.min(n.degree, 12) * 0.4, side: n.side, ...(p ? { x: p[0], y: p[1], z: p[2], fx: p[0], fy: p[1], fz: p[2] } : {}) };
           }),
-          links: shownEdges.filter((e) => keep.some((n) => n.id === e.a) && keep.some((n) => n.id === e.b)).map((e) => ({ source: e.a, target: e.b, kind: e.kind, why: e.why })),
+          links: shownEdges.filter((e) => kept.has(e.a) && kept.has(e.b)).map((e) => ({ source: e.a, target: e.b, kind: e.kind, why: e.why })),
         })
         .nodeLabel((n: object) => `<div class="map3d-tip">${escapeHtml(up(`${(n as { label: string }).label}  ${(n as { sub: string }).sub}`))}</div>`)
         .nodeColor((n: object) => (n as { color: string }).color)
-        .nodeOpacity(0.85)
-        .nodeRelSize(space ? 2.6 : 4)
+        .nodeOpacity(0.9)
+        .nodeRelSize(space ? 2.4 : 4)
         .nodeResolution(16)
         .nodeThreeObjectExtend(true)
         .nodeThreeObject((n: object) => {
@@ -667,7 +694,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
           return sp;
         })
         .linkColor((l: object) => EDGE_COLOR[(l as { kind: MapEdgeKind }).kind])
-        .linkOpacity(0.6)
+        .linkOpacity(space ? 0.35 : 0.6)
         .linkWidth((l: object) => ((l as { kind: string }).kind === 'written' ? 1.4 : (l as { kind: string }).kind === 'matched' ? 0.7 : 0.25))
         .linkCurvature((l: object) => ((l as { kind: string }).kind === 'contains' ? 0 : 0.2))
         .linkDirectionalParticles((l: object) => ((l as { kind: string }).kind === 'written' ? 3 : (l as { kind: string }).kind === 'matched' ? 2 : 0))
@@ -709,39 +736,87 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       }
       starGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
       g.scene().add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0.75 })));
-      // The axes of meaning, each end named by the words that pull that way.
+      nebulae.current = [];
+      lonerRings.current = [];
       if (space) {
-        const R = 520;
-        const dirs: [number, number, number][] = [
-          [1, 0, 0],
-          [0, 1, 0],
-          [0, 0, 1],
-        ];
-        const tint = [0x7cc4ff, 0xc58cff, 0x6fe3c5];
-        dirs.forEach((d, i) => {
-          const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-d[0] * R, -d[1] * R, -d[2] * R), new THREE.Vector3(d[0] * R, d[1] * R, d[2] * R)]);
-          g.scene().add(new THREE.Line(geo, new THREE.LineDashedMaterial({ color: tint[i], transparent: true, opacity: 0.28, dashSize: 8, gapSize: 6 })).computeLineDistances());
-          const ax = space.axes[i];
-          if (!ax) return;
-          for (const [sign, words] of [
-            [1, ax.plus],
-            [-1, ax.minus],
-          ] as const) {
-            const label = new SpriteText(up(words.join(' · ')), 15, `#${tint[i].toString(16)}`);
-            label.fontFace = FONT;
-            label.fontWeight = '700';
-            (label.material as { depthWrite: boolean; opacity: number }).depthWrite = false;
-            (label.material as { opacity: number }).opacity = 0.75;
-            label.position.set(d[0] * (R + 40) * sign, d[1] * (R + 40) * sign, d[2] * (R + 40) * sign);
-            g.scene().add(label);
-          }
-        });
+        // Each cluster a nebula: a soft glow at its heart, wisps through its members, its name above.
+        const glow = (() => {
+          const c = document.createElement('canvas');
+          c.width = c.height = 128;
+          const x = c.getContext('2d')!;
+          const gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+          gr.addColorStop(0, 'rgba(255,255,255,1)');
+          gr.addColorStop(0.25, 'rgba(255,255,255,0.45)');
+          gr.addColorStop(0.6, 'rgba(255,255,255,0.1)');
+          gr.addColorStop(1, 'rgba(255,255,255,0)');
+          x.fillStyle = gr;
+          x.fillRect(0, 0, 128, 128);
+          return new THREE.CanvasTexture(c);
+        })();
+        const wisp = (color: string, opacity: number, scale: number, at: [number, number, number]) => {
+          const m = new THREE.SpriteMaterial({ map: glow, color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+          const s = new THREE.Sprite(m);
+          s.scale.set(scale, scale, 1);
+          s.position.set(...at);
+          g.scene().add(s);
+          return m;
+        };
+        for (const c of space.clusters) {
+          const mats: { opacity: number }[] = [];
+          const base: number[] = [];
+          const add = (m: { opacity: number }) => (mats.push(m), base.push(m.opacity));
+          add(wisp(c.color, 0.16, c.radius * 2.6, c.center));
+          const ps = c.members.map((id) => space.pos.get(id)).filter((p): p is [number, number, number] => !!p);
+          for (let k = 0; k < Math.min(10, ps.length); k++) add(wisp(c.color, 0.06, c.radius * (0.7 + ((k * 37) % 10) / 14), ps[Math.floor((k * ps.length) / Math.min(10, ps.length))]));
+          // Names stay one size on screen, near or far (a fixed share of the view's height).
+          const name = new SpriteText(up(c.name), 0.03, c.color);
+          name.fontFace = FONT;
+          name.fontWeight = '700';
+          Object.assign(name.material, { depthWrite: false, depthTest: false, sizeAttenuation: false });
+          name.center.set(0.5, -0.35);
+          name.position.set(c.center[0], c.center[1] + c.radius * 0.7, c.center[2]);
+          name.renderOrder = 10;
+          g.scene().add(name);
+          add(name.material as { opacity: number });
+          const sub = new SpriteText(up(short(c.sub, 40)), 0.016, 'rgba(205,214,240,0.85)');
+          sub.fontFace = FONT;
+          sub.fontWeight = '500';
+          Object.assign(sub.material, { depthWrite: false, depthTest: false, sizeAttenuation: false });
+          sub.center.set(0.5, 1.1);
+          sub.position.set(c.center[0], c.center[1] + c.radius * 0.7, c.center[2]);
+          sub.renderOrder = 10;
+          g.scene().add(sub);
+          add(sub.material as { opacity: number });
+          nebulae.current.push({ i: c.i, mats, base });
+        }
+        // Loners: a red ring around each spec section nothing on the drawings is about.
+        const ring = (() => {
+          const c = document.createElement('canvas');
+          c.width = c.height = 128;
+          const x = c.getContext('2d')!;
+          x.strokeStyle = 'rgba(255,255,255,1)';
+          x.lineWidth = 7;
+          x.beginPath();
+          x.arc(64, 64, 52, 0, Math.PI * 2);
+          x.stroke();
+          return new THREE.CanvasTexture(c);
+        })();
+        for (const l of space.loners) {
+          const p = space.pos.get(l.id);
+          if (!p) continue;
+          const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ring, color: '#ff5f57', transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: false }));
+          s.scale.set(0.03, 0.03, 1);
+          s.position.set(...p);
+          s.visible = showLonersRef.current;
+          g.scene().add(s);
+          lonerRings.current.push(s as unknown as { material: { opacity: number }; visible: boolean });
+        }
       }
-      const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.65, 0.35, 0.4);
+      const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.7, 0.4, 0.35);
       g.postProcessingComposer().addPass(bloom);
       const controls = g.controls() as { autoRotate?: boolean; autoRotateSpeed?: number; addEventListener?: (t: string, f: () => void) => void };
       controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.5;
+      controls.autoRotateSpeed = 0.4;
       controls.addEventListener?.('start', () => (controls.autoRotate = false));
       // In from far out.
       g.cameraPosition({ x: 0, y: 0, z: 3600 }, { x: 0, y: 0, z: 0 });
@@ -752,22 +827,26 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
         if (selRef.current) restyleRef.current(true);
         else g.zoomToFit(2200, 60);
       });
-      // Labels by distance: near ones named, far ones quiet, the picked node's always.
+      // Labels by distance: near ones named, far ones quiet, the picked node's always; loners pulse.
+      let t = 0;
       lod = window.setInterval(() => {
+        t++;
         const cam = (g as unknown as { camera: () => { position: { x: number; y: number; z: number } } }).camera().position;
-        const focus = hoverRef3.current ?? selRef.current;
-        const near = focus ? neighbours.get(focus) : null;
+        const lit = litRef.current;
         const at = new Map(g.graphData().nodes.map((n) => [n.id, n]));
         for (const [id, sp] of sprites.current) {
           const n = at.get(id);
           if (!n || n.x === undefined) continue;
           const dist = Math.hypot(cam.x - n.x, cam.y - (n.y ?? 0), cam.z - (n.z ?? 0));
-          const lit = id === focus || !!near?.has(id);
-          sp.visible = lit || (focus ? false : sp.big ? dist < 900 : dist < 320);
+          sp.visible = lit ? lit.has(id) : sp.big ? dist < 700 : dist < 280;
         }
-      }, 250);
+        for (const r of lonerRings.current) {
+          r.visible = showLonersRef.current;
+          r.material.opacity = 0.45 + 0.4 * Math.sin(t / 2.2);
+        }
+      }, 120);
       g3.current = g as unknown as G3;
-      if (import.meta.env.DEV) Object.assign(window, { __g3: g, __space: space });
+      if (import.meta.env.DEV) Object.assign(window, { __g3: g, __meaning: space });
       restyle3d(false);
       // Laid out already (by meaning): framed once the camera has come in.
       if (space)
@@ -781,44 +860,96 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     return () => {
       gone = true;
       window.clearInterval(lod);
+      threads.current?.dispose();
+      threads.current = null;
       g3.current?._destructor?.();
       g3.current = null;
       if (threeRef.current) threeRef.current.innerHTML = '';
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, nodes, edges, show, space]);
+  }, [mode, nodes, edges, show, space, layout3d]);
 
-  /** 3D: the picked (or hovered) node and what it is tied to stay lit, the rest fades; the camera goes to a picked one. */
+  const showLonersRef = useRef(showLoners);
+  showLonersRef.current = showLoners;
+  /** What is lit in 3D: the focus and what it is tied to (links, and what it is most like), or a cluster; null when all is. */
+  const litRef = useRef<Set<string> | null>(null);
   const hoverRef3 = useRef(hover3d);
   hoverRef3.current = hover3d;
+  const hoverClusterRef = useRef(hoverCluster);
+  hoverClusterRef.current = hoverCluster;
   const restyle3d = (fly: boolean) => {
     const g = g3.current;
     if (!g) return;
     const focus = hoverRef3.current ?? selRef.current;
-    const near = focus ? (neighbours.get(focus) ?? new Set<string>()) : null;
-    const lit = (id: string) => !focus || id === focus || near!.has(id);
+    const hc = hoverClusterRef.current;
+    let lit: Set<string> | null = null;
+    if (focus) {
+      lit = new Set([focus, ...(neighbours.get(focus) ?? [])]);
+      for (const x of space?.near.get(focus) ?? []) lit.add(x.id);
+    } else if (hc !== null && space?.clusters[hc]) lit = new Set(space.clusters[hc].members);
+    litRef.current = lit;
+    const on = (id: string) => !lit || lit.has(id);
     const idOf = (x: unknown) => (typeof x === 'object' && x ? (x as { id: string }).id : (x as string));
     g.nodeColor((n: object) => {
       const d = n as { id: string; color: string };
-      return lit(d.id) ? d.color : '#1a1f2e';
+      return on(d.id) ? d.color : '#1a1f2e';
     });
     g.linkColor((l: object) => {
       const d = l as { source: unknown; target: unknown; kind: MapEdgeKind };
-      const on = !focus || idOf(d.source) === focus || idOf(d.target) === focus;
-      if (!on) return '#0c0f18';
+      const mine = !focus || idOf(d.source) === focus || idOf(d.target) === focus;
+      if (!mine || (hc !== null && !focus)) return '#0c0f18';
       return d.kind === 'contains' ? (focus ? '#6b7aa8' : '#2c3550') : EDGE_COLOR[d.kind];
     });
     g.linkWidth((l: object) => {
       const d = l as { source: unknown; target: unknown; kind: string };
-      const on = focus && (idOf(d.source) === focus || idOf(d.target) === focus);
-      return (d.kind === 'written' ? 1.4 : d.kind === 'matched' ? 0.7 : 0.25) * (on ? 2.6 : 1);
+      const mine = focus && (idOf(d.source) === focus || idOf(d.target) === focus);
+      return (d.kind === 'written' ? 1.4 : d.kind === 'matched' ? 0.7 : 0.25) * (mine ? 2.6 : 1);
     });
     g.linkDirectionalParticles((l: object) => {
       const d = l as { source: unknown; target: unknown; kind: string };
-      const on = !focus || idOf(d.source) === focus || idOf(d.target) === focus;
-      return on ? (d.kind === 'written' ? 3 : d.kind === 'matched' ? 2 : focus ? 1 : 0) : 0;
+      const mine = !focus || idOf(d.source) === focus || idOf(d.target) === focus;
+      return mine && hc === null ? (d.kind === 'written' ? 3 : d.kind === 'matched' ? 2 : focus ? 1 : 0) : 0;
     });
-    for (const [id, sp] of sprites.current) sp.material.opacity = lit(id) ? 1 : 0.08;
+    for (const [id, sp] of sprites.current) sp.material.opacity = on(id) ? 1 : 0.08;
+    // Nebulae: the focused one's (or the hovered cluster) bright, the others faint.
+    const fc = focus ? space?.clusterOf.get(focus) : (hc ?? undefined);
+    for (const nb of nebulae.current)
+      nb.mats.forEach((m, k) => {
+        // The last two are its name and its subtitle: the subtitle only for the cluster in focus, names faint while a node is.
+        const label = k >= nb.mats.length - 2;
+        const sub = k === nb.mats.length - 1;
+        const mine = fc === undefined || fc === nb.i;
+        m.opacity = nb.base[k] * (label ? (sub ? (fc === nb.i && !focus ? 1 : 0) : focus ? 0.18 : mine ? 1 : 0.2) : mine ? 1 : 0.12);
+      });
+    // Threads to what the focus is most like (in the full space), brighter the more alike.
+    threads.current?.dispose();
+    threads.current = null;
+    const THREE = three.current;
+    const from = focus ? space?.pos.get(focus) : undefined;
+    if (THREE && space && focus && from) {
+      const group = new THREE.Group();
+      const list = space.near.get(focus) ?? [];
+      const top = list[0]?.sim || 1;
+      const mats: { dispose: () => void }[] = [];
+      for (const x of list) {
+        const p = space.pos.get(x.id);
+        if (!p) continue;
+        const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...from), new THREE.Vector3(...p)]);
+        const mat = new THREE.LineDashedMaterial({ color: '#9fe8ff', transparent: true, opacity: 0.2 + 0.7 * (x.sim / top), dashSize: 3, gapSize: 2.5, depthWrite: false, blending: THREE.AdditiveBlending });
+        const line = new THREE.Line(geo, mat);
+        line.computeLineDistances();
+        group.add(line);
+        mats.push(geo, mat);
+      }
+      g.scene().add(group);
+      threads.current = {
+        obj: group,
+        dispose: () => {
+          g.scene().remove(group);
+          for (const m of mats) m.dispose();
+        },
+      };
+    }
     const sel = selRef.current;
     if (fly && sel) {
       g.controls().autoRotate = false;
@@ -844,16 +975,42 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
   useEffect(() => {
     if (mode === '3d') restyle3d(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hover3d]);
+  }, [hover3d, hoverCluster]);
+  // Colour by cluster or by type: the nodes recoloured in place.
+  useEffect(() => {
+    const g = g3.current as unknown as { graphData: () => { nodes: { id: string; color: string }[] } } | null;
+    if (!g || !space) return;
+    for (const n of g.graphData().nodes) {
+      const sn = byId.get(n.id);
+      if (sn) n.color = colorOfNode(sn);
+    }
+    restyle3d(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorBy]);
   /** The whole 3D map in view: the meaning space is a ball of known size, looked at from straight on. */
   const fit3d = (ms = 800) => {
     const g = g3.current;
     if (!g) return;
-    if (space) g.cameraPosition({ x: 0, y: 0, z: 1450 }, { x: 0, y: 0, z: 0 }, ms);
+    if (space) g.cameraPosition({ x: 0, y: 0, z: 1000 }, { x: 0, y: 0, z: 0 }, ms);
     else g.zoomToFit(ms, 60);
   };
   const fit3dRef = useRef(fit3d);
   fit3dRef.current = fit3d;
+  /** Flies to a cluster: in front of it, all of it in view. */
+  const flyToCluster = (i: number) => {
+    const g = g3.current;
+    const c = space?.clusters[i];
+    if (!g || !c) return;
+    setSelected(null);
+    g.controls().autoRotate = false;
+    const cam = g.cameraPosition();
+    const dx = cam.x - c.center[0];
+    const dy = cam.y - c.center[1];
+    const dz = cam.z - c.center[2];
+    const d = Math.hypot(dx, dy, dz) || 1;
+    const k = (c.radius * 3.2 + 140) / d;
+    g.cameraPosition({ x: c.center[0] + dx * k, y: c.center[1] + dy * k, z: c.center[2] + dz * k }, { x: c.center[0], y: c.center[1], z: c.center[2] }, 1000);
+  };
   const zoom3d = (f: number) => {
     const g = g3.current;
     if (!g) return;
@@ -1019,6 +1176,8 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     const specSpec = data.edges
       .filter((e) => e.kind === 'spec-spec' && (e.a === id || e.b === id))
       .map((e) => ({ other: node(e.a === id ? e.b : e.a)!, badge: e.a === id ? 'Refers to' : 'Referred by', kind: 'spec-spec', why: e.why }));
+    // What it is most like, in the full space of meaning (not only what a link says).
+    const similar = (meaning?.near.get(id) ?? []).map((x) => ({ other: node(x.id)!, badge: `${Math.round(x.sim * 100)}%`, kind: 'similar', why: meaning?.loners.some((l) => l.id === id) ? 'closest, still far: nothing on the drawings is about it' : 'about the same thing' }));
     const me = node(id);
     const groups = [
       { title: 'Parent', items: once(ancestors) },
@@ -1028,6 +1187,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       { title: 'Linked', items: once(own) },
       { title: 'Related through parent and children', items: once(via) },
       { title: 'Other sections', items: once(specSpec) },
+      { title: meaning?.source === 'embeddings' ? 'Most alike (AI meaning)' : 'Most alike (shared words)', items: once(similar) },
     ];
     return groups.filter((g) => g.items.length);
   };
@@ -1129,7 +1289,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
             }}
           />
         ) : (
-          <div className="pmap-3d" ref={threeRef} />
+          <div className="pmap-3d" ref={threeRef} onPointerLeave={() => setHover3d(null)} />
         )}
       </div>
 
@@ -1361,16 +1521,76 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
               By links
             </button>
           </div>
-          {space && (
+          {layout3d === 'meaning' && (
             <div className="pmap-space-key">
-              <b>Space of meaning</b>
-              <span>Close together = about the same thing. Axes named by the words that pull each way.</span>
-              {space.axes.map((a, i) => (
-                <span key={i} className={`ax ax${i}`}>
-                  <i>{'XYZ'[i]}</i> {a.minus.slice(0, 2).join(' · ')} ⟷ {a.plus.slice(0, 2).join(' · ')}
+              <div className="mk-head">
+                <b>Meaning map</b>
+                <span className="mk-color" role="group" aria-label="Colour by">
+                  <button className={colorBy === 'cluster' ? 'on' : ''} onClick={() => setColorBy('cluster')}>
+                    Cluster
+                  </button>
+                  <button className={colorBy === 'type' ? 'on' : ''} onClick={() => setColorBy('type')}>
+                    Trade
+                  </button>
                 </span>
-              ))}
-              <span className="dim">{Math.round(space.explained * 100)}% of the variation in 3 axes</span>
+                <span className={`mk-src ${meaning?.source ?? ''}`}>{meaning?.source === 'embeddings' ? `AI · ${PROVIDER_NAME[providerOf(getEmbeddingsKey() ?? '')]}` : 'Shared words'}</span>
+              </div>
+              <span className="dim">Close together = about the same thing. Dashed threads: what the picked one is most like.</span>
+              {meaningBusy && <span className="mk-busy">{meaningBusy}</span>}
+              {meaningNote && <span className="mk-note">{meaningNote}</span>}
+              {meaning && meaning.source === 'words' && !getEmbeddingsKey() && onAiSettings && (
+                <button className="mk-link" onClick={onAiSettings}>
+                  Read by AI meaning (add an embeddings key) →
+                </button>
+              )}
+              {meaning && (
+                <>
+                  <div className="mk-tabs" role="tablist">
+                    <button role="tab" aria-selected={hudOpen === 'clusters'} className={hudOpen === 'clusters' ? 'on' : ''} onClick={() => setHudOpen(hudOpen === 'clusters' ? null : 'clusters')}>
+                      Clusters <i>{meaning.clusters.length}</i>
+                    </button>
+                    <button role="tab" aria-selected={hudOpen === 'loners'} className={hudOpen === 'loners' ? 'on' : ''} onClick={() => setHudOpen(hudOpen === 'loners' ? null : 'loners')}>
+                      Not on drawings? <i className={meaning.loners.length ? 'warn' : ''}>{meaning.loners.length}</i>
+                    </button>
+                  </div>
+                  {hudOpen === 'clusters' && (
+                    <ul className="mk-list">
+                      {meaning.clusters.map((c) => (
+                        <li key={c.i}>
+                          <button onMouseEnter={() => setHoverCluster(c.i)} onMouseLeave={() => setHoverCluster(null)} onClick={() => flyToCluster(c.i)} title={`Fly to ${c.name}`}>
+                            <i style={{ background: c.color, boxShadow: `0 0 10px ${c.color}` }} />
+                            <span className="mk-name">{c.name}</span>
+                            <span className="mk-sub">{c.sub}</span>
+                            <span className="mk-n">{c.members.length}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {hudOpen === 'loners' && (
+                    <>
+                      <label className="mk-check">
+                        <input type="checkbox" checked={showLoners} onChange={(e) => setShowLoners(e.target.checked)} /> Ring them on the map
+                      </label>
+                      <span className="dim">Spec sections nothing on the drawings is about, and nothing links to. Check they are shown, or priced from the spec alone.</span>
+                      <ul className="mk-list">
+                        {meaning.loners.map((l) => {
+                          const n = byId.get(l.id);
+                          return n ? (
+                            <li key={l.id}>
+                              <button onClick={() => pick(l.id, false)} title={l.best ? `Closest on the drawings: ${byId.get(l.best.id)?.label ?? ''} (${Math.round(l.best.sim * 100)}%)` : 'Nothing on the drawings like it'}>
+                                <i className="ring" />
+                                <span className="mk-name">{n.label}</span>
+                                <span className="mk-sub">{n.sub}</span>
+                              </button>
+                            </li>
+                          ) : null;
+                        })}
+                      </ul>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>

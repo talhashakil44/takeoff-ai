@@ -178,7 +178,7 @@ export function ChatPanel({ about, run, sheets, sections, onOpenSheet, onOpenSec
   return (
     <aside className="chat-panel" aria-label="Ask the project">
       <header>
-        <Icon name="sparkle" size={16} />
+        <Icon name="chat" size={16} />
         <strong>Ask the project</strong>
         <span className="chat-sub">Claude · reads your drawings, specs and takeoff</span>
         {turns.length > 0 && (

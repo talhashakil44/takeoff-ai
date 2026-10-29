@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('takeoffDesktop', {
   getMissingFolder: () => ipcRenderer.invoke('folder:missing'),
   writeExport: (dir, filename, data) => ipcRenderer.invoke('folder:writeExport', dir, filename, data),
   showFile: (file) => ipcRenderer.invoke('shell:showFile', file),
+  /** Posts to an embeddings service with the user's key (OpenAI, Voyage). */
+  embed: (url, key, body) => ipcRenderer.invoke('ai:embed', url, key, body),
   /** The MCP server AI apps connect to (electron/mcp.cjs). */
   mcp: {
     register: (tools) => ipcRenderer.send('mcp:register', tools),

@@ -15,6 +15,8 @@ export interface DesktopApi extends FolderApi {
   writeExport?(dir: string, filename: string, data: ArrayBuffer): Promise<string>;
   /** Shows a file in Finder or Explorer. */
   showFile?(file: string): Promise<void>;
+  /** Posts to an embeddings service with the user's key, from the app (no browser CORS). */
+  embed?(url: string, key: string, body: unknown): Promise<{ status: number; body: string }>;
   /** The MCP server AI apps connect to (electron/mcp.cjs); absent in older builds. */
   mcp?: McpBridge;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getApiKey, MODEL, setApiKey } from '../ai/claude';
+import { getEmbeddingsKey, PROVIDER_NAME, providerOf, setEmbeddingsKey } from '../ai/embed';
 import { checkAccess, getAccessCode, serviceBuild, setAccessCode, type AccessInfo } from '../ai/service';
 
 /** The web app's access code: the server holds the model key and caps each code's daily use. */
@@ -107,6 +108,51 @@ function ApiKeySection({ onDone }: { onDone: () => void }) {
   );
 }
 
+/** Optional: an embeddings key, so the project map places things by what they mean, not only by shared words. */
+function EmbeddingsKeySection() {
+  const [key, setKey] = useState(getEmbeddingsKey() ?? '');
+  const [saved, setSaved] = useState(getEmbeddingsKey());
+  return (
+    <>
+      <h4 className="settings-sub">Project map: AI meaning (optional)</h4>
+      <label className="stack">
+        Embeddings key (Voyage AI or OpenAI)
+        <input type="password" autoComplete="off" placeholder="pa-… or sk-…" value={key} onChange={(e) => setKey(e.target.value)} />
+      </label>
+      <p className="muted">
+        With a key, the map's meaning view reads what each spec section and drawing is about, so a frame and a hollow metal door sit together even when the words differ.
+        Without one it goes by shared words. Each text is sent once and kept on this computer; a project costs a cent or two.
+        {saved ? ` Using ${PROVIDER_NAME[providerOf(saved)]}.` : ''}
+      </p>
+      <div className="row-actions">
+        <button
+          className="on"
+          disabled={!key.trim() || key.trim() === saved}
+          onClick={() => {
+            setEmbeddingsKey(key.trim());
+            setSaved(key.trim());
+            window.dispatchEvent(new Event('takeoff-embeddings-key'));
+          }}
+        >
+          Save
+        </button>
+        {saved && (
+          <button
+            onClick={() => {
+              setEmbeddingsKey(null);
+              setSaved(null);
+              setKey('');
+              window.dispatchEvent(new Event('takeoff-embeddings-key'));
+            }}
+          >
+            Remove key
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 export function AiSettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -116,6 +162,7 @@ export function AiSettingsDialog({ onClose }: { onClose: () => void }) {
           <button onClick={onClose}>Close</button>
         </div>
         {serviceBuild ? <AccessCodeSection onDone={onClose} /> : <ApiKeySection onDone={onClose} />}
+        <EmbeddingsKeySection />
       </div>
     </div>
   );

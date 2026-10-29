@@ -38,13 +38,22 @@ export interface SpecSection {
   schedules: string[];
   /** Words that say what it is about: its title's and its products' (Part 2 articles). */
   words: string[];
+  /** What its text is about: its most used words (stemmed) and how often. */
+  about?: [string, number][];
+  /** The start of its text, for an AI to read what it is. */
+  excerpt?: string;
   /** "To follow", or no pages: listed in the table of contents but not in the book. */
   missing?: boolean;
   /** Addenda that issued it (when merged across files): the last is the one that stands. */
   revisions?: { addendum: number; docId: string; page: number }[];
 }
 
+/** The reader's version: books read by an older one are read again (they lack what it learned since). */
+export const SPEC_READER = 2;
+
 export interface SpecBook {
+  /** The reader that read it (SPEC_READER). */
+  reader?: number;
   docId: string;
   name: string;
   pages: number;
@@ -166,6 +175,7 @@ export async function readSpec(
   /** Each section's first page's header lines, for a title the header gives only in passing. */
   const heads = new Map<string, string[]>();
   const headCount = new Map<string, number>();
+  const bodies = new Map<string, { counts: Map<string, number>; excerpt: string }>();
   let headPages = 0;
   /** The last page ended its section: the pages after it belong to none until the next names one. */
   let ended = false;
@@ -236,8 +246,13 @@ export async function readSpec(
     if (/(table|list) of contents|^contents$/i.test(s.title) || tocLike(lines, p)) toc = toc.concat(readToc(lines));
     let part = s.parts.length ? s.parts[s.parts.length - 1].name : '';
     if (lines.slice(-4).some((l) => /^END OF SECTION\b/i.test(l.text))) ended = true;
+    let body = bodies.get(s.key);
+    if (!body) bodies.set(s.key, (body = { counts: new Map(), excerpt: '' }));
     for (const [i, l] of lines.entries()) {
       if (i === headingAt) continue;
+      // What the section says: its words counted (not the page header's), and its opening lines.
+      for (const w of wordsOf(l.text)) body.counts.set(w, (body.counts.get(w) ?? 0) + 1);
+      if (body.excerpt.length < 900 && !/^END OF SECTION/i.test(l.text)) body.excerpt += (body.excerpt ? ' ' : '') + l.text;
       const pm = PART.exec(l.text);
       if (pm) {
         const word = pm[2] ?? pm[4];
@@ -304,9 +319,16 @@ export async function readSpec(
     const n = make(t.number, t.title);
     n.missing = true;
   }
-  for (const s of sections.values()) s.words = [...new Set([...wordsOf(s.title), ...wordsOf(s.title), ...s.words])];
+  for (const s of sections.values()) {
+    s.words = [...new Set([...wordsOf(s.title), ...wordsOf(s.title), ...s.words])];
+    const body = bodies.get(s.key);
+    if (body?.counts.size) {
+      s.about = [...body.counts].filter(([, c]) => c > 1).sort((a, b) => b[1] - a[1]).slice(0, 100);
+      s.excerpt = body.excerpt.slice(0, 900);
+    }
+  }
   const list = [...sections.values()].sort((a, b) => a.key.localeCompare(b.key));
-  return { docId, name, pages, sections: list, pageSection, ...(opts.addendum !== undefined ? { addendum: opts.addendum, changes } : {}) };
+  return { reader: SPEC_READER, docId, name, pages, sections: list, pageSection, ...(opts.addendum !== undefined ? { addendum: opts.addendum, changes } : {}) };
 }
 
 function cleanTitle(t: string): string {

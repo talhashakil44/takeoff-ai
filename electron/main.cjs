@@ -114,6 +114,14 @@ function registerIpc() {
     if (fsSync.existsSync(target)) await shell.trashItem(target);
   });
   ipcMain.handle('folder:reveal', () => root && shell.openPath(root));
+  // Embeddings for the project map, with the user's own key: asked from here, where the
+  // provider's browser rules (CORS) do not apply. Only these two hosts.
+  ipcMain.handle('ai:embed', async (_e, url, key, body) => {
+    const host = new URL(url).host;
+    if (!['api.openai.com', 'api.voyageai.com', 'ai.mongodb.com'].includes(host)) throw new Error('Not an embeddings service');
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify(body) });
+    return { status: res.status, body: await res.text() };
+  });
   ipcMain.handle('folder:writeExport', (_e, dir, filename, data) => folder.writeExport(requireRoot(), dir, filename, data));
 }
 
