@@ -38,6 +38,8 @@ export interface MapNode {
   places?: Place[];
   /** A drawing tag's index key, for its details. */
   entryKey?: string;
+  /** What it is about, as stemmed words (for placing it by meaning). */
+  words?: string[];
 }
 
 export type MapEdgeKind = 'written' | 'matched' | 'spec-spec' | 'contains' | 'revises';
@@ -130,13 +132,13 @@ export function buildProjectMap(graph: DrawingGraph | null, books: SpecBook[], s
   const sections = new Map<string, SpecSection>();
   for (const s of mergeSections(books)) {
     sections.set(s.key, s);
-    add({ id: `spec:${s.key}`, kind: 'section', side: 'spec', label: s.number, sub: s.title, group: s.division, missing: s.missing, pages: s.pages.map((page) => ({ docId: s.docId, page })) });
+    add({ id: `spec:${s.key}`, kind: 'section', side: 'spec', label: s.number, sub: s.title, group: s.division, missing: s.missing, pages: s.pages.map((page) => ({ docId: s.docId, page })), words: [...new Set([...s.words, ...expand(s.title)])] });
   }
   // Sections naming each other.
   for (const s of sections.values())
     for (const k of s.sections) if (sections.has(k)) edges.push({ a: `spec:${s.key}`, b: `spec:${k}`, kind: 'spec-spec', why: `${s.number} refers to Section ${sections.get(k)!.number}` });
 
-  const sheetNode = (s: Sheet) => add({ id: `sheet:${s.id}`, kind: 'sheet', side: 'drawing', label: s.name, sub: s.title ?? '', group: tradeOf(s.name), places: [{ sheetId: s.id, box: [0, 0, s.width, s.height], label: s.name }] });
+  const sheetNode = (s: Sheet) => add({ id: `sheet:${s.id}`, kind: 'sheet', side: 'drawing', label: s.name, sub: s.title ?? '', group: tradeOf(s.name), places: [{ sheetId: s.id, box: [0, 0, s.width, s.height], label: s.name }], words: expand(s.title ?? '') });
 
   // Drawing elements: schedules, type legends, finish codes, equipment.
   const elements: { node: MapNode; words: Words }[] = [];
@@ -150,6 +152,9 @@ export function buildProjectMap(graph: DrawingGraph | null, books: SpecBook[], s
       const node = add({ id, kind: 'schedule', side: 'drawing', label: title(sc.title.replace(/\s*SCHEDULE.*$/i, '')) + ' schedule', sub: `${sc.rows.length} rows · ${sh.name}`, group: tradeOf(sh.name), places: [{ sheetId: sc.sheetId, box: sc.box, label: `${sc.title} (${sh.name})` }] });
       edges.push({ a: id, b: sheetNode(sh).id, kind: 'contains', why: `on ${sh.name}` });
       elements.push({ node, words: about(sc.title.replace(/SCHEDULE/i, '')) });
+      // For placing it by meaning: its title, its columns, and what its rows say.
+      const said = [sc.title, ...sc.columns.map((c) => c.join(' ')), ...sc.rows.slice(0, 40).flatMap((r) => r.cells.slice(0, 6))].join(' ');
+      node.words = [...new Set([...elements[elements.length - 1].words.map((x) => x.w), ...expand(said)])];
     }
     const dict = entries(idx);
     const seen = new Set<string>();
@@ -160,6 +165,7 @@ export function buildProjectMap(graph: DrawingGraph | null, books: SpecBook[], s
       if (!n) continue;
       const node = add(n.node);
       elements.push({ node, words: n.words });
+      node.words = n.words.map((x) => x.w);
       // Its schedule or legend sheet.
       const home = e.schedule?.sheetId ?? e.legend?.sheetId;
       if (home && e.schedule) edges.push({ a: node.id, b: `schedule:${e.schedule.sheetId}:${e.schedule.title}`, kind: 'contains', why: `in the ${e.schedule.title.toLowerCase()}` });

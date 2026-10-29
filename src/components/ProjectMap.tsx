@@ -2,6 +2,7 @@ import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Place } from '../graph/graph';
 import type { MapEdge, MapEdgeKind, MapNode, ProjectMap as MapData } from '../spec/links';
+import { placeByMeaning } from '../spec/space';
 import { Icon } from './Icons';
 import '@fontsource/space-grotesk/500.css';
 import '@fontsource/space-grotesk/600.css';
@@ -570,7 +571,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
           const fs = 11 / v.k;
           ctx.font = `600 ${fs}px ${FONT}`;
           spaced(1 / v.k);
-          const text = `GO TO  ${up(o.label)}${o.sub && o.kind !== 'schedule' ? `  ${up(short(o.sub, 30))}` : ''}  →`;
+          const text = `TAKE ME TO  ${up(o.label)}${o.sub && o.kind !== 'schedule' ? `  ${up(short(o.sub, 30))}` : ''}  →`;
           const tw = ctx.measureText(text).width;
           const px = he.x + 12 / v.k;
           const py = he.y - 12 / v.k;
@@ -597,22 +598,28 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     };
   }, [mode, nodes, edges, anchors, neighbours, stars, rankIn, byId]);
 
-  // The 3D map, loaded when asked for: the same graph in space, labelled, glowing, turning slowly.
+  // The 3D map, loaded when asked for. Laid out by meaning (a vector space of what each thing is
+  // about), or by links (a force layout); labelled, glowing; links followed by a click.
   type G3 = {
     _destructor?: () => void;
     nodeColor: (f: (n: object) => string) => G3;
     linkColor: (f: (l: object) => string) => G3;
     linkWidth: (f: (l: object) => number) => G3;
     linkDirectionalParticles: (f: (l: object) => number) => G3;
-    cameraPosition: (pos: object, lookAt?: object, ms?: number) => G3;
+    cameraPosition: (pos?: object, lookAt?: object, ms?: number) => { x: number; y: number; z: number } & G3;
     graphData: () => { nodes: { id: string; x?: number; y?: number; z?: number }[] };
-    controls: () => { autoRotate?: boolean };
+    controls: () => { autoRotate?: boolean; target?: { x: number; y: number; z: number } };
+    zoomToFit: (ms?: number, pad?: number) => G3;
   };
+  const [layout3d, setLayout3d] = useState<'meaning' | 'links'>('meaning');
+  const [hover3d, setHover3d] = useState<string | null>(null);
+  const space = useMemo(() => (mode === '3d' && layout3d === 'meaning' ? placeByMeaning(nodes, data.edges.filter((e) => show[e.kind] || e.kind === 'contains')) : null), [mode, layout3d, nodes, data.edges, show]);
   const g3 = useRef<G3 | null>(null);
-  const sprites = useRef(new Map<string, { material: { opacity: number }; visible: boolean }>());
+  const sprites = useRef(new Map<string, { material: { opacity: number }; visible: boolean; big: boolean }>());
   useEffect(() => {
     if (mode !== '3d' || !threeRef.current) return;
     let gone = false;
+    let lod = 0;
     void Promise.all([
       import('3d-force-graph'),
       import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
@@ -621,99 +628,173 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       // The labels are drawn once: their face loaded first.
       document.fonts?.load(`600 16px ${FONT}`).catch(() => undefined),
       document.fonts?.load(`500 16px ${FONT}`).catch(() => undefined),
-    ]).then(
-      ([{ default: ForceGraph3D }, { UnrealBloomPass }, THREE, { default: SpriteText }]) => {
-        if (gone || !threeRef.current) return;
-        const el = threeRef.current;
-        const shownEdges = edges.filter((e) => show[e.kind]);
-        const used = new Set(shownEdges.flatMap((e) => [e.a, e.b]));
-        sprites.current.clear();
-        const g = new ForceGraph3D(el, { controlType: 'orbit' })
-          .width(el.clientWidth)
-          .height(el.clientHeight)
-          .backgroundColor('#000002')
-          .showNavInfo(false)
-          .graphData({
-            nodes: nodes.filter((n) => used.has(n.id)).map((n) => ({ id: n.id, label: n.label, sub: n.sub, kind: n.kind, color: n.missing ? '#6b7080' : n.color, val: (n.kind === 'section' ? 2 : n.kind === 'schedule' || n.kind === 'addendum' ? 3 : 1) + Math.min(n.degree, 12) * 0.4, side: n.side })),
-            links: shownEdges.map((e) => ({ source: e.a, target: e.b, kind: e.kind })),
-          })
-          .nodeLabel((n: object) => `<div class="map3d-tip">${escapeHtml(up(`${(n as { label: string }).label}  ${(n as { sub: string }).sub}`))}</div>`)
-          .nodeColor((n: object) => (n as { color: string }).color)
-          .nodeOpacity(0.85)
-          .nodeResolution(16)
-          // A label on every node: big for sections and schedules, small for tags.
-          .nodeThreeObjectExtend(true)
-          .nodeThreeObject((n: object) => {
-            const d = n as { id: string; label: string; sub: string; kind: string; color: string };
-            const big = d.kind === 'section' || d.kind === 'schedule' || d.kind === 'sheet';
-            const text = up(d.kind === 'section' ? `${d.label}  ${short(d.sub, 28)}` : d.kind === 'item' || d.kind === 'type' || d.kind === 'finish' ? d.label : short(d.label, 30));
-            const sp = new SpriteText(text, big ? 3.2 : 2.1, big ? 'rgba(214,222,245,0.92)' : 'rgba(190,200,230,0.75)');
-            sp.fontFace = FONT;
-            sp.fontWeight = big ? '600' : '500';
-            sp.center.set(0.5, -0.9);
-            (sp.material as { depthWrite: boolean }).depthWrite = false;
-            const f = selRef.current;
-            if (f && f !== d.id && !neighbours.get(f)?.has(d.id)) (sp.material as { opacity: number }).opacity = 0.08;
-            sprites.current.set(d.id, sp as never);
-            return sp;
-          })
-          .linkColor((l: object) => EDGE_COLOR[(l as { kind: MapEdgeKind }).kind])
-          .linkOpacity(0.6)
-          .linkWidth((l: object) => ((l as { kind: string }).kind === 'written' ? 1.4 : (l as { kind: string }).kind === 'matched' ? 0.7 : 0.25))
-          .linkCurvature((l: object) => ((l as { kind: string }).kind === 'contains' ? 0 : 0.2))
-          .linkDirectionalParticles((l: object) => ((l as { kind: string }).kind === 'written' ? 3 : (l as { kind: string }).kind === 'matched' ? 2 : 0))
-          .linkDirectionalParticleWidth(2.2)
-          .linkDirectionalParticleSpeed(0.006)
-          .linkDirectionalParticleColor((l: object) => ((l as { kind: string }).kind === 'written' ? '#ffffff' : '#e6ccff'))
-          .onNodeClick((n: object) => pickRef.current((n as { id: string }).id, false))
-          .onBackgroundClick(() => setSelected(null))
-          .cooldownTime(6000);
-        g.d3Force('x', forceX<SimulationNodeDatum & { side?: string }>((n) => (n.side === 'spec' ? -170 : 170)).strength(0.06) as never);
-        // A sky around it: a shell of stars.
-        const starGeo = new THREE.BufferGeometry();
-        const pts = new Float32Array(5000 * 3);
-        for (let i = 0; i < 5000; i++) {
-          const u = Math.random() * 2 - 1;
-          const th = Math.random() * Math.PI * 2;
-          const rad = 1800 + Math.random() * 2600;
-          const sq = Math.sqrt(1 - u * u);
-          pts.set([rad * sq * Math.cos(th), rad * u, rad * sq * Math.sin(th)], i * 3);
-        }
-        starGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
-        g.scene().add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0.75 })));
-        const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.65, 0.35, 0.4);
-        g.postProcessingComposer().addPass(bloom);
-        const controls = g.controls() as { autoRotate?: boolean; autoRotateSpeed?: number; addEventListener?: (t: string, f: () => void) => void };
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = 0.5;
-        controls.addEventListener?.('start', () => (controls.autoRotate = false));
-        // In from far out.
-        g.cameraPosition({ x: 0, y: 0, z: 5200 });
-        let fitted3d = false;
-        g.onEngineStop(() => {
-          if (fitted3d) return;
-          fitted3d = true;
-          if (selRef.current) restyleRef.current();
-          else g.zoomToFit(2200, 60);
+    ]).then(([{ default: ForceGraph3D }, { UnrealBloomPass }, THREE, { default: SpriteText }]) => {
+      if (gone || !threeRef.current) return;
+      const el = threeRef.current;
+      const shownEdges = edges.filter((e) => show[e.kind]);
+      const used = new Set(shownEdges.flatMap((e) => [e.a, e.b]));
+      // By meaning, everything with words has a place; by links, only what is linked.
+      const keep = nodes.filter((n) => (space ? space.pos.has(n.id) && (used.has(n.id) || (n.words?.length ?? 0) > 0) : used.has(n.id)));
+      sprites.current.clear();
+      const g = new ForceGraph3D(el, { controlType: 'orbit' })
+        .width(el.clientWidth)
+        .height(el.clientHeight)
+        .backgroundColor('#000002')
+        .showNavInfo(false)
+        .graphData({
+          nodes: keep.map((n) => {
+            const p = space?.pos.get(n.id);
+            return { id: n.id, label: n.label, sub: n.sub, kind: n.kind, color: n.missing ? '#6b7080' : n.color, val: (n.kind === 'section' ? 2 : n.kind === 'schedule' || n.kind === 'addendum' ? 3 : 1) + Math.min(n.degree, 12) * 0.4, side: n.side, ...(p ? { x: p[0], y: p[1], z: p[2], fx: p[0], fy: p[1], fz: p[2] } : {}) };
+          }),
+          links: shownEdges.filter((e) => keep.some((n) => n.id === e.a) && keep.some((n) => n.id === e.b)).map((e) => ({ source: e.a, target: e.b, kind: e.kind, why: e.why })),
+        })
+        .nodeLabel((n: object) => `<div class="map3d-tip">${escapeHtml(up(`${(n as { label: string }).label}  ${(n as { sub: string }).sub}`))}</div>`)
+        .nodeColor((n: object) => (n as { color: string }).color)
+        .nodeOpacity(0.85)
+        .nodeRelSize(space ? 2.6 : 4)
+        .nodeResolution(16)
+        .nodeThreeObjectExtend(true)
+        .nodeThreeObject((n: object) => {
+          const d = n as { id: string; label: string; sub: string; kind: string; color: string };
+          const big = d.kind === 'section' || d.kind === 'schedule' || d.kind === 'sheet' || d.kind === 'addendum';
+          const text = up(d.kind === 'section' ? `${d.label}  ${short(d.sub, 28)}` : d.kind === 'item' || d.kind === 'type' || d.kind === 'finish' ? d.label : short(d.label, 30));
+          const sp = new SpriteText(text, big ? 3.2 : 2.1, big ? 'rgba(214,222,245,0.92)' : 'rgba(190,200,230,0.75)');
+          sp.fontFace = FONT;
+          sp.fontWeight = big ? '600' : '500';
+          sp.center.set(0.5, -0.9);
+          (sp.material as { depthWrite: boolean }).depthWrite = false;
+          sprites.current.set(d.id, Object.assign(sp, { big }) as never);
+          return sp;
+        })
+        .linkColor((l: object) => EDGE_COLOR[(l as { kind: MapEdgeKind }).kind])
+        .linkOpacity(0.6)
+        .linkWidth((l: object) => ((l as { kind: string }).kind === 'written' ? 1.4 : (l as { kind: string }).kind === 'matched' ? 0.7 : 0.25))
+        .linkCurvature((l: object) => ((l as { kind: string }).kind === 'contains' ? 0 : 0.2))
+        .linkDirectionalParticles((l: object) => ((l as { kind: string }).kind === 'written' ? 3 : (l as { kind: string }).kind === 'matched' ? 2 : 0))
+        .linkDirectionalParticleWidth(2.2)
+        .linkDirectionalParticleSpeed(0.006)
+        .linkDirectionalParticleColor((l: object) => ((l as { kind: string }).kind === 'written' ? '#ffffff' : '#e6ccff'))
+        .linkHoverPrecision(10)
+        // A link says where it leads, and goes there on a click.
+        .linkLabel((l: object) => {
+          const d = l as { source: { id: string; label: string }; target: { id: string; label: string }; why: string };
+          const sel = selRef.current;
+          const to = d.source.id === sel ? d.target : d.target.id === sel ? d.source : d.target;
+          return `<div class="map3d-tip"><b>TAKE ME TO ${escapeHtml(up(to.label))} →</b><br/><span>${escapeHtml(up(short(d.why ?? '', 80)))}</span></div>`;
+        })
+        .onLinkClick((l: object) => {
+          const d = l as { source: { id: string }; target: { id: string } };
+          const sel = selRef.current;
+          pickRef.current(d.source.id === sel ? d.target.id : d.target.id === sel ? d.source.id : d.target.id, false);
+        })
+        .onNodeHover((n: object | null) => {
+          el.style.cursor = n ? 'pointer' : 'grab';
+          setHover3d(n ? (n as { id: string }).id : null);
+        })
+        .onLinkHover((l: object | null) => (el.style.cursor = l ? 'pointer' : 'grab'))
+        .onNodeClick((n: object) => pickRef.current((n as { id: string }).id, false))
+        .onBackgroundClick(() => setSelected(null))
+        .cooldownTicks(space ? 2 : Infinity)
+        .cooldownTime(6000);
+      if (!space) g.d3Force('x', forceX<SimulationNodeDatum & { side?: string }>((n) => (n.side === 'spec' ? -170 : 170)).strength(0.06) as never);
+      // A sky around it: a shell of stars.
+      const starGeo = new THREE.BufferGeometry();
+      const pts = new Float32Array(5000 * 3);
+      for (let i = 0; i < 5000; i++) {
+        const u = Math.random() * 2 - 1;
+        const th = Math.random() * Math.PI * 2;
+        const rad = 1800 + Math.random() * 2600;
+        const sq = Math.sqrt(1 - u * u);
+        pts.set([rad * sq * Math.cos(th), rad * u, rad * sq * Math.sin(th)], i * 3);
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+      g.scene().add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0.75 })));
+      // The axes of meaning, each end named by the words that pull that way.
+      if (space) {
+        const R = 520;
+        const dirs: [number, number, number][] = [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+        ];
+        const tint = [0x7cc4ff, 0xc58cff, 0x6fe3c5];
+        dirs.forEach((d, i) => {
+          const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-d[0] * R, -d[1] * R, -d[2] * R), new THREE.Vector3(d[0] * R, d[1] * R, d[2] * R)]);
+          g.scene().add(new THREE.Line(geo, new THREE.LineDashedMaterial({ color: tint[i], transparent: true, opacity: 0.28, dashSize: 8, gapSize: 6 })).computeLineDistances());
+          const ax = space.axes[i];
+          if (!ax) return;
+          for (const [sign, words] of [
+            [1, ax.plus],
+            [-1, ax.minus],
+          ] as const) {
+            const label = new SpriteText(up(words.join(' · ')), 15, `#${tint[i].toString(16)}`);
+            label.fontFace = FONT;
+            label.fontWeight = '700';
+            (label.material as { depthWrite: boolean; opacity: number }).depthWrite = false;
+            (label.material as { opacity: number }).opacity = 0.75;
+            label.position.set(d[0] * (R + 40) * sign, d[1] * (R + 40) * sign, d[2] * (R + 40) * sign);
+            g.scene().add(label);
+          }
         });
-        g3.current = g as unknown as G3;
-        restyle3d();
-      },
-    );
+      }
+      const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.65, 0.35, 0.4);
+      g.postProcessingComposer().addPass(bloom);
+      const controls = g.controls() as { autoRotate?: boolean; autoRotateSpeed?: number; addEventListener?: (t: string, f: () => void) => void };
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.5;
+      controls.addEventListener?.('start', () => (controls.autoRotate = false));
+      // In from far out.
+      g.cameraPosition({ x: 0, y: 0, z: 3600 }, { x: 0, y: 0, z: 0 });
+      let fitted3d = !!space;
+      g.onEngineStop(() => {
+        if (fitted3d) return;
+        fitted3d = true;
+        if (selRef.current) restyleRef.current(true);
+        else g.zoomToFit(2200, 60);
+      });
+      // Labels by distance: near ones named, far ones quiet, the picked node's always.
+      lod = window.setInterval(() => {
+        const cam = (g as unknown as { camera: () => { position: { x: number; y: number; z: number } } }).camera().position;
+        const focus = hoverRef3.current ?? selRef.current;
+        const near = focus ? neighbours.get(focus) : null;
+        const at = new Map(g.graphData().nodes.map((n) => [n.id, n]));
+        for (const [id, sp] of sprites.current) {
+          const n = at.get(id);
+          if (!n || n.x === undefined) continue;
+          const dist = Math.hypot(cam.x - n.x, cam.y - (n.y ?? 0), cam.z - (n.z ?? 0));
+          const lit = id === focus || !!near?.has(id);
+          sp.visible = lit || (focus ? false : sp.big ? dist < 900 : dist < 320);
+        }
+      }, 250);
+      g3.current = g as unknown as G3;
+      if (import.meta.env.DEV) Object.assign(window, { __g3: g, __space: space });
+      restyle3d(false);
+      // Laid out already (by meaning): framed once the camera has come in.
+      if (space)
+        window.setTimeout(() => {
+          if (gone) return;
+          fitted3d = true;
+          if (selRef.current) restyleRef.current(true);
+          else fit3dRef.current(1800);
+        }, 400);
+    });
     return () => {
       gone = true;
+      window.clearInterval(lod);
       g3.current?._destructor?.();
       g3.current = null;
       if (threeRef.current) threeRef.current.innerHTML = '';
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, nodes, edges, show]);
+  }, [mode, nodes, edges, show, space]);
 
-  /** 3D: the picked node and what it is tied to stay lit, the rest fades; the camera goes to it. */
-  const restyle3d = () => {
+  /** 3D: the picked (or hovered) node and what it is tied to stay lit, the rest fades; the camera goes to a picked one. */
+  const hoverRef3 = useRef(hover3d);
+  hoverRef3.current = hover3d;
+  const restyle3d = (fly: boolean) => {
     const g = g3.current;
     if (!g) return;
-    const focus = selRef.current;
+    const focus = hoverRef3.current ?? selRef.current;
     const near = focus ? (neighbours.get(focus) ?? new Set<string>()) : null;
     const lit = (id: string) => !focus || id === focus || near!.has(id);
     const idOf = (x: unknown) => (typeof x === 'object' && x ? (x as { id: string }).id : (x as string));
@@ -730,7 +811,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     g.linkWidth((l: object) => {
       const d = l as { source: unknown; target: unknown; kind: string };
       const on = focus && (idOf(d.source) === focus || idOf(d.target) === focus);
-      return (d.kind === 'written' ? 1.4 : d.kind === 'matched' ? 0.7 : 0.25) * (on ? 2.2 : 1);
+      return (d.kind === 'written' ? 1.4 : d.kind === 'matched' ? 0.7 : 0.25) * (on ? 2.6 : 1);
     });
     g.linkDirectionalParticles((l: object) => {
       const d = l as { source: unknown; target: unknown; kind: string };
@@ -738,23 +819,48 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
       return on ? (d.kind === 'written' ? 3 : d.kind === 'matched' ? 2 : focus ? 1 : 0) : 0;
     });
     for (const [id, sp] of sprites.current) sp.material.opacity = lit(id) ? 1 : 0.08;
-    if (focus) {
+    const sel = selRef.current;
+    if (fly && sel) {
       g.controls().autoRotate = false;
-      const n = g.graphData().nodes.find((x) => x.id === focus);
+      const n = g.graphData().nodes.find((x) => x.id === sel);
       if (n && n.x !== undefined) {
-        const r = Math.hypot(n.x, n.y ?? 0, n.z ?? 0) || 1;
-        const dist = 160;
-        const k = 1 + dist / r;
-        g.cameraPosition({ x: n.x * k, y: (n.y ?? 0) * k, z: (n.z ?? 0) * k }, { x: n.x, y: n.y, z: n.z }, 900);
+        // From where the camera is, closer: the node in front, what it links to around it.
+        const cam = g.cameraPosition();
+        const dx = cam.x - n.x;
+        const dy = cam.y - (n.y ?? 0);
+        const dz = cam.z - (n.z ?? 0);
+        const d = Math.hypot(dx, dy, dz) || 1;
+        const k = 220 / d;
+        g.cameraPosition({ x: n.x + dx * k, y: (n.y ?? 0) + dy * k, z: (n.z ?? 0) + dz * k }, { x: n.x, y: n.y, z: n.z }, 900);
       }
     }
   };
   const restyleRef = useRef(restyle3d);
   restyleRef.current = restyle3d;
   useEffect(() => {
-    if (mode === '3d') restyle3d();
+    if (mode === '3d') restyle3d(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, mode]);
+  useEffect(() => {
+    if (mode === '3d') restyle3d(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hover3d]);
+  /** The whole 3D map in view: the meaning space is a ball of known size, looked at from straight on. */
+  const fit3d = (ms = 800) => {
+    const g = g3.current;
+    if (!g) return;
+    if (space) g.cameraPosition({ x: 0, y: 0, z: 1450 }, { x: 0, y: 0, z: 0 }, ms);
+    else g.zoomToFit(ms, 60);
+  };
+  const fit3dRef = useRef(fit3d);
+  fit3dRef.current = fit3d;
+  const zoom3d = (f: number) => {
+    const g = g3.current;
+    if (!g) return;
+    const cam = g.cameraPosition();
+    const t = g.controls().target ?? { x: 0, y: 0, z: 0 };
+    g.cameraPosition({ x: t.x + (cam.x - t.x) / f, y: t.y + (cam.y - t.y) / f, z: t.z + (cam.z - t.z) / f }, undefined, 350);
+  };
 
   // Pointer: pan, zoom at the cursor, hover, click, drag a node.
   const toWorld = (cx: number, cy: number) => {
@@ -777,9 +883,21 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
     return best && bd < 8 / view.current.k ? best : null;
   };
   /** A link of the picked node under the pointer: the node at its other end, and where along it. */
+  if (import.meta.env.DEV)
+    (window as unknown as { __edgeProbe: () => unknown }).__edgeProbe = () => {
+      const h = edgeHits.current.find((x) => Math.hypot(x.b.x - x.a.x, x.b.y - x.a.y) > 200) ?? edgeHits.current[0];
+      if (!h || !wrapRef.current) return null;
+      const r = wrapRef.current.getBoundingClientRect();
+      const v = view.current;
+      const t = 0.5;
+      const wx = 0.25 * h.a.x + 0.5 * h.c.x + 0.25 * h.b.x;
+      const wy = 0.25 * h.a.y + 0.5 * h.c.y + 0.25 * h.b.y;
+      void t;
+      return { x: r.left + r.width / 2 + (wx + v.x) * v.k, y: r.top + r.height / 2 + (wy + v.y) * v.k, other: h.other };
+    };
   const edgeAt = (cx: number, cy: number) => {
     const [x, y] = toWorld(cx, cy);
-    const tol = 7 / view.current.k;
+    const tol = 12 / view.current.k;
     let best: { other: string; x: number; y: number; d: number } | null = null;
     for (const h of edgeHits.current) {
       for (let i = 1; i < 24; i++) {
@@ -828,10 +946,11 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
   // Keys: + and − zoom, 0 shows it all, Escape lets go, Backspace goes back.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.closest('input,textarea') || mode !== '2d') return;
-      if (e.key === '+' || e.key === '=') zoomBy(1.5);
-      else if (e.key === '-' || e.key === '_') zoomBy(1 / 1.5);
-      else if (e.key === '0') glide(fitView(), 600);
+      if ((e.target as HTMLElement)?.closest('input,textarea')) return;
+      const three = mode === '3d';
+      if (e.key === '+' || e.key === '=') (three ? zoom3d(1.5) : zoomBy(1.5));
+      else if (e.key === '-' || e.key === '_') (three ? zoom3d(1 / 1.5) : zoomBy(1 / 1.5));
+      else if (e.key === '0') (three ? fit3d() : glide(fitView(), 600));
       else if (e.key === 'Escape') setSelected(null);
       else if (e.key === 'Backspace') stepRef.current(-1);
       else return;
@@ -1220,17 +1339,40 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose }: 
         </div>
       )}
 
-      {mode === '2d' && (
-        <div className="pmap-zoom" role="group" aria-label="Zoom">
-          <button onClick={() => zoomBy(1.5)} aria-label="Zoom in" title="Zoom in (+)">
-            +
-          </button>
-          <button onClick={() => zoomBy(1 / 1.5)} aria-label="Zoom out" title="Zoom out (−)">
-            −
-          </button>
-          <button onClick={() => glide(fitView(), 600)} aria-label="Fit the map" title="Whole map (0)">
-            <Icon name="fit" size={14} />
-          </button>
+      <div className="pmap-zoom" role="group" aria-label="Zoom">
+        <button onClick={() => (mode === '3d' ? zoom3d(1.5) : zoomBy(1.5))} aria-label="Zoom in" title="Zoom in (+)">
+          +
+        </button>
+        <button onClick={() => (mode === '3d' ? zoom3d(1 / 1.5) : zoomBy(1 / 1.5))} aria-label="Zoom out" title="Zoom out (−)">
+          −
+        </button>
+        <button onClick={() => (mode === '3d' ? fit3d() : glide(fitView(), 600))} aria-label="Fit the map" title="Whole map (0)">
+          <Icon name="fit" size={14} />
+        </button>
+      </div>
+
+      {mode === '3d' && (
+        <div className="pmap-space">
+          <div className="pmap-space-switch" role="group" aria-label="3D layout">
+            <button className={layout3d === 'meaning' ? 'on' : ''} onClick={() => setLayout3d('meaning')} title="Placed by what each thing is about">
+              By meaning
+            </button>
+            <button className={layout3d === 'links' ? 'on' : ''} onClick={() => setLayout3d('links')} title="Placed by what links to what">
+              By links
+            </button>
+          </div>
+          {space && (
+            <div className="pmap-space-key">
+              <b>Space of meaning</b>
+              <span>Close together = about the same thing. Axes named by the words that pull each way.</span>
+              {space.axes.map((a, i) => (
+                <span key={i} className={`ax ax${i}`}>
+                  <i>{'XYZ'[i]}</i> {a.minus.slice(0, 2).join(' · ')} ⟷ {a.plus.slice(0, 2).join(' · ')}
+                </span>
+              ))}
+              <span className="dim">{Math.round(space.explained * 100)}% of the variation in 3 axes</span>
+            </div>
+          )}
         </div>
       )}
 

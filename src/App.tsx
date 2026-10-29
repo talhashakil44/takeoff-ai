@@ -46,6 +46,7 @@ import { SpecView, type SpecTarget } from './components/SpecView';
 import { FileManager } from './components/FileManager';
 import { addendumNumber, mergeSections, readSpec } from './spec/parse';
 import { isCombined, pageKinds, pagesOf, splitPdf } from './splitPdf';
+import { ocrTitleBlock, tidySetNumbers } from './ocr';
 import { buildProjectMap } from './spec/links';
 import { buildGraph, definitionsOf, type DrawingGraph, type Link, type Place } from './graph/graph';
 import { entries, norm, type Entry } from './smart/index';
@@ -59,6 +60,7 @@ import { polylineLength, ringArea } from './geometry';
 import { scoringOn, setScoringOn } from './scoring';
 import { desktopApi, folderLabel } from './desktop';
 import { ConnectAiDialog } from './components/ConnectAiDialog';
+import { ChatPanel } from './components/ChatPanel';
 import { runTool, toolList, TOOL_DEFS, type McpContext } from './mcp/tools';
 import { renderRegion } from './mcp/render';
 import { reviewText, takeOffWholeSet } from './automate/wholeSet';
@@ -192,6 +194,7 @@ export function App() {
   const specPdfs = useRef(new Map<string, Promise<PDFDocumentProxy | null>>());
   const specInput = useRef<HTMLInputElement>(null);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [flash, setFlash] = useState<{ sheetId: string; box: Box; n: number } | null>(null);
   /** Where you were before each link followed (Back), and where Back came from (Forward). */
   const navBack = useRef<{ sheetId: string; box: Box }[]>([]);
@@ -885,7 +888,11 @@ export function App() {
     const docId = newId();
     await savePdf(docId, data);
     const pdf = await openPdf(data);
-    const { sheets, noText } = await sheetsOf(pdf, docId, projectRef.current?.units, (n, of) => setBusy(`Reading ${name}: sheet ${n} of ${of}`));
+    const read = await sheetsOf(pdf, docId, projectRef.current?.units, (n, of) => setBusy(`Reading ${name}: sheet ${n} of ${of}`));
+    const { noText } = read;
+    let sheets = read.sheets;
+    // Sheets whose title block has no text (drawn as linework, or scanned): read by OCR.
+    sheets = await namedByOcr(pdf, sheets, name);
     setPdfs((m) => new Map(m).set(docId, pdf));
     commit((p) => ({ ...p, docs: [...p.docs, { id: docId, name }], sheets: [...p.sheets, ...sheets] }), 'Add drawings');
     setSheetId((cur) => cur ?? sheets[0]?.id ?? null);
@@ -1026,6 +1033,48 @@ export function App() {
     commit((p) => ({ ...p, sheets: p.sheets.filter((x) => !gone.has(x.id)), measurements: p.measurements.filter((m) => !gone.has(m.sheetId)) }), `Remove ${label}`);
     if (sheetId && gone.has(sheetId)) setSheetId(projectRef.current!.sheets[0]?.id ?? null);
     setToast({ text: `Removed ${label}`, undo: true });
+  }
+
+  /** Sheets still called "Page N" (no text in their title block): their numbers and titles read by OCR. */
+  async function namedByOcr(pdf: PDFDocumentProxy, sheets: Sheet[], name: string): Promise<Sheet[]> {
+    const unnamed = sheets.filter((x) => /^Page \d+$/.test(x.name));
+    if (!unnamed.length) return sheets;
+    const named = new Map<string, { number?: string; title?: string }>();
+    for (const [i, x] of unnamed.entries()) {
+      setBusy(`Reading title blocks of ${name}: ${i + 1} of ${unnamed.length}`);
+      try {
+        named.set(x.id, await ocrTitleBlock(await pdf.getPage(x.page)));
+      } catch {
+        break;
+      }
+    }
+    const numbers = tidySetNumbers(unnamed.map((x) => ({ page: x.page, number: named.get(x.id)?.number })));
+    return sheets.map((x) => {
+      if (!/^Page \d+$/.test(x.name)) return x;
+      const r = named.get(x.id);
+      const number = numbers.get(x.page);
+      return number ? { ...x, name: number, ...(r?.title && !x.title ? { title: r.title } : {}) } : x;
+    });
+  }
+
+  /** The menu's way to the same, for sets added before OCR. */
+  async function ocrSheetNames() {
+    const p = projectRef.current!;
+    const renamed = new Map<string, Sheet>();
+    try {
+      for (const d of p.docs) {
+        const own = p.sheets.filter((x) => x.docId === d.id);
+        if (!own.some((x) => /^Page \d+$/.test(x.name))) continue;
+        const pdf = pdfsRef.current.get(d.id);
+        if (!pdf) continue;
+        for (const x of await namedByOcr(pdf, own, d.name)) if (x.name !== p.sheets.find((y) => y.id === x.id)?.name) renamed.set(x.id, x);
+      }
+    } finally {
+      setBusy(null);
+    }
+    if (!renamed.size) return setToast({ text: 'No sheet numbers could be read from those title blocks.', undo: false });
+    commit((q) => ({ ...q, sheets: q.sheets.map((x) => renamed.get(x.id) ?? x) }), 'Name sheets from title blocks (OCR)');
+    setToast({ text: `Named ${renamed.size} sheet${renamed.size === 1 ? '' : 's'} from their title blocks.`, undo: true });
   }
 
   async function upload(files: FileList | File[]) {
@@ -2751,6 +2800,12 @@ export function App() {
               e.target.value = '';
             }}
           />
+          {!isHosted && (
+            <button className={`secondary chat-toggle${chatOpen ? ' on' : ''}`} onClick={() => setChatOpen((o) => !o)} title="Ask Claude about this project" aria-pressed={chatOpen}>
+              <Icon name="sparkle" size={16} />
+              <span className="hide-narrow">Ask</span>
+            </button>
+          )}
           <button className="secondary" onClick={() => fileInput.current?.click()} title="Add PDF drawings">
             <Icon name="upload" size={16} />
             <span className="hide-narrow">
@@ -3367,6 +3422,33 @@ export function App() {
           e.target.value = '';
         }}
       />
+      {chatOpen && project && (
+        <ChatPanel
+          about={`The open project: ${project.name || 'Untitled'}. ${project.sheets.filter((x) => !x.superseded).length} drawing sheets, ${mergeSections(specBooks).length} spec sections${specBooks.some((b) => b.addendum) ? `, ${specBooks.filter((b) => b.addendum).length} addenda` : ''}, ${project.measurements.length} takeoffs. Units: ${project.units}.`}
+          run={(name, args) => {
+            const go = async () => {
+              if (!mcpCtxRef.current) return { content: [{ type: 'text' as const, text: 'Takeoff AI is still opening.' }], isError: true };
+              return await runTool(mcpCtxRef.current, name, args);
+            };
+            const next = mcpQueue.current.then(go, go);
+            mcpQueue.current = next.catch(() => undefined);
+            return next;
+          }}
+          sheets={project.sheets.filter((x) => !x.superseded).map((x) => ({ id: x.id, name: x.name }))}
+          sections={mergeSections(specBooks).map((x) => ({ key: x.key, title: x.title, docId: x.docId, page: x.pages[0] ?? 1 }))}
+          onOpenSheet={(id) => {
+            setView('drawings');
+            setSheetId(id);
+          }}
+          onOpenSection={(x) => {
+            setSpecTarget({ docId: x.docId, page: x.page, key: x.key, n: Date.now() });
+            setView('specs');
+          }}
+          onSettings={() => setAiDialog('settings')}
+          onConnect={desktopApi?.mcp ? () => setAiDialog('connect') : undefined}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
       {filesOpen && (
         <FileManager
           docs={project.docs}
@@ -3799,7 +3881,10 @@ export function App() {
                 ? [{ label: 'Copy takeoffs to another sheet…', hint: 'Typical floors', onSelect: () => setTimeout(() => setPopover('copy'), 0) }]
                 : []),
               ...(project.sheets.some((x) => /^Page \d+$/.test(x.name))
-                ? [{ label: 'Name sheets with AI…', hint: 'Sheets with no text', onSelect: () => void nameSheetsWithAi() }]
+                ? [
+                    { label: 'Read scanned title blocks', hint: 'OCR, offline', onSelect: () => void ocrSheetNames() },
+                    { label: 'Name sheets with AI…', hint: 'Sheets with no text', onSelect: () => void nameSheetsWithAi() },
+                  ]
                 : []),
               ...(canUseServiceWorker() && !isInstalled() ? [{ label: 'Install as an app…', onSelect: () => void installApp() }] : []),
               ...(isHosted ? [] : [{ label: 'AI settings…', onSelect: () => setAiDialog('settings') }]),

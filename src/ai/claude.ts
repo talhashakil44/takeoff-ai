@@ -25,7 +25,7 @@ export function setApiKey(key: string | null): void {
   }
 }
 
-function client(): Anthropic {
+export function client(): Anthropic {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('Add your Anthropic API key in AI settings first.');
   // The app runs on the user's own machine with their own key, so calling the API from the browser is intended.
