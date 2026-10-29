@@ -78,10 +78,14 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
   const [zoom, setZoom] = useState(9);
 
   // The last build of this project, from this computer.
+  const [cached, setCached] = useState<'looking' | 'found' | 'none'>('looking');
   useEffect(() => {
     let gone = false;
+    setCached('looking');
     void loadBuild(project.id ?? '').then((b) => {
-      if (!gone && b && !out) {
+      if (gone) return;
+      setCached(b ? 'found' : 'none');
+      if (b && !out) {
         setOut(b.output);
         setLeft('model');
       }
@@ -140,6 +144,18 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
       setBusy(null);
     }
   };
+
+  // A project built before (its setup saved with it) but not on this computer, opened from a
+  // file or another computer: built again here straight away, from the same setup.
+  const autoBuilt = useRef(false);
+  const openedBuilt = useRef<{ id: string | undefined; had: boolean }>({ id: project.id, had: !!project.build });
+  if (openedBuilt.current.id !== project.id) openedBuilt.current = { id: project.id, had: !!project.build };
+  useEffect(() => {
+    if (autoBuilt.current || out || busy || !ready || cached !== 'none' || !openedBuilt.current.had || !project.measurements.length) return;
+    autoBuilt.current = true;
+    void build();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, cached, out, project.build]);
 
   // Stale: the drawings, takeoff or spec changed since this was built.
   const currentHash = useMemo(() => {
