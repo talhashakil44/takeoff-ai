@@ -839,6 +839,18 @@ export function App() {
     }
   }
 
+  // Sets added before title blocks were read by OCR (sheets still "Page 3"): read once, by themselves.
+  const ocrTried = useRef(new Set<string>());
+  useEffect(() => {
+    const p = projectRef.current;
+    if (!p || busy) return;
+    const due = p.docs.filter((d) => !ocrTried.current.has(d.id) && pdfs.has(d.id) && p.sheets.filter((x) => x.docId === d.id && !x.superseded).some((x) => /^Page \d+$/.test(x.name)));
+    if (!due.length) return;
+    for (const d of due) ocrTried.current.add(d.id);
+    void ocrSheetNames(due.map((d) => d.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, pdfs, busy]);
+
   if (!project) return <div className="loading">Opening your project…</div>;
 
   /**
@@ -893,6 +905,7 @@ export function App() {
     let sheets = read.sheets;
     // Sheets whose title block has no text (drawn as linework, or scanned): read by OCR.
     sheets = await namedByOcr(pdf, sheets, name);
+    ocrTried.current.add(docId);
     setPdfs((m) => new Map(m).set(docId, pdf));
     commit((p) => ({ ...p, docs: [...p.docs, { id: docId, name }], sheets: [...p.sheets, ...sheets] }), 'Add drawings');
     setSheetId((cur) => cur ?? sheets[0]?.id ?? null);
@@ -1044,7 +1057,8 @@ export function App() {
       setBusy(`Reading title blocks of ${name}: ${i + 1} of ${unnamed.length}`);
       try {
         named.set(x.id, await ocrTitleBlock(await pdf.getPage(x.page)));
-      } catch {
+      } catch (e) {
+        setToast({ text: `Could not read the title blocks of ${name}: ${e instanceof Error ? e.message : String(e)}`, undo: false });
         break;
       }
     }
@@ -1057,12 +1071,13 @@ export function App() {
     });
   }
 
-  /** The menu's way to the same, for sets added before OCR. */
-  async function ocrSheetNames() {
+  /** The menu's way to the same, for sets added before OCR; also run by itself on sets that need it (`only`). */
+  async function ocrSheetNames(only?: string[]) {
     const p = projectRef.current!;
     const renamed = new Map<string, Sheet>();
     try {
       for (const d of p.docs) {
+        if (only && !only.includes(d.id)) continue;
         const own = p.sheets.filter((x) => x.docId === d.id);
         if (!own.some((x) => /^Page \d+$/.test(x.name))) continue;
         const pdf = pdfsRef.current.get(d.id);
@@ -1072,7 +1087,7 @@ export function App() {
     } finally {
       setBusy(null);
     }
-    if (!renamed.size) return setToast({ text: 'No sheet numbers could be read from those title blocks.', undo: false });
+    if (!renamed.size) return only ? undefined : setToast({ text: 'No sheet numbers could be read from those title blocks.', undo: false });
     commit((q) => ({ ...q, sheets: q.sheets.map((x) => renamed.get(x.id) ?? x) }), 'Name sheets from title blocks (OCR)');
     setToast({ text: `Named ${renamed.size} sheet${renamed.size === 1 ? '' : 's'} from their title blocks.`, undo: true });
   }

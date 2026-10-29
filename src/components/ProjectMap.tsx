@@ -632,9 +632,10 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose, on
   const [hudOpen, setHudOpen] = useState<'clusters' | 'loners' | null>('clusters');
   const space = mode === '3d' && layout3d === 'meaning' ? meaning : null;
   const g3 = useRef<G3 | null>(null);
-  const sprites = useRef(new Map<string, { material: { opacity: number }; visible: boolean; big: boolean }>());
+  type Label = { material: { opacity: number }; visible: boolean; big: boolean; scale: { x: number; y: number }; center: { x: number; y: number } };
+  const sprites = useRef(new Map<string, Label>());
   /** Each cluster's glow and name, dimmed when another is in focus. */
-  const nebulae = useRef<{ i: number; mats: { opacity: number }[]; base: number[] }[]>([]);
+  const nebulae = useRef<{ i: number; mats: { opacity: number }[]; base: number[]; name?: Label; sub?: Label; at: [number, number, number]; size: number }[]>([]);
   const lonerRings = useRef<{ material: { opacity: number }; visible: boolean }[]>([]);
   const threads = useRef<{ obj: unknown; dispose: () => void } | null>(null);
   const three = useRef<typeof import('three') | null>(null);
@@ -684,12 +685,20 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose, on
         .nodeThreeObject((n: object) => {
           const d = n as { id: string; label: string; sub: string; kind: string; color: string };
           const big = d.kind === 'section' || d.kind === 'schedule' || d.kind === 'sheet' || d.kind === 'addendum';
-          const text = up(d.kind === 'section' ? `${d.label}  ${short(d.sub, 28)}` : d.kind === 'item' || d.kind === 'type' || d.kind === 'finish' ? d.label : short(d.label, 30));
-          const sp = new SpriteText(text, big ? 3.2 : 2.1, big ? 'rgba(214,222,245,0.92)' : 'rgba(190,200,230,0.75)');
+          const text = up(d.kind === 'section' ? `${d.label} · ${short(d.sub, 26)}` : d.kind === 'item' || d.kind === 'type' || d.kind === 'finish' ? d.label : short(d.label, 28));
+          // Labels one small size on screen, near or far; which ones show is decided each frame (no overlaps).
+          const th = big ? 0.0112 : 0.0098;
+          const sp = new SpriteText(text, th, big ? 'rgba(226,232,250,0.9)' : 'rgba(196,206,232,0.82)');
           sp.fontFace = FONT;
           sp.fontWeight = big ? '600' : '500';
-          sp.center.set(0.5, -0.9);
-          (sp.material as { depthWrite: boolean }).depthWrite = false;
+          // Padding and corners are in the text's own units (a share of its height).
+          sp.padding = [th * 0.5, th * 0.18];
+          sp.backgroundColor = 'rgba(8,11,24,0.6)';
+          sp.borderRadius = th * 0.35;
+          sp.center.set(0.5, -0.45);
+          Object.assign(sp.material, { depthWrite: false, depthTest: false, sizeAttenuation: false });
+          sp.renderOrder = 5;
+          sp.visible = false;
           sprites.current.set(d.id, Object.assign(sp, { big }) as never);
           return sp;
         })
@@ -768,26 +777,26 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose, on
           add(wisp(c.color, 0.16, c.radius * 2.6, c.center));
           const ps = c.members.map((id) => space.pos.get(id)).filter((p): p is [number, number, number] => !!p);
           for (let k = 0; k < Math.min(10, ps.length); k++) add(wisp(c.color, 0.06, c.radius * (0.7 + ((k * 37) % 10) / 14), ps[Math.floor((k * ps.length) / Math.min(10, ps.length))]));
-          // Names stay one size on screen, near or far (a fixed share of the view's height).
-          const name = new SpriteText(up(c.name), 0.03, c.color);
+          // Names one size on screen, near or far; spaced capitals, the subtitle quieter below.
+          const name = new SpriteText(up(c.name).split('').join(String.fromCharCode(8202)), 0.0165, c.color);
           name.fontFace = FONT;
-          name.fontWeight = '700';
+          name.fontWeight = '600';
           Object.assign(name.material, { depthWrite: false, depthTest: false, sizeAttenuation: false });
-          name.center.set(0.5, -0.35);
+          name.center.set(0.5, -0.1);
           name.position.set(c.center[0], c.center[1] + c.radius * 0.7, c.center[2]);
           name.renderOrder = 10;
           g.scene().add(name);
           add(name.material as { opacity: number });
-          const sub = new SpriteText(up(short(c.sub, 40)), 0.016, 'rgba(205,214,240,0.85)');
+          const sub = new SpriteText(up(short(c.sub, 38)), 0.0095, 'rgba(190,200,228,0.75)');
           sub.fontFace = FONT;
           sub.fontWeight = '500';
           Object.assign(sub.material, { depthWrite: false, depthTest: false, sizeAttenuation: false });
-          sub.center.set(0.5, 1.1);
+          sub.center.set(0.5, 1.15);
           sub.position.set(c.center[0], c.center[1] + c.radius * 0.7, c.center[2]);
           sub.renderOrder = 10;
           g.scene().add(sub);
           add(sub.material as { opacity: number });
-          nebulae.current.push({ i: c.i, mats, base });
+          nebulae.current.push({ i: c.i, mats, base, name: name as unknown as Label, sub: sub as unknown as Label, at: [c.center[0], c.center[1] + c.radius * 0.7, c.center[2]], size: c.members.length });
         }
         // Loners: a red ring around each spec section nothing on the drawings is about.
         const ring = (() => {
@@ -812,7 +821,7 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose, on
           lonerRings.current.push(s as unknown as { material: { opacity: number }; visible: boolean });
         }
       }
-      const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.7, 0.4, 0.35);
+      const bloom = new UnrealBloomPass(new THREE.Vector2(el.clientWidth, el.clientHeight), 0.55, 0.4, 0.55);
       g.postProcessingComposer().addPass(bloom);
       const controls = g.controls() as { autoRotate?: boolean; autoRotateSpeed?: number; addEventListener?: (t: string, f: () => void) => void };
       controls.autoRotate = true;
@@ -827,18 +836,67 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose, on
         if (selRef.current) restyleRef.current(true);
         else g.zoomToFit(2200, 60);
       });
-      // Labels by distance: near ones named, far ones quiet, the picked node's always; loners pulse.
+      // Labels: which show is decided on screen, most important first, none over another — the
+      // picked node and what it is tied to, then cluster names, then what is near the camera.
       let t = 0;
+      const v = new THREE.Vector3();
       lod = window.setInterval(() => {
         t++;
-        const cam = (g as unknown as { camera: () => { position: { x: number; y: number; z: number } } }).camera().position;
+        const camera = (g as unknown as { camera: () => { position: { x: number; y: number; z: number }; fov: number } & import('three').Camera }).camera();
+        const W = el.clientWidth;
+        const H = el.clientHeight;
+        const px = H / 2 / Math.tan((camera.fov * Math.PI) / 360);
         const lit = litRef.current;
+        const focus = hoverRef3.current ?? selRef.current;
+        const boxes: [number, number, number, number][] = [];
+        const place = (sp: Label, at: [number, number, number]) => {
+          v.set(at[0], at[1], at[2]).project(camera);
+          if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) return false;
+          const sx = ((v.x + 1) / 2) * W;
+          const sy = ((1 - v.y) / 2) * H;
+          const w = sp.scale.x * px;
+          const h = sp.scale.y * px;
+          const b: [number, number, number, number] = [sx - w * sp.center.x - 3, sy - h * (1 - sp.center.y) - 2, sx + w * (1 - sp.center.x) + 3, sy + h * sp.center.y + 2];
+          if (boxes.some((o) => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])) return false;
+          boxes.push(b);
+          return true;
+        };
         const at = new Map(g.graphData().nodes.map((n) => [n.id, n]));
-        for (const [id, sp] of sprites.current) {
+        const posOf = (id: string): [number, number, number] | null => {
           const n = at.get(id);
-          if (!n || n.x === undefined) continue;
-          const dist = Math.hypot(cam.x - n.x, cam.y - (n.y ?? 0), cam.z - (n.z ?? 0));
-          sp.visible = lit ? lit.has(id) : sp.big ? dist < 700 : dist < 280;
+          return n && n.x !== undefined ? [n.x, n.y ?? 0, n.z ?? 0] : null;
+        };
+        for (const sp of sprites.current.values()) sp.visible = false;
+        const show = (id: string) => {
+          const sp = sprites.current.get(id);
+          const p = posOf(id);
+          if (sp && p) sp.visible = place(sp, p);
+        };
+        if (focus && lit) {
+          // The focus, its links, then what it is most like (closest first).
+          show(focus);
+          for (const id of neighbours.get(focus) ?? []) show(id);
+          for (const x of space?.near.get(focus) ?? []) show(x.id);
+          for (const id of lit) if (!sprites.current.get(id)?.visible) show(id);
+        }
+        // Cluster names: biggest first; hidden while a node is in focus, the subtitle only for the cluster hovered.
+        const hc = hoverClusterRef.current;
+        for (const nb of [...nebulae.current].sort((a, b) => b.size - a.size)) {
+          if (nb.name) nb.name.visible = !focus && place(nb.name, nb.at);
+          if (nb.sub) nb.sub.visible = !focus && hc === nb.i && place(nb.sub, nb.at);
+        }
+        if (!focus) {
+          // What is near the camera, the bigger kinds first, as space allows.
+          const cam = camera.position;
+          const near = [...sprites.current.entries()]
+            .map(([id, sp]) => {
+              const p = posOf(id);
+              return { id, sp, d: p ? Math.hypot(cam.x - p[0], cam.y - p[1], cam.z - p[2]) : Infinity };
+            })
+            .filter((x) => (lit ? lit.has(x.id) : true) && x.d < (x.sp.big ? 760 : 300))
+            .sort((a, b) => (a.sp.big === b.sp.big ? a.d - b.d : a.sp.big ? -1 : 1))
+            .slice(0, 60);
+          for (const x of near) show(x.id);
         }
         for (const r of lonerRings.current) {
           r.visible = showLonersRef.current;
