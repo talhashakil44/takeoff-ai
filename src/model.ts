@@ -188,6 +188,8 @@ export interface Project {
   measurements: Measurement[];
   /** The project's specification files, each read into its sections once. */
   specs?: SpecDoc[];
+  /** Build It: the planning assumptions and edits the user made (the generated model and schedule are kept apart). */
+  build?: import('./build/types').BuildEdits;
 }
 
 /** A specification file: its PDF is kept like a drawing's, its reading with the project. */

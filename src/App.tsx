@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { diffProjects, type ActivityEvent } from './activity';
 import { AiAssembliesDialog } from './components/AiAssembliesDialog';
 import { AiSettingsDialog } from './components/AiSettingsDialog';
@@ -61,6 +61,8 @@ import { scoringOn, setScoringOn } from './scoring';
 import { desktopApi, folderLabel } from './desktop';
 import { ConnectAiDialog } from './components/ConnectAiDialog';
 import { ChatPanel } from './components/ChatPanel';
+// Build It and its 3D viewer load only when opened.
+const BuildView = lazy(() => import('./components/BuildView'));
 import { runTool, toolList, TOOL_DEFS, type McpContext } from './mcp/tools';
 import { renderRegion } from './mcp/render';
 import { reviewText, takeOffWholeSet } from './automate/wholeSet';
@@ -187,7 +189,7 @@ export function App() {
   const [cardEntry, setCardEntry] = useState<Entry | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   /** The workspace shown: the drawings, the specification, or the map tying them together. */
-  const [view, setView] = useState<'drawings' | 'specs' | 'map'>('drawings');
+  const [view, setView] = useState<'drawings' | 'specs' | 'map' | 'build'>('drawings');
   const [specTarget, setSpecTarget] = useState<SpecTarget | null>(null);
   const [specReading, setSpecReading] = useState<{ name: string; page: number; of: number } | null>(null);
   const [mapFocus, setMapFocus] = useState<{ id: string; n: number } | null>(null);
@@ -359,6 +361,20 @@ export function App() {
   const sheetLinks = linksOn && graph && sheet ? (graph.links[sheet.id] ?? []) : [];
   // The spec tied to the drawings: built when the spec or the map is looked at.
   const specBooks = useMemo(() => (project?.specs ?? []).flatMap((d) => (d.book ? [d.book] : [])), [project?.specs]);
+  const buildSections = useMemo(() => mergeSections(specBooks), [specBooks]);
+  // Text for Build It: a spec page's (its time requirements), a sheet's (its title block).
+  const specTextOf = useCallback(async (docId: string, page: number) => {
+    const pdf = await specPdfOf(docId);
+    if (!pdf) return '';
+    return (await pageTexts(await pdf.getPage(page)).catch(() => [])).map((t) => t.str).join(' ');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const sheetTextOf = useCallback(async (sheetId: string) => {
+    const sh = projectRef.current?.sheets.find((x) => x.id === sheetId);
+    const pdf = sh ? pdfsRef.current.get(sh.docId) : undefined;
+    if (!sh || !pdf) return [];
+    return pageTexts(await pdf.getPage(sh.page)).catch(() => []);
+  }, []);
   const projectMap = useMemo(
     () => (view !== 'drawings' && project && (specBooks.length || graph) ? buildProjectMap(graph, specBooks, project.sheets, graph?.specRefs ?? [], project.docs) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2762,9 +2778,10 @@ export function App() {
                 ['drawings', 'Drawings', 'sheet'],
                 ['specs', 'Specs', 'doc'],
                 ['map', 'Map', 'graph'],
+                ['build', 'Build', 'walls'],
               ] as const
             ).map(([v, label, icon]) => (
-              <button key={v} role="tab" aria-label={label} aria-selected={view === v} className={view === v ? 'on' : ''} onClick={() => setView(v)} title={v === 'drawings' ? 'The drawings and the takeoff' : v === 'specs' ? 'The specification, read into its sections' : 'The spec and the drawings, tied together'}>
+              <button key={v} role="tab" aria-label={label} aria-selected={view === v} className={view === v ? 'on' : ''} onClick={() => setView(v)} title={v === 'drawings' ? 'The drawings and the takeoff' : v === 'specs' ? 'The specification, read into its sections' : v === 'map' ? 'The spec and the drawings, tied together' : 'Build it: the building, the schedule and its construction, from the takeoff and the spec'}>
                 <Icon name={icon} size={14} />
                 <span>{label}</span>
               </button>
@@ -3521,6 +3538,29 @@ export function App() {
               setView('map');
             }}
           />
+        </div>
+      )}
+      {view === 'build' && (
+        <div className="view-pane build-pane">
+          <Suspense fallback={<div className="bld-loading">Opening Build It…</div>}>
+            <BuildView
+              project={project}
+              sections={buildSections}
+              specText={specTextOf}
+              sheetText={sheetTextOf}
+              onEdits={(build) => commit((p) => ({ ...p, build }), 'Build It setup', 'build-edits')}
+              onOpenSpec={(docId, page, key) => {
+                setSpecTarget({ docId, page, key, n: Date.now() });
+                setView('specs');
+              }}
+              onOpenDrawing={(to, label) => {
+                setView('drawings');
+                follow(to, label);
+              }}
+              onSave={(name, data) => void saveFile(name, data)}
+              onClose={() => setView('drawings')}
+            />
+          </Suspense>
         </div>
       )}
       {view === 'map' && (
