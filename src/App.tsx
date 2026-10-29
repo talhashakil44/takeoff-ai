@@ -2754,7 +2754,9 @@ export function App() {
           <div className="app-mark" aria-hidden="true">
             <svg viewBox="0 0 20 20" width="20" height="20">
               <rect x="1" y="1" width="18" height="18" rx="5" fill="var(--accent)" />
-              <path d="M5 14.5V6h4.5L15 14.5z" fill="#fff" />
+              <path d="M5.2 12.4C5.2 8.9 7.3 6.3 10 6.3s4.8 2.6 4.8 6.1z" fill="#fff" />
+              <path d="M4 12.2h11.6c.6 0 1.1.3 1.5.7l.2.3c.1.2 0 .4-.2.4H4.4c-.3 0-.5-.2-.5-.5v-.6z" fill="#fff" />
+              <path d="M15.3 3.2q0 1.6 1.6 1.6q-1.6 0-1.6 1.6q0-1.6-1.6-1.6q1.6 0 1.6-1.6z" fill="#ffc21a" />
             </svg>
           </div>
           <input

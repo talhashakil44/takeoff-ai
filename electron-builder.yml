@@ -15,7 +15,7 @@ mac:
     - target: dmg
       arch: [arm64, x64]
   category: public.app-category.productivity
-  icon: public/icon-512.png
+  icon: public/icon-mac.png
   # Ad-hoc signed: no Apple developer account. macOS asks once before the first launch.
   identity: '-'
   hardenedRuntime: false
