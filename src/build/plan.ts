@@ -17,6 +17,8 @@ const DEFAULTS: Record<string, { LF: number; SF: number; ea: number; lead: numbe
   envelope: { LF: 100, SF: 800, ea: 10, lead: 20, crews: 1 },
   'mech-rough': { LF: 90, SF: 400, ea: 10, lead: 25, crews: 1 },
   'elec-rough': { LF: 180, SF: 600, ea: 30, lead: 15, crews: 1 },
+  'fire-rough': { LF: 120, SF: 600, ea: 20, lead: 20, crews: 1 },
+  'fire-heads': { LF: 150, SF: 600, ea: 30, lead: 20, crews: 1 },
   partitions: { LF: 70, SF: 400, ea: 10, lead: 10, crews: 1 },
   ceilings: { LF: 120, SF: 650, ea: 20, lead: 15, crews: 1 },
   doors: { LF: 60, SF: 300, ea: 6, lead: 40, crews: 1 },
@@ -38,9 +40,10 @@ const AFTER: Record<string, string[]> = {
   site: [],
   'mech-rough': ['demolition', 'structure'],
   'elec-rough': ['demolition', 'structure'],
+  'fire-rough': ['demolition', 'structure'],
   partitions: ['demolition', 'structure'],
   other: ['partitions'],
-  ceilings: ['mech-rough', 'elec-rough', 'partitions'],
+  ceilings: ['mech-rough', 'elec-rough', 'fire-rough', 'partitions'],
   doors: ['partitions'],
   painting: ['partitions'],
   flooring: ['ceilings', 'painting'],
@@ -48,6 +51,7 @@ const AFTER: Record<string, string[]> = {
   specialties: ['painting', 'flooring'],
   'mech-trim': ['ceilings'],
   'elec-trim': ['ceilings'],
+  'fire-heads': ['ceilings'],
 };
 
 const a = <T>(value: T, basis: Basis, why: string, source?: SourceRef): Assumption<T> => ({ value, basis, why, ...(source ? { source } : {}) });
@@ -255,6 +259,7 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
   for (const [key, name, trades] of [
     ['mech', 'Commissioning — mechanical systems', ['mech-rough', 'mech-trim']],
     ['elec', 'Commissioning — electrical systems', ['elec-rough', 'elec-trim']],
+    ['fire', 'Verification — fire protection systems', ['fire-rough', 'fire-heads']],
   ] as const) {
     const ws = acts.filter((x) => x.kind === 'work' && trades.includes(x.trade as never));
     if (!ws.length) continue;

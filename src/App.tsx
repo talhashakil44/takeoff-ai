@@ -369,6 +369,13 @@ export function App() {
     return (await pageTexts(await pdf.getPage(page)).catch(() => [])).map((t) => t.str).join(' ');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // A region of a sheet as an image, with its takeoffs drawn (Build It's drawing blow-ups).
+  const renderSheetRegion = useCallback(async (sheetId: string, box: [number, number, number, number], scale: number) => {
+    const sh = projectRef.current?.sheets.find((x) => x.id === sheetId);
+    const pdf = sh ? pdfsRef.current.get(sh.docId) : undefined;
+    if (!sh || !pdf) throw new Error('The drawing is not on this computer.');
+    return renderRegion(await pdf.getPage(sh.page), sh, projectRef.current!, box, scale, true);
+  }, []);
   const sheetTextOf = useCallback(async (sheetId: string) => {
     const sh = projectRef.current?.sheets.find((x) => x.id === sheetId);
     const pdf = sh ? pdfsRef.current.get(sh.docId) : undefined;
@@ -3558,6 +3565,7 @@ export function App() {
                 follow(to, label);
               }}
               onSave={(name, data) => void saveFile(name, data)}
+              renderSheet={renderSheetRegion}
               onClose={() => setView('drawings')}
             />
           </Suspense>

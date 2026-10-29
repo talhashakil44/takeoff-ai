@@ -2,30 +2,80 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { tradeByKey } from '../build/extract';
 import type { BuildElement, BuildModel } from '../build/types';
 
 /**
  * The proposed building, drawn from the model: walls and runs extruded along their lines,
  * floors and ceilings as slabs, counted things as boxes. Each element shows the state its
- * activity is in on the day being shown — not started (a faint ghost), being built (lit in its
- * trade's colour), done (solid); existing work to be demolished stands until it's taken out.
+ * activity is in on the day shown — not started (a faint ghost), being built (lit), done
+ * (solid); existing work to be demolished stands until it's taken out. Like a BIM viewer:
+ * exploded by level and by system, cut by a section plane, isolated, coloured by any
+ * parameter, seen from preset views.
  */
 
 export type ElementState = 'todo' | 'doing' | 'done' | 'existing' | 'removing' | 'gone';
+/**
+ * Where the camera goes to show a box filling the view, looking along -dir: far enough that
+ * every corner of the box is inside the frustum (both ways), with a little margin.
+ */
+function fitCamera(camera: THREE.PerspectiveCamera, box: THREE.Box3, dir: THREE.Vector3): { position: THREE.Vector3; target: THREE.Vector3 } {
+  const c = box.getCenter(new THREE.Vector3());
+  const v = dir.clone().normalize();
+  const worldUp = Math.abs(v.y) > 0.99 ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(0, 1, 0);
+  const right = new THREE.Vector3().crossVectors(worldUp, v).normalize();
+  const up = new THREE.Vector3().crossVectors(v, right).normalize();
+  const tanV = Math.tan((camera.fov * Math.PI) / 360);
+  const tanH = tanV * camera.aspect;
+  const corners = Array.from({ length: 8 }, (_, i) => new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z));
+  let d = 0;
+  // A box seen at an angle is not centred on its centre: aim at the middle of what is seen.
+  for (let pass = 0; pass < 3; pass++) {
+    d = 0;
+    for (const k of corners) {
+      const p = k.clone().sub(c);
+      const z = p.dot(v);
+      d = Math.max(d, z + Math.abs(p.dot(right)) / tanH, z + Math.abs(p.dot(up)) / tanV);
+    }
+    if (pass === 2) break;
+    let [x0, x1, y0, y1] = [Infinity, -Infinity, Infinity, -Infinity];
+    for (const k of corners) {
+      const p = k.clone().sub(c);
+      const w = d - p.dot(v);
+      const sx = p.dot(right) / (w * tanH);
+      const sy = p.dot(up) / (w * tanV);
+      [x0, x1, y0, y1] = [Math.min(x0, sx), Math.max(x1, sx), Math.min(y0, sy), Math.max(y1, sy)];
+    }
+    c.addScaledVector(right, ((x0 + x1) / 2) * d * tanH).addScaledVector(up, ((y0 + y1) / 2) * d * tanV);
+  }
+  d = Math.max(3, d * 1.14);
+  return { position: c.clone().add(v.multiplyScalar(d)), target: c };
+}
+
+export type ViewCommand = { kind: 'iso' | 'top' | 'front' | 'side' | 'frame'; n: number };
 
 interface Props {
   model: BuildModel;
   /** Each element's state on the day shown. */
   stateOf: (e: BuildElement) => ElementState;
-  /** Changes when the states need recomputing (the day, the schedule). */
+  /** Each element's colour in the current colour mode. */
+  colourOf: (e: BuildElement) => string;
+  /** Changes when states or colours need recomputing. */
   stateKey: string;
   selected: string | null;
-  /** Elements of the selected activity. */
+  /** Elements to outline (an activity's, a type's). */
   highlight: Set<string> | null;
-  levels: Set<string>;
-  trades: Set<string>;
+  /** Only these are shown, when set. */
+  isolate: Set<string> | null;
+  hidden: Set<string>;
   showGhosts: boolean;
+  /** 0–1: levels pulled apart, and (above 0.5) the systems within each level. */
+  explode: number;
+  explodeSystems: boolean;
+  /** Section cut: metres above the lowest floor; null = none. */
+  cut: number | null;
+  view: ViewCommand | null;
+  /** Order of trades for exploding systems. */
+  tradeOrder: Map<string, number>;
   onSelect: (id: string | null) => void;
   onHover: (id: string | null) => void;
 }
@@ -40,7 +90,7 @@ function geometryOf(e: BuildElement): THREE.BufferGeometry | null {
       const [x2, y2] = s.points[i];
       const len = Math.hypot(x2 - x1, y2 - y1);
       if (len < 0.02) continue;
-      const g = new THREE.BoxGeometry(len, s.height, s.thickness);
+      const g = new THREE.BoxGeometry(len + s.thickness * 0.5, s.height, s.thickness);
       g.rotateY(-Math.atan2(y2 - y1, x2 - x1));
       g.translate((x1 + x2) / 2, s.z0 + s.height / 2, (y1 + y2) / 2);
       parts.push(g);
@@ -64,81 +114,175 @@ function geometryOf(e: BuildElement): THREE.BufferGeometry | null {
   return g;
 }
 
-export function BuildScene({ model, stateOf, stateKey, selected, highlight, levels, trades, showGhosts, onSelect, onHover }: Props) {
+interface Item {
+  mesh: THREE.Mesh;
+  el: BuildElement;
+  state?: ElementState;
+  colour?: string;
+  level: number;
+}
+
+export function BuildScene(props: Props) {
+  const { model, stateKey, selected, highlight, isolate, hidden, showGhosts, explode, explodeSystems, cut, view } = props;
   const host = useRef<HTMLDivElement>(null);
-  const meshes = useRef(new Map<string, { mesh: THREE.Mesh; el: BuildElement; state?: ElementState }>());
-  const scene = useRef<{ s: THREE.Scene; mats: (trade: string, st: ElementState) => THREE.Material; outline: THREE.Group; renderer: THREE.WebGLRenderer; camera: THREE.PerspectiveCamera; controls: OrbitControls; fit: () => void } | null>(null);
-  const cb = useRef({ onSelect, onHover });
-  cb.current = { onSelect, onHover };
+  const items = useRef(new Map<string, Item>());
+  const scene = useRef<{
+    s: THREE.Scene;
+    mat: (colour: string, st: ElementState) => THREE.Material;
+    outline: THREE.Group;
+    renderer: THREE.WebGLRenderer;
+    camera: THREE.PerspectiveCamera;
+    controls: OrbitControls;
+    plane: THREE.Plane;
+    cutCap: THREE.Mesh;
+    levelLabels: THREE.Group;
+    span: number;
+    top: number;
+    invalidate: () => void;
+  } | null>(null);
+  const compass = useRef<HTMLButtonElement>(null);
+  const cb = useRef(props);
+  cb.current = props;
+  const fly = useRef<{ from: THREE.Vector3; to: THREE.Vector3; tFrom: THREE.Vector3; tTo: THREE.Vector3; t0: number } | null>(null);
 
   // The scene, made once per model.
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
     renderer.setSize(el.clientWidth, el.clientHeight);
+    renderer.localClippingEnabled = true;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     el.appendChild(renderer.domElement);
     const s = new THREE.Scene();
-    s.background = new THREE.Color('#0b0f1a');
-    s.fog = new THREE.Fog('#0b0f1a', 260, 900);
-    const camera = new THREE.PerspectiveCamera(40, el.clientWidth / el.clientHeight, 0.5, 4000);
+    // A studio sky: dark at the top, a lift at the horizon.
+    const sky = document.createElement('canvas');
+    sky.width = 2;
+    sky.height = 256;
+    const sx = sky.getContext('2d')!;
+    const grad = sx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#070a14');
+    grad.addColorStop(0.65, '#0d1324');
+    grad.addColorStop(1, '#1a2238');
+    sx.fillStyle = grad;
+    sx.fillRect(0, 0, 2, 256);
+    s.background = new THREE.CanvasTexture(sky);
+    const [x0, y0, x1, y1] = model.extent;
+    const span = Math.max(20, x1 - x0, y1 - y0);
+    s.fog = new THREE.Fog('#0d1324', span * 3, span * 9);
+    const camera = new THREE.PerspectiveCamera(38, el.clientWidth / el.clientHeight, 0.3, span * 20);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    s.add(new THREE.HemisphereLight('#dfe8ff', '#20283a', 1.1));
-    const sun = new THREE.DirectionalLight('#ffffff', 1.4);
-    sun.position.set(60, 120, 40);
+    controls.screenSpacePanning = true;
+    controls.maxPolarAngle = Math.PI * 0.495;
+    s.add(new THREE.HemisphereLight('#e6eeff', '#1c2233', 0.9));
+    const sun = new THREE.DirectionalLight('#fff4e6', 1.8);
+    sun.position.set(span * 0.6, span * 1.2, span * 0.4);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    const sc = sun.shadow.camera as THREE.OrthographicCamera;
+    sc.left = -span;
+    sc.right = span;
+    sc.top = span;
+    sc.bottom = -span;
+    sc.far = span * 4;
+    sun.shadow.bias = -0.0005;
     s.add(sun);
-    const [x0, y0, x1, y1] = model.extent;
-    const span = Math.max(20, x1 - x0, y1 - y0);
-    const grid = new THREE.GridHelper(Math.ceil(span * 1.6), Math.ceil((span * 1.6) / 2), '#2a3550', '#161d2e');
-    grid.position.y = -0.02;
+    const fill = new THREE.DirectionalLight('#9fb8ff', 0.5);
+    fill.position.set(-span, span * 0.5, -span * 0.6);
+    s.add(fill);
+    // Ground: a shadow catcher and a fine grid.
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(span * 6, span * 6), new THREE.ShadowMaterial({ opacity: 0.35 }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.03;
+    ground.receiveShadow = true;
+    s.add(ground);
+    const grid = new THREE.GridHelper(Math.ceil(span * 3), Math.ceil((span * 3) / 2), '#24304d', '#151c2d');
+    grid.position.y = -0.04;
     s.add(grid);
 
-    // Materials: one per trade and state, shared.
+    // The section plane (keeps what is below it) and its materials.
+    const plane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
     const cache = new Map<string, THREE.Material>();
-    const mats = (trade: string, st: ElementState) => {
-      const k = `${trade}|${st}`;
+    const mat = (colour: string, st: ElementState) => {
+      const k = `${colour}|${st}`;
       let m = cache.get(k);
       if (m) return m;
-      const c = new THREE.Color(tradeByKey.get(trade)?.colour ?? '#b8c4ff');
-      if (st === 'todo') m = new THREE.MeshBasicMaterial({ color: '#8fa3d6', transparent: true, opacity: 0.06, depthWrite: false });
-      else if (st === 'doing') m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.75, roughness: 0.5 });
-      else if (st === 'existing') m = new THREE.MeshStandardMaterial({ color: '#c9a7a7', transparent: true, opacity: 0.35, roughness: 0.9, depthWrite: false });
-      else if (st === 'removing') m = new THREE.MeshStandardMaterial({ color: '#ff6b6b', emissive: '#ff3b30', emissiveIntensity: 0.8, transparent: true, opacity: 0.8 });
-      else m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.75, metalness: 0.05 });
+      const c = new THREE.Color(colour);
+      if (st === 'todo') m = new THREE.MeshBasicMaterial({ color: '#8fa3d6', transparent: true, opacity: 0.05, depthWrite: false });
+      else if (st === 'doing') m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.55, roughness: 0.45 });
+      else if (st === 'existing') m = new THREE.MeshStandardMaterial({ color: '#d0b3b3', transparent: true, opacity: 0.3, roughness: 0.9, depthWrite: false });
+      else if (st === 'removing') m = new THREE.MeshStandardMaterial({ color: '#ff6b6b', emissive: '#ff3b30', emissiveIntensity: 0.7, transparent: true, opacity: 0.85 });
+      else m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.72, metalness: 0.04 });
+      m.clippingPlanes = [plane];
+      m.side = THREE.DoubleSide;
       cache.set(k, m);
       return m;
     };
+    // The cut's cap: a faint red glass at the section height.
+    const cutCap = new THREE.Mesh(new THREE.PlaneGeometry(span * 1.6, span * 1.6), new THREE.MeshBasicMaterial({ color: '#ff5f57', transparent: true, opacity: 0.06, depthWrite: false, side: THREE.DoubleSide }));
+    cutCap.rotation.x = -Math.PI / 2;
+    cutCap.visible = false;
+    s.add(cutCap);
     const outline = new THREE.Group();
     s.add(outline);
+    const levelLabels = new THREE.Group();
+    s.add(levelLabels);
 
     // The elements.
-    meshes.current.clear();
+    items.current.clear();
+    const levelIndex = new Map(model.levels.map((l, i) => [l.id, i]));
     for (const e of model.elements) {
       const g = geometryOf(e);
       if (!g) continue;
-      const mesh = new THREE.Mesh(g, mats(e.trade, 'todo'));
+      const mesh = new THREE.Mesh(g, mat('#8fa3d6', 'todo'));
       mesh.userData.id = e.id;
+      mesh.castShadow = e.shape?.type !== 'point';
+      mesh.receiveShadow = true;
       s.add(mesh);
-      meshes.current.set(e.id, { mesh, el: e });
+      items.current.set(e.id, { mesh, el: e, level: levelIndex.get(e.level ?? '') ?? 0 });
+    }
+    const top = Math.max(3, ...model.levels.map((l) => l.elevation + 4));
+    scene.current = { s, mat, outline, renderer, camera, controls, plane, cutCap, levelLabels, span, top, invalidate: () => {} };
+    {
+      // Start on the whole building, filling the view, from the usual three-quarter angle.
+      const box = new THREE.Box3();
+      for (const x of items.current.values()) box.expandByObject(x.mesh);
+      if (box.isEmpty()) box.set(new THREE.Vector3(-span / 2, 0, -span / 2), new THREE.Vector3(span / 2, top, span / 2));
+      const to = fitCamera(camera, box, new THREE.Vector3(0.62, 0.62, 0.8).normalize());
+      camera.position.copy(to.position);
+      controls.target.copy(to.target);
+      controls.update();
     }
 
-    const top = Math.max(3, ...model.levels.map((l) => l.elevation + 4));
-    const fit = () => {
-      const r = span * 0.9;
-      camera.position.set(r * 0.7, top + r * 0.75, r * 0.95);
-      controls.target.set(0, top / 3, 0);
-      controls.update();
-    };
-    fit();
-    scene.current = { s, mats, outline, renderer, camera, controls, fit };
-
+    // Drawn on demand: when the camera moves or the model changes, not sixty times a second.
+    let dirty = true;
+    scene.current.invalidate = () => (dirty = true);
+    controls.addEventListener('change', () => (dirty = true));
     let raf = 0;
-    const frame = () => {
-      controls.update();
-      renderer.render(s, camera);
+    const frame = (now: number) => {
+      const f = fly.current;
+      if (f) {
+        dirty = true;
+        const t = Math.min(1, (now - f.t0) / 700);
+        const k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        camera.position.lerpVectors(f.from, f.to, k);
+        controls.target.lerpVectors(f.tFrom, f.tTo, k);
+        if (t >= 1) fly.current = null;
+      }
+      if (controls.update()) dirty = true;
+      if (dirty) {
+        dirty = false;
+        renderer.render(s, camera);
+        // The compass: which way the sheets' up is on the screen now.
+        const c = compass.current;
+        if (c) c.style.setProperty('--az', `${Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z)}rad`);
+      }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -146,6 +290,7 @@ export function BuildScene({ model, stateOf, stateKey, selected, highlight, leve
       renderer.setSize(el.clientWidth, el.clientHeight);
       camera.aspect = el.clientWidth / Math.max(1, el.clientHeight);
       camera.updateProjectionMatrix();
+      dirty = true;
     });
     ro.observe(el);
 
@@ -154,9 +299,11 @@ export function BuildScene({ model, stateOf, stateKey, selected, highlight, leve
     const pickAt = (ev: PointerEvent): string | null => {
       const r = renderer.domElement.getBoundingClientRect();
       ray.setFromCamera(new THREE.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1), camera);
-      const vis = [...meshes.current.values()].filter((x) => x.mesh.visible && x.state !== 'todo' && x.state !== 'gone').map((x) => x.mesh);
-      const ghosts = [...meshes.current.values()].filter((x) => x.mesh.visible && x.state === 'todo').map((x) => x.mesh);
-      const hit = ray.intersectObjects(vis, false)[0] ?? ray.intersectObjects(ghosts, false)[0];
+      const all = [...items.current.values()].filter((x) => x.mesh.visible);
+      const solid = all.filter((x) => x.state !== 'todo').map((x) => x.mesh);
+      const ghosts = all.filter((x) => x.state === 'todo').map((x) => x.mesh);
+      const below = (h: THREE.Intersection) => plane.distanceToPoint(h.point) >= -0.01;
+      const hit = ray.intersectObjects(solid, false).find(below) ?? ray.intersectObjects(ghosts, false).find(below);
       return (hit?.object.userData.id as string) ?? null;
     };
     let down: [number, number] | null = null;
@@ -172,17 +319,23 @@ export function BuildScene({ model, stateOf, stateKey, selected, highlight, leve
       cb.current.onHover(pickAt(ev));
     };
     const onLeave = () => cb.current.onHover(null);
+    const onDbl = (ev: MouseEvent) => {
+      const id = pickAt(ev as PointerEvent);
+      const it = id ? items.current.get(id) : null;
+      if (it) frameBox(new THREE.Box3().setFromObject(it.mesh));
+    };
     renderer.domElement.addEventListener('pointerdown', onDown);
     renderer.domElement.addEventListener('pointerup', onUp);
     renderer.domElement.addEventListener('pointermove', onMove);
     renderer.domElement.addEventListener('pointerleave', onLeave);
-    if (import.meta.env.DEV) Object.assign(window, { __buildScene: { scene: s, camera, meshes: meshes.current } });
+    renderer.domElement.addEventListener('dblclick', onDbl);
+    if (import.meta.env.DEV) Object.assign(window, { __buildScene: { scene: s, camera, meshes: items.current } });
 
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
       controls.dispose();
-      for (const { mesh } of meshes.current.values()) mesh.geometry.dispose();
+      for (const { mesh } of items.current.values()) mesh.geometry.dispose();
       for (const m of cache.values()) m.dispose();
       renderer.dispose();
       el.removeChild(renderer.domElement);
@@ -190,37 +343,102 @@ export function BuildScene({ model, stateOf, stateKey, selected, highlight, leve
     };
   }, [model]);
 
-  // States on the day shown, filters, and the selection.
+  /** Flies the camera to frame a box, from the side it is seen from now (or snaps there). */
+  const frameBox = (box: THREE.Box3, dir?: THREE.Vector3, snap = false) => {
+    const sc = scene.current;
+    if (!sc || box.isEmpty()) return;
+    const to = fitCamera(sc.camera, box, dir ?? sc.camera.position.clone().sub(sc.controls.target).normalize());
+    if (snap) {
+      sc.camera.position.copy(to.position);
+      sc.controls.target.copy(to.target);
+      sc.controls.update();
+      return;
+    }
+    fly.current = { from: sc.camera.position.clone(), to: to.position, tFrom: sc.controls.target.clone(), tTo: to.target, t0: performance.now() };
+  };
+
+  // Preset views and framing.
+  useEffect(() => {
+    const sc = scene.current;
+    if (!sc || !view) return;
+    const box = new THREE.Box3();
+    const sel = selected ? items.current.get(selected) : null;
+    if (view.kind === 'frame' && sel) box.setFromObject(sel.mesh);
+    else for (const x of items.current.values()) if (x.mesh.visible && (!highlight || highlight.has(x.el.id) || view.kind !== 'frame')) box.expandByObject(x.mesh);
+    const dirs: Record<string, THREE.Vector3> = { iso: new THREE.Vector3(0.62, 0.62, 0.8), top: new THREE.Vector3(0, 1, 0.0001), front: new THREE.Vector3(0, 0.12, 1), side: new THREE.Vector3(1, 0.12, 0) };
+    frameBox(box, view.kind === 'frame' ? undefined : dirs[view.kind].clone().normalize());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view?.n]);
+
+  // States, colours, filters, explode and the cut.
   useEffect(() => {
     const sc = scene.current;
     if (!sc) return;
-    for (const x of meshes.current.values()) {
+    const { stateOf, colourOf, tradeOrder } = cb.current;
+    const lift = explode * Math.max(6, sc.span * 0.22);
+    const layer = explodeSystems ? explode * 2.2 : 0;
+    for (const x of items.current.values()) {
       const st = stateOf(x.el);
-      const shown = (x.el.level ? levels.has(x.el.level) : true) && trades.has(x.el.trade) && st !== 'gone' && (showGhosts || st !== 'todo');
+      const colour = colourOf(x.el);
+      const shown = !hidden.has(x.el.id) && (!isolate || isolate.has(x.el.id)) && st !== 'gone' && (showGhosts || st !== 'todo');
       x.mesh.visible = shown;
-      if (st !== x.state) {
+      if (st !== x.state || colour !== x.colour) {
         x.state = st;
-        x.mesh.material = sc.mats(x.el.trade, st);
+        x.colour = colour;
+        x.mesh.material = sc.mat(colour, st);
         x.mesh.renderOrder = st === 'todo' || st === 'existing' ? 2 : 0;
       }
+      x.mesh.position.y = x.level * lift + (tradeOrder.get(x.el.trade) ?? 0) * layer;
     }
-    // The selection, outlined (and an activity's elements).
+    // The cut, measured from the lowest floor (and lifted with an exploded level, it cuts each level alike).
+    if (cut === null) {
+      sc.plane.constant = 1e6;
+      sc.cutCap.visible = false;
+    } else {
+      sc.plane.constant = cut;
+      sc.cutCap.position.y = cut;
+      sc.cutCap.visible = true;
+    }
+    // The selection, outlined (and an activity's or type's elements).
     for (const c of [...sc.outline.children]) {
       sc.outline.remove(c);
       (c as THREE.LineSegments).geometry.dispose();
     }
     const ids = new Set<string>([...(highlight ?? []), ...(selected ? [selected] : [])]);
-    const mat = new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, depthTest: false });
+    const mat = new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthTest: false });
+    const selMat = new THREE.LineBasicMaterial({ color: '#ffd60a', depthTest: false });
     let n = 0;
     for (const id of ids) {
-      const x = meshes.current.get(id);
-      if (!x || !x.mesh.visible || n++ > 600) continue;
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(x.mesh.geometry, 30), id === selected ? new THREE.LineBasicMaterial({ color: '#ffd60a', depthTest: false }) : mat);
+      const x = items.current.get(id);
+      if (!x || !x.mesh.visible || n++ > 800) continue;
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(x.mesh.geometry, 30), id === selected ? selMat : mat);
+      edges.position.copy(x.mesh.position);
       edges.renderOrder = 20;
       sc.outline.add(edges);
     }
+    sc.invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateKey, selected, highlight, levels, trades, showGhosts, model]);
+  }, [stateKey, selected, highlight, isolate, hidden, showGhosts, explode, explodeSystems, cut, model]);
 
-  return <div className="bld-scene" ref={host} />;
+  const toTop = () => {
+    const sc = scene.current;
+    if (!sc) return;
+    const box = new THREE.Box3();
+    for (const x of items.current.values()) if (x.mesh.visible) box.expandByObject(x.mesh);
+    frameBox(box, new THREE.Vector3(0, 1, 0.0001));
+  };
+  return (
+    <div className="bld-scene" ref={host}>
+      <button className="bld-compass" ref={compass} onClick={toTop} title="Plan north is up the sheet. Click for the plan view.">
+        <svg viewBox="-22 -22 44 44" width="46" height="46">
+          <circle r="20" className="ring" />
+          <g className="needle">
+            <path d="M0 -11 L4 1 L0 -1.5 L-4 1 Z" className="n" />
+            <path d="M0 11 L4 1 L0 3.5 L-4 1 Z" className="s" />
+            <text y="-15.5" textAnchor="middle" dominantBaseline="central">N</text>
+          </g>
+        </svg>
+      </button>
+    </div>
+  );
 }

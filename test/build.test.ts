@@ -3,6 +3,8 @@ import { Calendar, schedule } from '../src/build/cpm';
 import { applySetupEdits, defaultSetup, planActivities } from '../src/build/plan';
 import { extractModel, levelWords, tradeOf } from '../src/build/extract';
 import { readSpecFacts } from '../src/build/facts';
+import { toIfc } from '../src/build/ifc';
+import { ifcClassLabel, ifcGuid } from '../src/build/ifcClass';
 import type { Project, TakeoffType } from '../src/model';
 import type { SpecSection } from '../src/spec/parse';
 
@@ -92,5 +94,27 @@ describe('build it', () => {
     expect(c.date(1)).toBe('2026-11-09');
     expect(c.date(3)).toBe('2026-11-12');
     expect(c.workingDaysTo('2026-11-12')).toBe(4);
+  });
+
+  it('exports IFC 4: storeys, classed elements with quantities and specs, and the schedule as tasks', async () => {
+    const model = extractModel({ project: project(), sections, floorToFloor: 3.6 });
+    const facts = await readSpecFacts(sections, async () => '');
+    const setup = defaultSetup(model, facts, '2026-11-02');
+    const sched = schedule(planActivities(model, setup, sections, facts), setup);
+    const ifc = toIfc({ model, schedule: sched, project: project(), sections });
+    expect(ifc).toMatch(/^ISO-10303-21;/);
+    expect(ifc).toMatch(/FILE_SCHEMA\(\('IFC4'\)\)/);
+    expect((ifc.match(/IFCBUILDINGSTOREY\(/g) ?? []).length).toBe(2);
+    expect((ifc.match(/IFCWALL\(/g) ?? []).length).toBe(30);
+    expect((ifc.match(/IFCDOOR\(/g) ?? []).length).toBe(13);
+    expect(ifc).toContain('Qto_TakeoffAI');
+    expect(ifc).toContain('08100 HOLLOW METAL DOORS AND FRAMES');
+    expect(ifc).toMatch(/IFCRELCONTAINEDINSPATIALSTRUCTURE\([^)]*'Not placed'/);
+    expect(ifc).toMatch(/IFCWORKSCHEDULE\(/);
+    expect(ifc).toMatch(/IFCTASK\(/);
+    const wall = model.elements.find((e) => e.id === 'ws10')!;
+    expect(ifcClassLabel(wall)).toBe('IfcWall · Standard');
+    expect(ifcGuid(wall.id)).toHaveLength(22);
+    expect(ifc).toContain(`'${ifcGuid(wall.id)}'`);
   });
 });

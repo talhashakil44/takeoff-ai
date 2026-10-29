@@ -26,6 +26,7 @@ export const TRADES: Trade[] = [
   { key: 'envelope', name: 'Roofing & envelope', order: 2, colour: '#c8a27a' },
   { key: 'mech-rough', name: 'Mechanical & plumbing rough-in', order: 3, colour: '#3ddc84' },
   { key: 'elec-rough', name: 'Electrical rough-in', order: 3, colour: '#ffd60a' },
+  { key: 'fire-rough', name: 'Fire protection piping', order: 3, colour: '#ff6b6b' },
   { key: 'partitions', name: 'Partitions & framing', order: 4, colour: '#4da3ff' },
   { key: 'ceilings', name: 'Ceilings', order: 5, colour: '#9d8cff' },
   { key: 'doors', name: 'Doors, frames, windows & hardware', order: 6, colour: '#ff9f43' },
@@ -35,6 +36,7 @@ export const TRADES: Trade[] = [
   { key: 'specialties', name: 'Specialties & millwork', order: 8, colour: '#e3a35b' },
   { key: 'mech-trim', name: 'Mechanical & plumbing fixtures', order: 8, colour: '#5be3b0' },
   { key: 'elec-trim', name: 'Electrical fixtures & devices', order: 8, colour: '#ffe066' },
+  { key: 'fire-heads', name: 'Sprinkler heads & fire devices', order: 8, colour: '#ff8a80' },
   { key: 'site', name: 'Site work', order: 2, colour: '#a3e35b' },
   { key: 'other', name: 'Other work', order: 6, colour: '#b8c4ff' },
 ];
@@ -52,10 +54,12 @@ export function tradeOf(type: TakeoffType): string {
   if (d === 3 || d === 4 || d === 5) return 'structure';
   if (d === 7) return /roof|membrane|flashing|eaves|soffit|siding|cladding|air barrier|vapour/.test(name) ? 'envelope' : 'finishes';
   if (d === 8) return 'doors';
+  if (d === 21 || /sprinkler|standpipe|fire pump|fire protection/.test(name)) return type.kind === 'count' ? 'fire-heads' : 'fire-rough';
   if (d >= 20 && d <= 25) return type.kind === 'count' ? 'mech-trim' : 'mech-rough';
   if (d >= 26 && d <= 28) return type.kind === 'count' ? 'elec-trim' : 'elec-rough';
   if (d >= 31 && d <= 33) return 'site';
   if (d === 10 || d === 11 || d === 12) return 'specialties';
+  if (!d && type.kind === 'linear' && !/duct|pipe|conduit|cable|tray|sprinkler/.test(name)) return /\bfw|foundation|footing|grade beam/.test(name) ? 'structure' : 'partitions';
   if (d === 6 || d === 9 || !d) {
     if (/ceil|\bact\b|t-bar|bulkhead|acoustic(al)? (tile|panel)/.test(name)) return 'ceilings';
     if (/paint|coating|stain/.test(name)) return 'painting';
@@ -73,7 +77,7 @@ export function levelWords(text: string): { num?: number; word?: string } {
   const n = /\bLEVEL\s*(\d{1,2})\b/.exec(t) ?? /\b(\d)(?:ST|ND|RD|TH)\s+(?:FLOOR|LEVEL)\b/.exec(t);
   const ord: Record<string, number> = { FIRST: 1, SECOND: 2, THIRD: 3, FOURTH: 4, FIFTH: 5, SIXTH: 6 };
   const o = /\b(FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH)\s+(?:FLOOR|LEVEL|STOREY)\b/.exec(t);
-  const word = /\bROOF\b/.test(t) ? 'roof' : /\b(BASEMENT|CELLAR|BELOW GRADE|LOWER)\b/.test(t) ? 'lower' : /\b(MAIN|GROUND)\b/.test(t) ? 'main' : /\bMEZZANINE\b/.test(t) ? 'mezzanine' : undefined;
+  const word = /\bROOF\b/.test(t) ? 'roof' : /\bFOUNDATION|FOOTING\b/.test(t) ? 'foundation' : /\b(BASEMENT|CELLAR|BELOW GRADE|LOWER)\b/.test(t) ? 'lower' : /\b(MAIN|GROUND)\b/.test(t) ? 'main' : /\bMEZZANINE\b/.test(t) ? 'mezzanine' : undefined;
   return { ...(n ? { num: parseInt(n[1], 10) } : o ? { num: ord[o[1]] } : {}), ...(word ? { word } : {}) };
 }
 
@@ -210,15 +214,15 @@ export function extractModel(input: ExtractInput): BuildModel {
   // "LEVEL 1 (LOWER)" says what LOWER means on this job.
   const alias = new Map<string, number>();
   for (const p of parsed.values()) if (p.num !== undefined && p.word && !p.word.startsWith('id:')) alias.set(p.word, p.num);
-  const nums = [...parsed.values()].flatMap((p) => (p.num !== undefined ? [p.num] : []));
-  const lowest = nums.length ? Math.min(...nums) : 1;
   const resolve = (p: { num?: number; word?: string }): string | null => {
     if (p.word?.startsWith('id:')) return p.word.slice(3);
     if (p.word === 'roof') return 'roof';
     if (p.num !== undefined) return `L${p.num}`;
     if (p.word && alias.has(p.word)) return `L${alias.get(p.word)}`;
-    if (p.word === 'lower') return `L${lowest - (nums.length ? 1 : 0)}`;
-    if (p.word === 'main') return nums.length ? `L${Math.max(lowest, 1)}` : 'L1';
+    // Without the drawings saying otherwise: the ground (main) floor is Level 1, below it Level 0.
+    if (p.word === 'main') return 'L1';
+    if (p.word === 'lower') return alias.has('main') ? `L${alias.get('main')! - 1}` : 'L0';
+    if (p.word === 'foundation') return 'fdn';
     if (p.word === 'mezzanine') return 'mezz';
     return null;
   };
@@ -229,21 +233,22 @@ export function extractModel(input: ExtractInput): BuildModel {
   }
   // The levels, bottom up, at the floor-to-floor height unless set.
   const ids = [...new Set([...levelOfSheet.values()].map((x) => x.id))];
-  const rank = (id: string) => (id === 'roof' ? 1e3 : id === 'mezz' ? 1.5 : parseFloat(id.replace(/^L/, '')) || 0);
+  const rank = (id: string) => (id === 'roof' ? 1e3 : id === 'mezz' ? 1.5 : id === 'fdn' ? -1e3 : parseFloat(id.replace(/^L/, '')) || 0);
   ids.sort((a, b) => rank(a) - rank(b));
   const levels: Level[] = [];
   let z = 0;
   for (const id of ids) {
     const set = edits?.elevations?.[id];
-    const elevation = set ?? z;
+    // Foundations sit just under the lowest floor; it stays at 0.
+    const elevation = set ?? (id === 'fdn' ? -1.2 : z);
     levels.push({
       id,
-      name: id === 'roof' ? 'Roof' : id === 'mezz' ? 'Mezzanine' : `Level ${id.slice(1)}`,
+      name: id === 'roof' ? 'Roof' : id === 'mezz' ? 'Mezzanine' : id === 'fdn' ? 'Foundation' : `Level ${id.slice(1)}`,
       elevation,
       basis: set !== undefined ? 'assumed' : levels.length ? 'assumed' : 'inferred',
       sheets: [...levelOfSheet].filter(([, l]) => l.id === id).map(([sid]) => sid),
     });
-    z = elevation + input.floorToFloor;
+    z = id === 'fdn' ? 0 : elevation + input.floorToFloor;
   }
   const levelById = new Map(levels.map((l) => [l.id, l]));
 
@@ -304,6 +309,7 @@ export function extractModel(input: ExtractInput): BuildModel {
       const typeH = type.height > 0 ? toM(type.height) : 0;
       if (type.kind === 'linear') {
         if (trade === 'mech-rough') shape = { type: 'run', points: pts, z0: ceil - 0.05, height: 0.3, thickness: 0.3 };
+        else if (trade === 'fire-rough') shape = { type: 'run', points: pts, z0: ceil + 0.2, height: 0.1, thickness: 0.1 };
         else if (trade === 'elec-rough') shape = { type: 'run', points: pts, z0: ceil + 0.1, height: 0.06, thickness: 0.06 };
         else shape = { type: 'run', points: pts, z0: level.elevation, height: typeH > 0 ? Math.min(typeH, input.floorToFloor) : input.floorToFloor - 0.3, thickness: 0.15 };
       } else if (type.kind === 'area') {
@@ -315,6 +321,7 @@ export function extractModel(input: ExtractInput): BuildModel {
         if (trade === 'doors') shape = { type: 'point', at, z: level.elevation, size: [0.95, 0.12, 2.1] };
         else if (trade === 'elec-trim' && /light|luminaire|fixture|exit/i.test(type.name)) shape = { type: 'point', at, z: ceil - 0.1, size: [0.6, 0.6, 0.1] };
         else if (trade === 'elec-trim') shape = { type: 'point', at, z: level.elevation + 0.45, size: [0.12, 0.12, 0.12] };
+        else if (trade === 'fire-heads') shape = { type: 'point', at, z: ceil - 0.05, size: [0.15, 0.15, 0.12] };
         else if (trade === 'mech-trim' && /diffuser|grille|register|fan/i.test(type.name)) shape = { type: 'point', at, z: ceil - 0.05, size: [0.6, 0.6, 0.15] };
         else if (trade === 'mech-trim') shape = { type: 'point', at, z: level.elevation, size: [0.5, 0.5, 0.8] };
         else shape = { type: 'point', at, z: level.elevation, size: [0.4, 0.4, 0.4] };

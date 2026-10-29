@@ -8,7 +8,8 @@ import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Issue, Plan
 import type { Project } from '../model';
 import type { Place } from '../graph/graph';
 import type { SpecSection } from '../spec/parse';
-import { BuildScene, type ElementState } from './BuildScene';
+import { BuildScene, type ElementState, type ViewCommand } from './BuildScene';
+import { ElementProperties, GroupProperties, ModelTree, QuantitySchedule, type TreeSel } from './BuildPanels';
 import { Icon } from './Icons';
 
 /**
@@ -29,6 +30,8 @@ interface Props {
   onOpenSpec: (docId: string, page: number, key: string) => void;
   onOpenDrawing: (places: Place[], label: string) => void;
   onSave: (name: string, data: Blob) => void;
+  /** A region of a sheet as an image (with its takeoffs drawn): the drawing blow-ups. */
+  renderSheet: (sheetId: string, box: [number, number, number, number], scale: number) => Promise<string>;
   onClose: () => void;
 }
 
@@ -41,7 +44,7 @@ function Badge({ basis }: { basis: Basis }) {
   return <span className={`bld-badge ${basis}`}>{BASIS_LABEL[basis]}</span>;
 }
 
-export default function BuildView({ project, sections, specText, sheetText, onEdits, onOpenSpec, onOpenDrawing, onSave, onClose }: Props) {
+export default function BuildView({ project, sections, specText, sheetText, onEdits, onOpenSpec, onOpenDrawing, onSave, renderSheet, onClose }: Props) {
   const edits = useMemo(() => project.build ?? {}, [project.build]);
   const [out, setOut] = useState<BuildOutput | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -55,9 +58,23 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
   const [day, setDay] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(10);
-  const [levelsOn, setLevelsOn] = useState<Set<string> | null>(null);
-  const [tradesOn, setTradesOn] = useState<Set<string> | null>(null);
   const [ghosts, setGhosts] = useState(true);
+  const [left, setLeft] = useState<'model' | 'setup'>('setup');
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [isolate, setIsolate] = useState<Set<string> | null>(null);
+  const [explode, setExplode] = useState(0);
+  const [explodeSystems, setExplodeSystems] = useState(false);
+  const [cut, setCut] = useState<number | null>(null);
+  const [colourMode, setColourMode] = useState<'system' | 'status' | 'level' | 'spec' | 'quality'>('system');
+  const [view, setView] = useState<ViewCommand | null>(null);
+  const [treeSel, setTreeSel] = useState<TreeSel | null>(null);
+  // A new pick starts at the top of the inspector, not where the last one was scrolled to.
+  const inspectRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (inspectRef.current) inspectRef.current.scrollTop = 0;
+  }, [sel?.kind, sel?.id, treeSel?.key]);
+  const [bottom, setBottom] = useState<'schedule' | 'quantities'>('schedule');
+  const go = (kind: ViewCommand['kind']) => setView({ kind, n: Date.now() });
   const [zoom, setZoom] = useState(9);
 
   // The last build of this project, from this computer.
@@ -66,7 +83,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
     void loadBuild(project.id ?? '').then((b) => {
       if (!gone && b && !out) {
         setOut(b.output);
-        setSetupOpen(false);
+        setLeft('model');
       }
     });
     return () => {
@@ -116,7 +133,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
       const o = await runBuild({ project, sections, facts, levelHints: hints, edits: withEdits, today: today() });
       setOut(o);
       if (project.id) void saveBuild(project.id, o);
-      setSetupOpen(false);
+      setLeft('model');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -191,13 +208,33 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
     if (dayInt < t.ef) return demo ? 'removing' : 'doing';
     return demo ? 'gone' : 'done';
   };
-  const stateKey = `${dayInt}|${Object.keys(times).length}|${acts.map((a) => times[a.id]?.es).join(',')}`;
+  const stateKey = `${colourMode}|${dayInt}|${Object.keys(times).length}|${acts.map((a) => times[a.id]?.es).join(',')}`;
 
   const levels = model?.levels ?? [];
   const tradesUsed = useMemo(() => TRADES.filter((t) => model?.elements.some((e) => e.trade === t.key)), [model]);
-  const levelSet = levelsOn ?? new Set(levels.map((l) => l.id));
-  const tradeSet = tradesOn ?? new Set(tradesUsed.map((t) => t.key));
-  const highlight = useMemo(() => (sel?.kind === 'activity' ? new Set(actById.get(sel.id)?.elements ?? []) : null), [sel, actById]);
+  const highlight = useMemo(() => (sel?.kind === 'activity' ? new Set(actById.get(sel.id)?.elements ?? []) : treeSel && !sel ? new Set(treeSel.ids) : null), [sel, actById, treeSel]);
+  // Colour by a parameter, like a BIM viewer's filters.
+  const LEVEL_COLOURS = ['#5b9cff', '#ff9f43', '#5be3b0', '#c58cff', '#ffd35b', '#ff5fa2', '#5bd6ff'];
+  const specMissing = useMemo(() => new Set(sections.filter((s) => s.missing).map((s) => s.key)), [sections]);
+  const colourOf = (e: BuildElement): string => {
+    if (colourMode === 'level') return LEVEL_COLOURS[Math.max(0, levels.findIndex((l) => l.id === e.level)) % LEVEL_COLOURS.length];
+    if (colourMode === 'status') {
+      const t = times[actOfElement.get(e.id) ?? ''];
+      return t?.late ? '#ff5f57' : t?.critical ? '#ff9f43' : '#3ddc84';
+    }
+    if (colourMode === 'spec') return !e.specs.length ? '#ff5f57' : e.specs.some((s) => specMissing.has(s.key)) ? '#ffb340' : '#4da3ff';
+    if (colourMode === 'quality') return e.issues.length ? '#ffb340' : e.placement === 'inferred' ? '#4da3ff' : '#ff5f57';
+    return tradeByKey.get(e.trade)?.colour ?? '#b8c4ff';
+  };
+  const tradeOrder = useMemo(() => new Map(TRADES.map((t, i) => [t.key, i])), []);
+  const LEGENDS: Record<typeof colourMode, [string, string][]> = {
+    system: tradesUsed.map((t) => [t.colour, t.name]),
+    status: [['#3ddc84', 'Has float'], ['#ff9f43', 'Critical path'], ['#ff5f57', 'Can’t make the target']],
+    level: levels.map((l, i) => [LEVEL_COLOURS[i % LEVEL_COLOURS.length], l.name]),
+    spec: [['#4da3ff', 'Spec section linked'], ['#ffb340', 'Its section isn’t issued'], ['#ff5f57', 'No spec section']],
+    quality: [['#4da3ff', 'Placed from the plan'], ['#ffb340', 'Has open issues'], ['#ff5f57', 'Not placed']],
+  };
+  const topZ = Math.max(4, ...levels.map((l) => l.elevation + 4));
 
   const allIssues: Issue[] = [...(model?.issues ?? []), ...(schedule?.issues ?? [])];
   const feas = schedule?.feasibility;
@@ -220,6 +257,12 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
     if (!out) return;
     const data = { format: 'takeoff-ai-build', version: 1, project: project.name, builtAt: new Date().toISOString(), edits, setup: out.setup, model: out.model, schedule: out.schedule };
     onSave(`${project.name || 'Project'} - build plan.json`, new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+  };
+  const exportIfc = async () => {
+    if (!out) return;
+    const { toIfc } = await import('../build/ifc');
+    const text = toIfc({ model: out.model, schedule: out.schedule, project, sections });
+    onSave(`${project.name || 'Project'} - Build It.ifc`, new Blob([text], { type: 'application/x-step' }));
   };
   const exportCsv = () => {
     if (!out) return;
@@ -268,11 +311,14 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
           </button>
         )}
         <div className="bld-actions">
-          <button className={setupOpen ? 'on' : ''} onClick={() => setSetupOpen((o) => !o)}>
-            Setup
+          <button className={setupOpen ? 'on' : ''} onClick={() => setSetupOpen((o) => !o)} title="The model browser and the setup">
+            Panel
           </button>
           <button className={issuesOpen ? 'on' : ''} onClick={() => setIssuesOpen((o) => !o)} disabled={!out}>
             Issues {allIssues.length ? <i className={allIssues.some((i) => i.severity === 'conflict') ? 'bad' : ''}>{allIssues.length}</i> : null}
+          </button>
+          <button onClick={() => void exportIfc()} disabled={!out} title="IFC 4: opens in Revit, Archicad, Solibri, Navisworks, Bonsai — elements with their takeoff, materials, spec sections and the 4D schedule">
+            Export IFC
           </button>
           <button onClick={exportPlan} disabled={!out} title="The model, the assumptions and the schedule, as data">
             Export plan
@@ -287,7 +333,32 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
       </header>
 
       <div className="bld-main">
-        {setupOpen && (
+        {setupOpen && out && (
+          <div className="bld-left-tabs">
+            <button className={left === 'model' ? 'on' : ''} onClick={() => setLeft('model')}>
+              Model
+            </button>
+            <button className={left === 'setup' ? 'on' : ''} onClick={() => setLeft('setup')}>
+              Setup
+            </button>
+          </div>
+        )}
+        {setupOpen && out && left === 'model' && model && (
+          <aside className="bld-left">
+            <ModelTree
+              model={model}
+              hidden={hidden}
+              onHidden={setHidden}
+              picked={treeSel?.key ?? null}
+              onPick={(t) => {
+                setSel(null);
+                setTreeSel(t);
+              }}
+              onIsolate={(ids) => setIsolate(new Set(ids))}
+            />
+          </aside>
+        )}
+        {setupOpen && (!out || left === 'setup') && (
           <SetupPanel
             project={project}
             setup={setup}
@@ -312,52 +383,85 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                 model={model}
                 stateOf={stateOf}
                 stateKey={stateKey}
+                colourOf={colourOf}
                 selected={selEl?.id ?? null}
                 highlight={highlight}
-                levels={levelSet}
-                trades={tradeSet}
+                isolate={isolate}
+                hidden={hidden}
                 showGhosts={ghosts}
-                onSelect={(id) => setSel(id ? { kind: 'element', id } : null)}
+                explode={explode}
+                explodeSystems={explodeSystems}
+                cut={cut}
+                view={view}
+                tradeOrder={tradeOrder}
+                onSelect={(id) => {
+                  setTreeSel(null);
+                  setSel(id ? { kind: 'element', id } : null);
+                }}
                 onHover={setHover}
               />
-              <div className="bld-filters">
-                <div className="bld-chips" role="group" aria-label="Levels">
-                  {levels.map((l) => (
-                    <button
-                      key={l.id}
-                      className={levelSet.has(l.id) ? 'on' : ''}
-                      onClick={() => {
-                        const n = new Set(levelSet);
-                        if (n.has(l.id)) n.delete(l.id);
-                        else n.add(l.id);
-                        setLevelsOn(n);
-                      }}
-                    >
-                      {l.name}
+              <div className="bld-toolbar" role="toolbar" aria-label="View">
+                <div className="bld-tg" role="group" aria-label="Views">
+                  {(
+                    [
+                      ['iso', 'Iso'],
+                      ['top', 'Top'],
+                      ['front', 'Front'],
+                      ['side', 'Side'],
+                    ] as const
+                  ).map(([k, l]) => (
+                    <button key={k} onClick={() => go(k)} title={`${l} view`}>
+                      {l}
                     </button>
                   ))}
+                  <button onClick={() => go('frame')} title="Zoom to the selection (or everything)">
+                    <Icon name="fit" size={13} />
+                  </button>
                 </div>
-                <div className="bld-chips trades" role="group" aria-label="Trades">
-                  {tradesUsed.map((t) => (
-                    <button
-                      key={t.key}
-                      className={tradeSet.has(t.key) ? 'on' : ''}
-                      onClick={() => {
-                        const n = new Set(tradeSet);
-                        if (n.has(t.key)) n.delete(t.key);
-                        else n.add(t.key);
-                        setTradesOn(n);
-                      }}
-                      title={t.name}
-                    >
-                      <i style={{ background: t.colour }} />
-                      {t.name}
-                    </button>
-                  ))}
-                </div>
-                <label className="bld-ghost">
-                  <input type="checkbox" checked={ghosts} onChange={(e) => setGhosts(e.target.checked)} /> Show what isn’t built yet
+                <label className="bld-tg slider" title="Pull the levels apart (and the systems, when ticked)">
+                  <span>Explode</span>
+                  <input type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => setExplode(Number(e.target.value))} />
+                  <input type="checkbox" checked={explodeSystems} onChange={(e) => setExplodeSystems(e.target.checked)} title="Systems too" />
+                  <em>systems</em>
                 </label>
+                <label className="bld-tg slider" title="Section cut: hide everything above this height">
+                  <span>Section</span>
+                  <input type="range" min={0} max={topZ} step={0.05} value={cut ?? topZ} onChange={(e) => setCut(Number(e.target.value) >= topZ - 0.01 ? null : Number(e.target.value))} />
+                  <em>{cut === null ? 'off' : `${(project.units === 'imperial' ? cut / 0.3048 : cut).toFixed(1)} ${project.units === 'imperial' ? 'ft' : 'm'}`}</em>
+                </label>
+                <label className="bld-tg">
+                  <span>Colour by</span>
+                  <select value={colourMode} onChange={(e) => setColourMode(e.target.value as typeof colourMode)}>
+                    <option value="system">System</option>
+                    <option value="status">Schedule status</option>
+                    <option value="level">Level</option>
+                    <option value="spec">Spec coverage</option>
+                    <option value="quality">Data quality</option>
+                  </select>
+                </label>
+                <div className="bld-tg">
+                  <button className={ghosts ? 'on' : ''} onClick={() => setGhosts(!ghosts)} title="Show what isn’t built yet, as a ghost">
+                    Ghosts
+                  </button>
+                  {(isolate || hidden.size > 0) && (
+                    <button
+                      className="on warn"
+                      onClick={() => {
+                        setIsolate(null);
+                        setHidden(new Set());
+                      }}
+                    >
+                      Show all
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="bld-legend2">
+                {LEGENDS[colourMode].slice(0, 12).map(([c, l]) => (
+                  <span key={l}>
+                    <i style={{ background: c }} /> {l}
+                  </span>
+                ))}
               </div>
               <div className="bld-day">
                 <b>{cal ? fmt(cal.date(dayInt)) : ''}</b>
@@ -370,20 +474,6 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                   {hoverEl.name} · {Math.round(hoverEl.quantity).toLocaleString()} {hoverEl.unit}
                 </div>
               )}
-              <div className="bld-legend">
-                <span>
-                  <i className="todo" /> Not started
-                </span>
-                <span>
-                  <i className="doing" /> Being built
-                </span>
-                <span>
-                  <i className="done" /> Done
-                </span>
-                <span>
-                  <i className="demo" /> To demolish
-                </span>
-              </div>
             </>
           ) : (
             <div className="bld-empty">
@@ -405,7 +495,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
         </section>
 
         {out && (
-          <aside className="bld-inspect">
+          <aside className="bld-inspect" ref={inspectRef}>
             {selAct ? (
               <ActivityCard
                 a={selAct}
@@ -420,7 +510,33 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                 elements={selAct.elements.map((id) => elById.get(id)!).filter(Boolean)}
               />
             ) : selEl ? (
-              <ElementCard e={selEl} act={actById.get(actOfElement.get(selEl.id) ?? '')} state={stateOf(selEl)} onPickAct={(id) => setSel({ kind: 'activity', id })} onSection={openSection} secLabel={secLabel} onSource={openSource} missing={(k) => !!sections.find((s) => s.key === k)?.missing} />
+              <ElementProperties
+                e={selEl}
+                project={project}
+                sections={sections}
+                act={actById.get(actOfElement.get(selEl.id) ?? '')}
+                t={times[actOfElement.get(selEl.id) ?? '']}
+                state={stateOf(selEl)}
+                render={renderSheet}
+                onPickAct={(id) => setSel({ kind: 'activity', id })}
+                onSection={(k, page) => {
+                  const sc = sections.find((x) => x.key === k);
+                  if (sc) onOpenSpec(sc.docId, page ?? sc.pages[0] ?? 1, sc.key);
+                }}
+                onSource={openSource}
+                onFrame={() => go('frame')}
+                onIsolate={() => setIsolate(new Set([selEl.id]))}
+              />
+            ) : treeSel && model ? (
+              <GroupProperties
+                sel={treeSel}
+                model={model}
+                project={project}
+                sections={sections}
+                onSection={openSection}
+                onIsolate={() => setIsolate(new Set(treeSel.ids))}
+                onFrame={() => go('frame')}
+              />
             ) : feas ? (
               <div className="bld-card">
                 <h3>{feas.target ? (feas.overBy ? 'The target can’t be met' : 'The plan meets the target') : 'Earliest finish'}</h3>
@@ -492,6 +608,14 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
       {out && cal && (
         <footer className="bld-time">
           <div className="bld-controls">
+            <div className="bld-btabs" role="tablist">
+              <button role="tab" aria-selected={bottom === 'schedule'} className={bottom === 'schedule' ? 'on' : ''} onClick={() => setBottom('schedule')}>
+                Schedule
+              </button>
+              <button role="tab" aria-selected={bottom === 'quantities'} className={bottom === 'quantities' ? 'on' : ''} onClick={() => setBottom('quantities')}>
+                Quantities
+              </button>
+            </div>
             <button className="primary" onClick={() => (day >= end ? (setDay(0), setPlaying(true)) : setPlaying((p) => !p))} aria-label={playing ? 'Pause' : 'Play'}>
               {playing ? '❚❚' : '▶'}
             </button>
@@ -511,7 +635,20 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
               </button>
             </span>
           </div>
-          <Gantt groups={groups} times={times} end={end} zoom={zoom} day={day} target={targetIdx} cal={cal} selected={sel?.kind === 'activity' ? sel.id : null} onPick={(id) => setSel({ kind: 'activity', id })} onDay={(d) => (setPlaying(false), setDay(d))} />
+          {bottom === 'schedule' ? (
+            <Gantt groups={groups} times={times} end={end} zoom={zoom} day={day} target={targetIdx} cal={cal} selected={sel?.kind === 'activity' ? sel.id : null} onPick={(id) => (setTreeSel(null), setSel({ kind: 'activity', id }))} onDay={(d) => (setPlaying(false), setDay(d))} />
+          ) : (
+            model && (
+              <QuantitySchedule
+                model={model}
+                picked={treeSel?.key ?? null}
+                onPick={(t) => {
+                  setSel(null);
+                  setTreeSel(t);
+                }}
+              />
+            )
+          )}
         </footer>
       )}
     </div>
@@ -852,69 +989,6 @@ function ActivityCard(props: {
           <h4>Unresolved</h4>
           <ul className="bld-warn">
             {issues.slice(0, 6).map((i) => (
-              <li key={i}>{i}</li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
-  );
-}
-
-function ElementCard(props: { e: BuildElement; act?: Activity; state: ElementState; onPickAct: (id: string) => void; onSection: (k: string) => void; secLabel: (k: string) => string; onSource: (s: SourceRef) => void; missing: (k: string) => boolean }) {
-  const { e, act, state, onPickAct, onSection, secLabel, onSource, missing } = props;
-  const STATE: Record<ElementState, string> = { todo: 'Not started', doing: 'Being built', done: 'Built', existing: 'Existing, to be demolished', removing: 'Being demolished', gone: 'Demolished' };
-  return (
-    <div className="bld-card">
-      <span className="bld-kind" style={{ borderColor: tradeByKey.get(e.trade)?.colour }}>
-        {tradeByKey.get(e.trade)?.name}
-      </span>
-      <h3>{e.name}</h3>
-      <p className="bld-big">
-        {Math.round(e.quantity * 10) / 10} {e.unit}
-        <span> · {STATE[state]}</span>
-      </p>
-      <h4>Takeoff</h4>
-      <p>
-        {e.typeName}
-        {e.division ? ` · ${e.division}` : ''}
-      </p>
-      <h4>Measured on</h4>
-      {e.sources.map((s, i) => (
-        <button key={i} className="link-button block" onClick={() => onSource(s)}>
-          {s.label} (page {s.page}) →
-        </button>
-      ))}
-      <h4>
-        Place <Badge basis={e.placement} />
-      </h4>
-      <p className="dim">{e.placement === 'inferred' ? 'From its place on the plan; its level from the sheet.' : 'Not placed in the model.'}</p>
-      {e.specs.length > 0 && (
-        <>
-          <h4>Specification</h4>
-          <div className="bld-chips2">
-            {e.specs.map((s) => (
-              <button key={s.key} onClick={() => onSection(s.key)} className={missing(s.key) ? 'missing' : ''}>
-                {secLabel(s.key)}
-                {missing(s.key) ? ' · not issued' : ''}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      {act && (
-        <>
-          <h4>Built by</h4>
-          <button className="link-button block" onClick={() => onPickAct(act.id)}>
-            {act.name} →
-          </button>
-        </>
-      )}
-      {e.issues.length > 0 && (
-        <>
-          <h4>Unresolved</h4>
-          <ul className="bld-warn">
-            {e.issues.map((i) => (
               <li key={i}>{i}</li>
             ))}
           </ul>

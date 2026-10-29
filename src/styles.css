@@ -6040,3 +6040,659 @@ button.link-button:hover {
 .bld-g-target {
   border-left: 2px dashed #ff6b6b;
 }
+
+/* ---------- Build It: BIM viewer ---------- */
+.bld-left-tabs {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  width: 300px;
+  padding: 8px 10px;
+  background: rgba(14, 19, 34, 0.98);
+  border-right: 1px solid rgba(140, 170, 255, 0.12);
+  border-bottom: 1px solid rgba(140, 170, 255, 0.08);
+}
+.bld-left-tabs button,
+.bld-btabs button {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  box-shadow: none;
+  color: #8fa0cc;
+  font: 600 10.5px 'Space Grotesk', sans-serif !important;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.bld-left-tabs button.on,
+.bld-btabs button.on {
+  background: rgba(124, 196, 255, 0.14);
+  border-color: rgba(124, 196, 255, 0.3);
+  color: #fff;
+}
+.bld-left,
+.bld-left-tabs ~ .bld-setup {
+  padding-top: 46px;
+}
+.bld-left {
+  width: 300px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(140, 170, 255, 0.12);
+  background: rgba(14, 19, 34, 0.96);
+  min-height: 0;
+}
+.bld-left-tabs ~ .bld-setup {
+  width: 300px;
+}
+.bld-tree {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 6px 12px;
+}
+.bld-tree-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 4px 6px;
+  padding: 0 8px;
+  border: 1px solid rgba(140, 170, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(10, 14, 26, 0.95);
+  color: #7d87a8;
+}
+.bld .bld-tree-search input {
+  flex: 1;
+  min-height: 28px;
+  border: none !important;
+  background: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: #fff;
+}
+.bld-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bld-tree-row:hover {
+  background: rgba(140, 170, 255, 0.08);
+}
+.bld-tree-row.on {
+  background: rgba(124, 196, 255, 0.16);
+}
+.bld-tree-row.lvl b {
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 11.5px;
+}
+.bld-tree-row.trade {
+  padding-left: 18px;
+}
+.bld-tree-row.type {
+  padding-left: 38px;
+  color: #aab4d8;
+  font-size: 11.5px;
+}
+.bld-tree-row .nm {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bld-tree-row > i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.bld-tree-row em {
+  margin-left: auto;
+  color: #7d87a8;
+  font-style: normal;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+}
+.bld-tree-row .caret,
+.bld-pg .caret {
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  color: #7d87a8;
+  font-size: 9px;
+  transition: transform 0.15s;
+}
+.bld-tree-row .caret.open,
+.bld-pg.open > header .caret {
+  transform: rotate(90deg);
+}
+.bld-eye {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  color: #8fa0cc;
+  opacity: 0.5;
+}
+.bld-tree-row:hover .bld-eye,
+.bld-eye.off,
+.bld-eye.some {
+  opacity: 1;
+}
+.bld-eye.off {
+  color: #5a6485;
+}
+.bld-eye.some {
+  color: #ffc861;
+}
+.bld-tree-hint {
+  padding: 8px 8px 0;
+}
+.bld-toolbar {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid rgba(140, 170, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(12, 17, 31, 0.82);
+  backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  z-index: 2;
+}
+.bld-tg {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border-right: 1px solid rgba(140, 170, 255, 0.12);
+  color: #8fa0cc;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.bld-tg:last-child {
+  border-right: none;
+}
+.bld-tg > span {
+  margin-right: 4px;
+}
+.bld-tg button {
+  min-height: 26px !important;
+  padding: 0 8px !important;
+  border: none !important;
+  border-radius: 7px !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: #c9d2f0;
+  font: 600 10.5px 'Space Grotesk', sans-serif !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.bld-tg button:hover {
+  background: rgba(140, 170, 255, 0.14) !important;
+}
+.bld-tg button.on {
+  background: rgba(124, 196, 255, 0.2) !important;
+  color: #fff;
+}
+.bld-tg button.warn {
+  background: rgba(255, 179, 64, 0.2) !important;
+  color: #ffc861;
+}
+.bld-tg input[type='range'] {
+  width: 90px;
+  accent-color: #7cc4ff;
+}
+.bld-tg em {
+  min-width: 34px;
+  color: #c9d2f0;
+  font-style: normal;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.bld .bld-tg select {
+  min-height: 24px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.bld-legend2 {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  max-width: 62%;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(12, 17, 31, 0.8);
+  backdrop-filter: blur(10px);
+  color: #aab4d8;
+  font-size: 10.5px;
+  pointer-events: none;
+}
+.bld-legend2 i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+.bld-day {
+  top: 64px !important;
+}
+/* Properties: BIM property sets */
+.bld-props {
+  padding-bottom: 20px;
+}
+.bld-props-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 14px 16px 10px;
+  background: linear-gradient(rgba(14, 19, 34, 0.99) 85%, rgba(14, 19, 34, 0));
+}
+.bld-props-head h3 {
+  margin: 6px 0 2px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.bld-props-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+.bld-props-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px !important;
+  padding: 0 9px !important;
+  font-size: 11px !important;
+}
+.bld-state {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(140, 170, 255, 0.14);
+  color: #c9d2f0;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.bld-state.doing,
+.bld-state.removing {
+  background: rgba(255, 214, 10, 0.18);
+  color: #ffe066;
+}
+.bld-state.done {
+  background: rgba(61, 220, 132, 0.16);
+  color: #6ff0a8;
+}
+.bld-pg {
+  border-top: 1px solid rgba(140, 170, 255, 0.1);
+}
+.bld-pg > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+.bld-pg > header:hover {
+  background: rgba(140, 170, 255, 0.05);
+}
+.bld-pg > header b {
+  color: #8fa0cc;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.bld-count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(140, 170, 255, 0.14);
+  color: #c9d2f0;
+  font-style: normal;
+  font-size: 10px;
+}
+.bld-count.warn {
+  background: rgba(255, 179, 64, 0.2);
+  color: #ffc861;
+}
+.bld-pg-body {
+  padding: 0 16px 12px;
+}
+.bld-prop {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(140, 170, 255, 0.08);
+}
+.bld-prop > span:first-child {
+  color: #7d87a8;
+}
+.bld-prop > span:last-child {
+  color: #e8ecff;
+  overflow-wrap: anywhere;
+}
+.bld-prop code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #aab4d8;
+}
+.bld-prop .crit,
+.bld-pg .crit {
+  color: #ff9b94;
+  font-weight: 600;
+}
+.bld-mats {
+  width: 100%;
+  margin-top: 6px;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.bld-mats td {
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(140, 170, 255, 0.07);
+}
+.bld-mats .num {
+  padding-right: 6px;
+  text-align: right;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+}
+.bld-mats .u {
+  width: 34px;
+  color: #7d87a8;
+}
+.bld-desc {
+  margin-top: 8px !important;
+}
+.bld-blowup {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0 !important;
+  border: 1px solid rgba(140, 170, 255, 0.2) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  background: #fff !important;
+  cursor: zoom-in;
+}
+.bld-blowup.loading {
+  display: grid;
+  place-items: center;
+  height: 160px;
+  background: rgba(140, 170, 255, 0.06) !important;
+  color: #7d87a8;
+  font-size: 11px;
+}
+.bld-blowup img {
+  display: block;
+  width: 100%;
+}
+.bld-blowup svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: calc(100% - 0px);
+  pointer-events: none;
+}
+.bld-blowup .hl {
+  fill: none;
+  stroke: #ff2d55;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 3px rgba(255, 45, 85, 0.8));
+}
+.bld-blowup .hl.area {
+  fill: rgba(255, 45, 85, 0.12);
+}
+.bld-blowup-tag {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(12, 17, 31, 0.85);
+  color: #dfe5fb;
+  font-size: 10.5px;
+  text-align: left;
+}
+.bld-blowup-tag b {
+  color: #9cc4ff;
+  white-space: nowrap;
+}
+.bld-spec {
+  margin: 6px 0 12px;
+}
+.bld-spec-title {
+  display: block;
+  width: 100%;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: #e8ecff;
+  text-align: left !important;
+  white-space: normal !important;
+  justify-content: flex-start !important;
+  cursor: pointer;
+}
+.bld-spec-title b {
+  color: #9cc4ff;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+}
+.bld-spec-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0;
+}
+.bld-spec-tags .tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(140, 170, 255, 0.12);
+  color: #aab4d8;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.bld-spec-tags .tag.warn {
+  background: rgba(255, 179, 64, 0.18);
+  color: #ffc861;
+}
+.bld-spec-tags .tag.add {
+  background: rgba(255, 95, 162, 0.18);
+  color: #ff9fc8;
+}
+.bld-excerpt {
+  margin: 4px 0 !important;
+  padding-left: 8px;
+  border-left: 2px solid rgba(140, 170, 255, 0.25);
+  color: #aab4d8;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.bld-arts {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}
+.bld-arts button {
+  display: block;
+  min-height: 0 !important;
+  padding: 2px 0 !important;
+  border: none !important;
+  background: none !important;
+  box-shadow: none !important;
+  color: #c9d2f0;
+  font-size: 11px !important;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  justify-content: flex-start !important;
+}
+.bld-arts button:hover {
+  color: #9cc4ff;
+}
+.bld-arts em {
+  display: inline-block;
+  width: 30px;
+  color: #7d87a8;
+  font-style: normal;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+}
+.bld-btabs {
+  display: flex;
+  gap: 2px;
+  margin-right: 6px;
+}
+.bld-btabs button {
+  flex: none;
+}
+/* Quantity schedule */
+.bld-qty {
+  flex: 1;
+  overflow: auto;
+}
+.bld-qty table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.bld-qty th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 10px;
+  background: rgba(10, 14, 26, 0.98);
+  border-bottom: 1px solid rgba(140, 170, 255, 0.14);
+  color: #7d87a8;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.bld-qty td {
+  padding: 4px 10px;
+  border-bottom: 1px solid rgba(140, 170, 255, 0.06);
+  white-space: nowrap;
+}
+.bld-qty .num {
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+}
+.bld-qty .b {
+  color: #fff;
+  font-weight: 600;
+}
+.bld-qty .nm {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #e8ecff;
+}
+.bld-qty .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 2px;
+}
+.bld-qty tbody tr {
+  cursor: pointer;
+}
+.bld-qty tbody tr:hover td {
+  background: rgba(140, 170, 255, 0.06);
+}
+.bld-qty tbody tr.on td {
+  background: rgba(124, 196, 255, 0.14);
+}
+
+/* Build: the compass (plan north is up the sheet), bottom right of the model. */
+.bld-compass {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 3;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.45));
+}
+.bld-compass .ring {
+  fill: rgba(14, 19, 34, 0.82);
+  stroke: rgba(140, 170, 255, 0.28);
+  stroke-width: 1;
+}
+.bld-compass:hover .ring {
+  stroke: rgba(140, 170, 255, 0.7);
+}
+.bld-compass .needle {
+  transform: rotate(var(--az, 0rad));
+  transform-origin: 0 0;
+}
+.bld-compass .n {
+  fill: #ff6b6b;
+}
+.bld-compass .s {
+  fill: rgba(220, 228, 255, 0.55);
+}
+.bld-compass text {
+  fill: #e8edff;
+  font: 700 7px var(--font-mono, ui-monospace, monospace);
+}
