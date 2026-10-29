@@ -46,6 +46,8 @@ export interface Sheet {
   scaleHints: string[];
   /** An older revision kept for reference after its takeoffs moved to a newer sheet. */
   superseded?: boolean;
+  /** Its number was read from its title block by OCR (so a better reading of the set may change it). */
+  ocr?: boolean;
   /** Marked finished by the estimator, to track progress through a set. */
   done?: boolean;
   /** How many times the sheet's takeoffs count, for a typical floor drawn once (unset is once). */

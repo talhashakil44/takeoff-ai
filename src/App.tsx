@@ -840,10 +840,27 @@ export function App() {
   }
 
   // Sets added before title blocks were read by OCR (sheets still "Page 3"): read once, by themselves.
+  // Sets OCR named before its reading of a set improved: their numbers made consistent again.
   const ocrTried = useRef(new Set<string>());
   useEffect(() => {
     const p = projectRef.current;
     if (!p || busy) return;
+    const fromOcr = new Set(activityRef.current.filter((e) => e.source === 'Name sheets from title blocks (OCR)').map((e) => `${e.name}|${/Page (\d+)/.exec(e.detail ?? '')?.[1] ?? ''}`));
+    const isOcr = (x: Sheet) => x.ocr || fromOcr.has(`${x.name}|${x.page}`);
+    const retidy = new Map<string, Sheet>();
+    for (const d of p.docs) {
+      if (ocrTried.current.has(`tidy:${d.id}`)) continue;
+      ocrTried.current.add(`tidy:${d.id}`);
+      const own = p.sheets.filter((x) => x.docId === d.id && !x.superseded && isOcr(x));
+      if (own.length < 3) continue;
+      const discipline = /electrical/i.test(d.name) ? 'E' : /mechanical|hvac/i.test(d.name) ? 'M' : /plumbing/i.test(d.name) ? 'P' : /structural/i.test(d.name) ? 'S' : /architectural/i.test(d.name) ? 'A' : undefined;
+      const numbers = tidySetNumbers(own.map((x) => ({ page: x.page, number: x.name })), discipline);
+      for (const x of own) {
+        const n = numbers.get(x.page);
+        if (n && n !== x.name) retidy.set(x.id, { ...x, name: n, ocr: true });
+      }
+    }
+    if (retidy.size) commit((q) => ({ ...q, sheets: q.sheets.map((x) => retidy.get(x.id) ?? x) }), 'Name sheets from title blocks (OCR)');
     const due = p.docs.filter((d) => !ocrTried.current.has(d.id) && pdfs.has(d.id) && p.sheets.filter((x) => x.docId === d.id && !x.superseded).some((x) => /^Page \d+$/.test(x.name)));
     if (!due.length) return;
     for (const d of due) ocrTried.current.add(d.id);
@@ -1062,12 +1079,16 @@ export function App() {
         break;
       }
     }
-    const numbers = tidySetNumbers(unnamed.map((x) => ({ page: x.page, number: named.get(x.id)?.number })));
+    const discipline = /electrical/i.test(name) ? 'E' : /mechanical|hvac/i.test(name) ? 'M' : /plumbing/i.test(name) ? 'P' : /structural/i.test(name) ? 'S' : /architectural/i.test(name) ? 'A' : /civil/i.test(name) ? 'C' : /landscape/i.test(name) ? 'L' : undefined;
+    const numbers = tidySetNumbers(
+      unnamed.map((x) => ({ page: x.page, number: named.get(x.id)?.number })),
+      discipline,
+    );
     return sheets.map((x) => {
       if (!/^Page \d+$/.test(x.name)) return x;
       const r = named.get(x.id);
       const number = numbers.get(x.page);
-      return number ? { ...x, name: number, ...(r?.title && !x.title ? { title: r.title } : {}) } : x;
+      return number ? { ...x, name: number, ocr: true, ...(r?.title && !x.title ? { title: r.title } : {}) } : x;
     });
   }
 

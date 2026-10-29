@@ -86,7 +86,7 @@ export async function ocrTitleBlock(page: PDFPageProxy): Promise<{ number?: stri
  * the set's letter, and a page OCR missed takes its number from its neighbours' run (E5 between
  * E4 on page 4 and E6 on page 6).
  */
-export function tidySetNumbers(found: { page: number; number?: string }[]): Map<number, string> {
+export function tidySetNumbers(found: { page: number; number?: string }[], hint?: string): Map<number, string> {
   const out = new Map<number, string>();
   const parsed = found.flatMap((f) => {
     const m = f.number ? /^([A-Z]{1,3})([-.]?)(\d+)$/.exec(f.number) : null;
@@ -98,7 +98,9 @@ export function tidySetNumbers(found: { page: number; number?: string }[]): Map<
   }
   const count = new Map<string, number>();
   for (const p of parsed) count.set(p.prefix, (count.get(p.prefix) ?? 0) + 1);
-  const [prefix, n] = [...count].sort((a, b) => b[1] - a[1])[0];
+  // The set's letter: the file's discipline when its name says (Electrical: E) and some pages agree, else the most read.
+  const ranked = [...count].sort((a, b) => b[1] - a[1]);
+  const [prefix, n] = hint && count.has(hint) ? [hint, count.get(hint)!] : ranked[0];
   const sep = parsed.find((p) => p.prefix === prefix)!.sep;
   // The run: number = page + offset, when the pages that read agree on one offset.
   const offsets = new Map<number, number>();
@@ -107,8 +109,9 @@ export function tidySetNumbers(found: { page: number; number?: string }[]): Map<
   for (const f of found) {
     const p = parsed.find((x) => x.page === f.page);
     if (p) {
-      const odd = n > parsed.length / 2 && p.prefix !== prefix && p.prefix.length === prefix.length;
       const inRun = agree >= 3 && agree >= parsed.length * 0.6;
+      // A misread letter: when the set's letter is most of it, or the pages run in order (E2 … E11, page = number).
+      const odd = p.prefix !== prefix && p.prefix.length === prefix.length && (n > parsed.length / 2 || (inRun && n > (count.get(p.prefix) ?? 0)));
       // A misread letter (F for E) in the run: the set's letter; misread digits too (F1 on page 10 of E1…E12): the run's number.
       out.set(f.page, odd ? `${prefix}${sep}${p.n - p.page === offset || !inRun ? p.n : f.page + offset}` : `${p.prefix}${p.sep}${p.n}`);
     } else if (f.number) out.set(f.page, f.number);

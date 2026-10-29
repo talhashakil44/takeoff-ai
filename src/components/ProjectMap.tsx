@@ -730,6 +730,8 @@ export function ProjectMap({ data, focus, onOpenSpec, onOpenDrawing, onClose, on
         .onLinkHover((l: object | null) => (el.style.cursor = l ? 'pointer' : 'grab'))
         .onNodeClick((n: object) => pickRef.current((n as { id: string }).id, false))
         .onBackgroundClick(() => setSelected(null))
+        // By meaning, a node's place is what it means: not dragged about (by links it can be).
+        .enableNodeDrag(!space)
         .cooldownTicks(space ? 2 : Infinity)
         .cooldownTime(6000);
       if (!space) g.d3Force('x', forceX<SimulationNodeDatum & { side?: string }>((n) => (n.side === 'spec' ? -170 : 170)).strength(0.06) as never);

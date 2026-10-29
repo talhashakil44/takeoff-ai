@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readTitleLines } from '../src/ocr';
+import { readTitleLines, tidySetNumbers } from '../src/ocr';
 
 describe('title block by OCR', () => {
   it('finds the sheet number and the drawing title', () => {
@@ -32,5 +32,14 @@ describe('a set of OCR numbers', () => {
       [8, 'E8'],
       [9, 'E9'],
     ]);
+  });
+});
+
+describe('a set read on another computer', () => {
+  it('fixes misread letters when the pages run in order, even when they are not most of it', () => {
+    const read = ['C0', 'E2', 'F3', 'F4', undefined, 'E6', undefined, 'E8', 'E9', 'F1', 'E11', 'F1'];
+    const out = tidySetNumbers(read.map((number, i) => ({ page: i + 1, number })));
+    expect([...out.values()]).toEqual(['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'E12']);
+    expect([...tidySetNumbers(read.map((number, i) => ({ page: i + 1, number })), 'E').values()][0]).toBe('E1');
   });
 });
