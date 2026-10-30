@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawingFingerprint, needsLines, needsText, packLines, slimLines, unpackLines } from '../src/build/sources';
+import { doorSheets, drawingFingerprint, needsLines, needsText, packLines, slimLines, unpackLines } from '../src/build/sources';
 import { sourceHashOf } from '../src/build/extract';
 import { writtenDate } from '../src/build/facts';
 import type { Segment } from '../src/fill/vectors';
@@ -19,6 +19,18 @@ describe('Build It drawing evidence', () => {
     expect(needsText({ id: 'f', title: 'MILLWORK DETAILS' }, measured)).toBe(false);
     expect(needsLines({ title: 'BUILDING SECTIONS' })).toBe(true);
     expect(needsLines({ title: 'INTERIOR ELEVATIONS' })).toBe(false);
+    // Plans with counted doors: their swing arcs host the doors.
+    const doors = doorSheets({
+      types: [{ id: 'd', name: 'Doors', kind: 'count' } as Project['types'][number], { id: 'w', name: 'Windows', kind: 'count' } as Project['types'][number]],
+      measurements: [
+        { id: '1', sheetId: 'p1', typeId: 'd', points: [], holes: [] },
+        { id: '2', sheetId: 'p2', typeId: 'x', points: [], holes: [], source: 'doors' },
+        { id: '3', sheetId: 'p3', typeId: 'w', points: [], holes: [] },
+      ] as Project['measurements'],
+    });
+    expect([...doors].sort()).toEqual(['p1', 'p2']);
+    expect(needsLines({ id: 'p1', title: 'GROUND FLOOR PLAN' }, doors)).toBe(true);
+    expect(needsLines({ id: 'p3', title: 'GROUND FLOOR PLAN' }, doors)).toBe(false);
   });
 
   it('keeps every line exactly, without the fields the model never reads', () => {

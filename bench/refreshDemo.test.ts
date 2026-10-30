@@ -28,8 +28,7 @@ it('refresh', async () => {
     // Door tags on every sheet, from the first level floor plan (as the whole-set run does); numbers already counted stay as they are.
     const home = p.sheets.find((s: any) => !s.superseded && classifySheet(s).kind === 'floor plan' && classifySheet(s).level === 'level');
     if (!home) return { message: 'no floor plan' };
-    const r: any = doorTakeoff(p, await findDoorTagsIn(p, access as any, home, true), home, true);
-    return r.apply ? { ...r, apply: (q: any) => { const n = q.measurements.length; const o = r.apply(q); return { ...o, measurements: o.measurements.map((m: any, i: number) => (i >= n ? { ...m, source: 'doors' } : m)) }; } } : r;
+    return doorTakeoff(p, await findDoorTagsIn(p, access as any, home, true), home, true);
   }]] as const) {
     const r: any = await (fn as any)();
     console.log(name, '→', r.message);

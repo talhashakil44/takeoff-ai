@@ -16,7 +16,18 @@ import type { DrawingLines } from './roof';
 const CACHE_VERSION = 1;
 
 /** Sheets whose linework the model reads: building elevations and sections (window elevations included). */
-export const needsLines = (s: Pick<Sheet, 'title'>) => /ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? '');
+/**
+ * Sheets whose linework the model reads: exterior elevations and building sections (façades,
+ * roof), and plans with counted doors (the swing arcs and wall openings the doors are hosted in).
+ */
+export const needsLines = (s: Pick<Sheet, 'title'> & { id?: string }, doors?: Set<string>) =>
+  (/ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? '')) || (!!s.id && !!doors?.has(s.id));
+
+/** Sheets with door counts: by the door takeoff (source doors) or on a Doors count type. */
+export function doorSheets(project: Pick<Project, 'measurements'> & { types?: Project['types'] }): Set<string> {
+  const doorTypes = new Set((project.types ?? []).filter((t) => t.kind === 'count' && /^doors?\b/i.test(t.name)).map((t) => t.id));
+  return new Set(project.measurements.filter((m) => m.source === 'doors' || doorTypes.has(m.typeId)).map((m) => m.sheetId));
+}
 
 /**
  * Sheets whose text the model reads: plans (levels, grids), elevations and sections (datums,
@@ -82,7 +93,7 @@ export interface DrawingSources {
  * computer's cache where it was read before. A sheet that can't be read is left out.
  */
 export async function loadDrawingSources(opts: {
-  project: Pick<Project, 'sheets' | 'measurements'>;
+  project: Pick<Project, 'sheets' | 'measurements'> & { types?: Project['types'] };
   sheetText: (sheetId: string) => Promise<DrawingText[]>;
   sheetLines?: (sheetId: string) => Promise<Segment[]>;
   titleWords: (texts: DrawingText[], width: number, height: number) => string;
@@ -93,6 +104,7 @@ export async function loadDrawingSources(opts: {
   const { project, sheetText, sheetLines, titleWords, progress, cancelled } = opts;
   const useCache = opts.cache !== false && typeof indexedDB !== 'undefined';
   const measured = new Set(project.measurements.map((m) => m.sheetId));
+  const doors = doorSheets(project);
   const todo = project.sheets.filter((s) => !s.superseded && needsText(s, measured));
   const out: DrawingSources = { texts: {}, lines: {}, hints: {} };
   let done = 0;
@@ -107,7 +119,7 @@ export async function loadDrawingSources(opts: {
     }
     out.texts[s.id] = texts ?? [];
     out.hints[s.id] = titleWords(out.texts[s.id], s.width, s.height);
-    if (sheetLines && needsLines(s)) {
+    if (sheetLines && needsLines(s, doors)) {
       const packed = useCache ? await get<PackedLines | undefined>(lineKey(s)).catch(() => undefined) : undefined;
       if (packed?.v === CACHE_VERSION) out.lines[s.id] = unpackLines(packed);
       else {
