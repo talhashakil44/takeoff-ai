@@ -190,6 +190,17 @@ export interface ScopeAllowance {
   provisional: boolean;
 }
 
+/** An optional planning proxy, shown for user review before it enters setup. */
+export interface ScopeSuggestion {
+  key: string;
+  allowance: ScopeAllowance;
+  /** The area used for the proxy, in m²: gross floors or a measured slab footprint. */
+  referenceAreaM2: number;
+  areaBasis: 'inferred';
+  rateBasis: 'assumed';
+  why: string;
+}
+
 export interface PlanSetup {
   start: Assumption<string>;
   /** The finish wanted: a target, never a reason to compress work arbitrarily. */

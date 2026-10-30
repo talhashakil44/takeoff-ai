@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { schedule } from '../src/build/cpm';
 import { applySetupEdits, defaultSetup, planActivities } from '../src/build/plan';
-import { planningScopeIssues } from '../src/build/scope';
+import { planningScopeIssues, suggestScopeAllowances } from '../src/build/scope';
+import { replan } from '../src/build/run';
 import type { BuildElement, BuildModel, ScopeAllowance } from '../src/build/types';
 
 const element = (id: string, trade: string, level: string | null, division: string, unit: string, quantity: number): BuildElement => ({
@@ -12,7 +13,7 @@ const element = (id: string, trade: string, level: string | null, division: stri
 
 function model(): BuildModel {
   return {
-    version: 14, sourceHash: 'test', units: 'metric',
+    version: 15, sourceHash: 'test', units: 'metric',
     levels: [
       { id: 'fdn', name: 'Foundation', elevation: -1.2, basis: 'inferred', sheets: [] },
       { id: 'L1', name: 'Level 1', elevation: 0, basis: 'inferred', sheets: [] },
@@ -32,6 +33,37 @@ const allowance = (quantity: number, unit: string, rate: number, provisional = t
   ({ quantity, unit, rate, provisional });
 
 describe('Build It unmeasured scope allowances', () => {
+  it('offers floor-area proxies only for absent measured trades and never applies them by itself', () => {
+    const m = model();
+    const setup = defaultSetup(m, [], '2026-11-02');
+    const suggestions = suggestScopeAllowances(m, setup);
+    expect(suggestions.map((s) => s.key)).toEqual(expect.arrayContaining(['elec-rough', 'fire-rough', 'painting', 'flooring']));
+    expect(suggestions.some((s) => s.key === 'mech-rough' || s.key === 'ceilings')).toBe(false);
+    expect(suggestions.some((s) => s.key === 'site' || s.key === 'doors')).toBe(false);
+    expect(suggestions.find((s) => s.key === 'elec-rough')).toMatchObject({
+      allowance: { quantity: 100, unit: 'm²', rate: 56, provisional: true },
+      areaBasis: 'inferred', rateBasis: 'assumed',
+    });
+    expect(setup.allowances.value).toEqual({});
+    expect(planActivities(m, setup, [], []).some((a) => a.id === 'allowance:elec-rough')).toBe(false);
+    const accepted = applySetupEdits(setup, { setup: { allowances: { 'elec-rough': suggestions.find((s) => s.key === 'elec-rough')!.allowance } } });
+    expect(planActivities(m, accepted, [], []).find((a) => a.id === 'allowance:elec-rough')).toMatchObject({ duration: 2, elements: [] });
+    expect(suggestScopeAllowances(m, accepted).some((s) => s.key === 'elec-rough')).toBe(false);
+    expect(replan(m, accepted, { sections: [], facts: [], today: '2026-11-02' }).scopeSuggestions.some((s) => s.key === 'elec-rough')).toBe(false);
+    m.floorAreas = {};
+    expect(suggestScopeAllowances(m, setup)).toEqual([]);
+  });
+  it('uses the measured slab footprint for a provisional roof/envelope proposal', () => {
+    const m = model();
+    m.elements.push({ ...element('slab', 'structure', 'fdn', '03 Concrete', 'm²', 702.065), typeName: 'Slab on grade' });
+    const setup = defaultSetup(m, [], '2026-11-02');
+    expect(suggestScopeAllowances(m, setup).find((s) => s.key === 'envelope')).toMatchObject({
+      allowance: { quantity: 702.1, unit: 'm²', rate: 74, provisional: true },
+      referenceAreaM2: 702.065,
+    });
+    m.floorAreas = {};
+    expect(suggestScopeAllowances(m, setup).map((s) => s.key)).toEqual(['envelope']);
+  });
   it('has no quantity or work activity until the user enters one', () => {
     const m = model();
     const setup = defaultSetup(m, [], '2026-11-02');

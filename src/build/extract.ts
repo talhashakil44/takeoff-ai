@@ -25,7 +25,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 15;
+export const MODEL_VERSION = 16;
 
 export interface Trade {
   key: string;
@@ -69,6 +69,7 @@ export function tradeOf(type: TakeoffType, source?: Measurement['source']): stri
   if (d === 31) return 'site';
   if (source === 'structure' || source === 'foundations') return 'structure';
   if (source === 'site') return 'site';
+  if (/^ew[\s-]?\d+[a-z]?\b|\bexterior\s+wall\b|\bcladding\b|\bair[ -]?barrier\b/.test(name)) return 'envelope';
   if (/\b(?:beam|column|lintel|brace|post|base\s*plate|structural\s*wall|shear\s*wall|glulam)\b/.test(name)) return 'structure';
   if (d === 3 || d === 4 || d === 5) return 'structure';
   if (d === 7) return /roof|membrane|flashing|eaves|soffit|siding|cladding|air barrier|vapour/.test(name) ? 'envelope' : 'finishes';

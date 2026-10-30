@@ -1,5 +1,39 @@
 import { tradeByKey } from './extract';
-import type { BuildModel, Issue, PlanSetup, ScopeAllowance, SpecFact } from './types';
+import type { BuildModel, Issue, PlanSetup, ScopeAllowance, ScopeSuggestion, SpecFact } from './types';
+
+/** Area can proxy these missing work packages. Count and site work need their own evidence. */
+const AREA_PROXY_TRADES = [
+  'envelope', 'mech-rough', 'elec-rough', 'fire-rough', 'partitions',
+  'ceilings', 'painting', 'flooring', 'finishes',
+] as const;
+
+/** Suggestions have no effect until the user accepts one into edits.setup.allowances. */
+export function suggestScopeAllowances(model: BuildModel, setup: PlanSetup): ScopeSuggestion[] {
+  const unit = model.units === 'metric' ? 'm²' : 'SF';
+  const areaM2 = Object.entries(model.floorAreas ?? {})
+    .filter(([level]) => level !== 'roof' && level !== 'fdn')
+    .reduce((sum, [, area]) => sum + (Number.isFinite(area) && area > 0 ? area : 0), 0);
+  const slabM2 = model.elements
+    .filter((e) => e.origin === 'takeoff' && e.trade === 'structure' && e.level === 'fdn' && /slab on grade/i.test(e.typeName))
+    .reduce((sum, e) => sum + (e.unit === 'm²' ? e.quantity : e.unit === 'SF' ? e.quantity * 0.09290304 : 0), 0);
+  return AREA_PROXY_TRADES.flatMap((key): ScopeSuggestion[] => {
+    if (model.elements.some((e) => e.trade === key && e.origin === 'takeoff') || key in (setup.allowances?.value ?? {})) return [];
+    const referenceAreaM2 = key === 'envelope' ? slabM2 : areaM2;
+    if (referenceAreaM2 <= 0) return [];
+    const quantity = Math.round((model.units === 'metric' ? referenceAreaM2 : referenceAreaM2 / 0.09290304) * 10) / 10;
+    const rate = setup.trades[key]?.value.rates[unit];
+    if (!Number.isFinite(rate) || rate <= 0) return [];
+    const name = tradeByKey.get(key)?.name ?? key;
+    return [{
+      key,
+      allowance: { quantity, unit, rate, provisional: true },
+      referenceAreaM2,
+      areaBasis: 'inferred',
+      rateBasis: 'assumed',
+      why: `${name} has no measured takeoff. ${quantity} ${unit} is a proxy from ${key === 'envelope' ? 'the measured slab-on-grade footprint (roof area and slope unverified)' : 'recovered gross floor area'}; ${rate} ${unit} per crew-day is an assumed planning rate, not a trade commitment. Review scope and rate before accepting.`,
+    }];
+  });
+}
 
 const allowanceValue = (value: unknown): value is ScopeAllowance => {
   if (!value || typeof value !== 'object') return false;

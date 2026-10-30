@@ -5,8 +5,8 @@ import type { SpecSection } from '../spec/parse';
 import { planToTarget } from "./replanTarget";
 import { extractModel, type ExtractInput } from './extract';
 import { applySetupEdits, defaultSetup, planActivities } from './plan';
-import { planningScopeIssues } from './scope';
-import type { BuildEdits, BuildModel, PlanSetup, Schedule, SpecFact } from './types';
+import { planningScopeIssues, suggestScopeAllowances } from './scope';
+import type { BuildEdits, BuildModel, PlanSetup, Schedule, ScopeSuggestion, SpecFact } from './types';
 
 export interface BuildInput {
   project: Project;
@@ -24,6 +24,7 @@ export interface BuildOutput {
   model: BuildModel;
   setup: PlanSetup;
   schedule: Schedule;
+  scopeSuggestions: ScopeSuggestion[];
   /** Milliseconds spent, for keeping an eye on it. */
   ms: { model: number; plan: number };
 }
@@ -42,7 +43,7 @@ export function buildAll(input: BuildInput): BuildOutput {
 }
 
 /** Just the plan and schedule again (setup or activity edits; the model unchanged). */
-export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInput, 'sections' | 'facts' | 'edits'> & { today?: string }): { schedule: Schedule } {
+export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInput, 'sections' | 'facts' | 'edits'> & { today?: string }): { schedule: Schedule; scopeSuggestions: ScopeSuggestion[] } {
   const acts = planActivities(model, setup, input.sections, input.facts, input.edits);
   const schedule = planToTarget(acts, setup);
   schedule.issues.push(...planningScopeIssues(model, input.facts, setup));
@@ -85,5 +86,5 @@ export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInp
       text: `The plan starts on ${setup.start.value}, before today's ${today}. This may be the documented contract start, but the schedule is historical; set the actual remaining-work start to forecast from today.`,
       sources: setup.start.source ? [setup.start.source] : [],
     });
-  return { schedule };
+  return { schedule, scopeSuggestions: suggestScopeAllowances(model, setup) };
 }

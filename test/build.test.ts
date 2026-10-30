@@ -43,12 +43,32 @@ describe('build it', () => {
     expect(tradeOf(type('a', 'P5 – 6" stud partition', 'linear', '09 Finishes'))).toBe('partitions');
     expect(tradeOf(type('a', 'ACT-1 lay-in ceiling', 'area', '09 Finishes'))).toBe('ceilings');
     expect(tradeOf(type('a', 'Remove existing light fixture', 'count', '26 Electrical'))).toBe('demolition');
+    expect(tradeOf(type('ew', 'EW1A', 'linear', ''))).toBe('envelope');
+    expect(tradeOf(type('ew', 'EW-2', 'linear', ''))).toBe('envelope');
+    expect(tradeOf(type('clad', 'Exterior wall cladding', 'linear', '06 Wood'))).toBe('envelope');
     expect(levelWords('LEVEL 2 (MAIN) FLOOR PLAN')).toEqual({ num: 2, word: 'main' });
     expect(levelWords('BELOW GRADE PLAN - DRAINAGE').word).toBe('lower');
     for (const name of ['Beam B2 GLULAM', 'Column C1', 'Lintel L1', 'Brace BR1', 'Post P1', 'Base plate BP1', 'Structural wall WT1'])
       expect(tradeOf(type('s', name, 'count', '06 Wood, Plastics & Composites'))).toBe('structure');
     expect(tradeOf(type('s', 'Joist / truss J1', 'count', '06 Wood'), 'structure')).toBe('structure');
     expect(tradeOf(type('f', 'Excavation', 'area', '31 Earthwork'), 'foundations')).toBe('site');
+  });
+
+  it('plans measured EW wall work as envelope after framing without duplicating takeoffs', () => {
+    const p = project();
+    p.units = 'metric';
+    p.sheets = [sheet('framing', 'S2.0', 'LEVEL 1 FRAMING PLAN', 1), sheet('wall', 'A2.1', 'LEVEL 1 FLOOR PLAN', 2)];
+    p.types = [type('beam', 'B1 Beam GLULAM', 'count', '06 Wood'), type('ew', 'EW1A', 'linear', '')];
+    p.measurements = [
+      { id: 'beam', sheetId: 'framing', typeId: 'beam', source: 'structure', points: [[100, 100]], holes: [] },
+      { id: 'ew', sheetId: 'wall', typeId: 'ew', source: 'walls', points: [[100, 100], [200, 100]], holes: [] },
+    ];
+    const model = extractModel({ project: p, sections: [], floorToFloor: 3.6 });
+    expect(model.elements.map((e) => e.trade)).toEqual(['structure', 'envelope']);
+    const acts = planActivities(model, defaultSetup(model, [], '2026-11-02'), [], []);
+    expect(acts.find((a) => a.id === 'work:envelope:L1')).toMatchObject({ elements: ['ew'] });
+    expect(acts.find((a) => a.id === 'work:envelope:L1')?.deps.map((d) => d.from)).toContain('work:structure:L1');
+    expect(acts.some((a) => a.id === 'work:partitions:L1')).toBe(false);
   });
 
   it('shows located beam spans as plan axes without exporting invented solids', () => {
