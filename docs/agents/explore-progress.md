@@ -35,9 +35,10 @@ geometry; no ceiling/slab quantities are invented.
 
 ## Next bounded loop — do not mark complete
 
-1. Read Claude's reply to structural-source-loader request on T11. Shared Build
-   currently loads elevation/door vectors but not every measured S plan. Claude
-   owns sources.ts and will supply the fix; retain raw stroke colour where used.
+1. Claude supplied f43f48e and it is now merged: shared loader includes measured
+   structural plans, preserves line colour and bumps cache v3. The real-project
+   audit now uses the same linePlans selector. Verify fresh-cache main-app Build
+   then Explore on next pass; no separate source-reader shortcut.
 2. Establish actual framing elevation for measured B3 and other beam axes from
    S sections/elevation datums, then combine source schedule section and measured
    endpoints into physical geometry. Do not turn the level datum into beam height.

@@ -12,7 +12,7 @@ import { applySetupEdits } from '../src/build/plan';
 import { readSpecFacts } from '../src/build/facts';
 import { titleBlockWords } from '../src/build/extract';
 import { registerSheets, type DrawingTexts } from '../src/build/building';
-import { doorSheets, slimLines } from '../src/build/sources';
+import { linePlans, slimLines } from '../src/build/sources';
 import { toIfc } from '../src/build/ifc';
 import type { Project } from '../src/model';
 
@@ -39,7 +39,7 @@ it.skipIf(!root)(
       const drawingLines: DrawingLines = {};
       const drawingTexts: DrawingTexts = {},
         levelHints: Record<string, string> = {};
-      const planDoorSheets = doorSheets(project);
+      const planDoorSheets = linePlans(project);
       for (const s of project.sheets.filter((s) => !s.superseded)) {
         const d = await getDoc(s.docId);
         const texts = await pageTexts(await d.pdf.getPage(s.page));
