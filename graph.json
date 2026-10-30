@@ -251,7 +251,7 @@
       ]
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [
         "T5"
       ],
@@ -267,7 +267,9 @@
       "title": "Place measurements on sheets with two level viewports (Kelso M1-02/M1-04: L1 and L2 side by side) on their levels; 1,092 m pipe is unplaced",
       "prompt": "Measurements on multi-viewport plan sheets (viewport titles L1-Plumbing / L2-Plumbing, L1-HVAC/L2-HVAC on Kelso M1-02..M1-04) should take the level of the viewport they fall in. Today they land unplaced. Viewport titles and bounds are on the sheet text; claude owns src/build/sources.ts and facts.ts, tell me if you need a viewport reader there.",
       "added": "2026-10-30T04:21:40.999Z",
-      "by": "claude"
+      "by": "claude",
+      "branch": "codex/build-it-viewports",
+      "updated": "2026-10-30T04:44:03.831Z"
     },
     {
       "status": "done",
