@@ -7,6 +7,11 @@ export interface DrawingText {
   str: string;
   cx: number;
   cy: number;
+  /** Width along the baseline and capital height, in sheet points, when the PDF gave them. */
+  w?: number;
+  h?: number;
+  /** The baseline's direction in radians (0 reads left to right), when the PDF gave it. */
+  angle?: number;
 }
 export type DrawingTexts = Record<string, DrawingText[]>;
 export interface Registration {

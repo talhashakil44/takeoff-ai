@@ -151,7 +151,18 @@ export function unpackLines(p: PackedLines): Segment[] {
   return out;
 }
 
-const textKey = (s: Pick<Sheet, 'docId' | 'page'>) => `bldsrc:t:${s.docId}:${s.page}`;
+/** Bumped when what is kept of a text changes (v2: its size and angle). */
+const TEXT_VERSION = 2;
+const textKey = (s: Pick<Sheet, 'docId' | 'page'>) => `bldsrc:t${TEXT_VERSION}:${s.docId}:${s.page}`;
+
+/** Only what Build It uses of a text: its words, centre, and its size and angle where the PDF gave them. */
+export function slimText(t: DrawingText): DrawingText {
+  const out: DrawingText = { str: t.str, cx: t.cx, cy: t.cy };
+  if (Number.isFinite(t.w)) out.w = t.w;
+  if (Number.isFinite(t.h)) out.h = t.h;
+  if (Number.isFinite(t.angle)) out.angle = t.angle;
+  return out;
+}
 const lineKey = (s: Pick<Sheet, 'docId' | 'page'>) => `bldsrc:l:${s.docId}:${s.page}`;
 
 export interface DrawingSources {
@@ -186,7 +197,7 @@ export async function loadDrawingSources(opts: {
     if (!texts) {
       const read = await sheetText(s.id).catch(() => null);
       if (read) {
-        texts = read.map((t) => ({ str: t.str, cx: t.cx, cy: t.cy }));
+        texts = read.map(slimText);
         if (useCache && read.length) void set(textKey(s), texts).catch(() => undefined);
       }
     }
