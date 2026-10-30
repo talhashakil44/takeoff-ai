@@ -294,7 +294,7 @@
       "updated": "2026-10-30T04:26:32.312Z"
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [],
       "accept": [
         "tsc",
@@ -305,7 +305,8 @@
       "owner": "claude",
       "title": "Raster symbol counting: legend symbols matched on plans pasted in as pictures (Kelso E2/E3 devices, fixtures)",
       "added": "2026-10-30T04:28:19.354Z",
-      "by": "claude"
+      "by": "claude",
+      "updated": "2026-10-30T05:18:14.182Z"
     },
     {
       "status": "blocked",
