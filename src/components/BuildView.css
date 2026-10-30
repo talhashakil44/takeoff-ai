@@ -322,3 +322,10 @@
   font-weight: 500;
   opacity: 0.8;
 }
+
+.bld-allowance b { display: flex; align-items: baseline; gap: 6px; }
+.bld-allowance b .link-button { margin-left: auto; }
+.bld-allowance input.bld-unit { width: 4.5em; margin-left: 4px; }
+.bld-allowance p { margin: 2px 0 0; }
+.bld-allowance label.check { display: inline-flex; align-items: center; gap: 6px; }
+.bld-allowance label.check input { width: auto; margin: 0; }

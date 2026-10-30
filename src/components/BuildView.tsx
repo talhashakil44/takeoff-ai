@@ -8,7 +8,7 @@ import { isPlan, sourceHashOf, titleBlockWords, TRADES, tradeByKey } from '../bu
 import { readSpecFacts } from '../build/facts';
 import { loadDrawingSources } from '../build/sources';
 import { type BuildOutput } from '../build/run';
-import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Feasibility, Issue, PlanSetup, SourceRef, SpecFact } from '../build/types';
+import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Feasibility, Issue, PlanSetup, ScopeAllowance, SourceRef, SpecFact } from '../build/types';
 import type { Project } from '../model';
 import type { Place } from '../graph/graph';
 import type { SpecSection } from '../spec/parse';
@@ -747,6 +747,88 @@ function applyEditsToSetup(setup: PlanSetup, edits: BuildEdits): PlanSetup {
   return out;
 }
 
+/** What an allowance is entered in, and a typical rate per crew-day to start from (provisional until set). */
+const ALLOWANCE_DEFAULTS: Record<string, { metric: [string, number]; imperial: [string, number] }> = {
+  site: { metric: ['m³', 50], imperial: ['CY', 65] },
+  foundations: { metric: ['m³', 6], imperial: ['CY', 8] },
+  structure: { metric: ['m²', 40], imperial: ['SF', 430] },
+  envelope: { metric: ['m²', 30], imperial: ['SF', 320] },
+  'mech-rough': { metric: ['m', 15], imperial: ['ft', 50] },
+  'elec-rough': { metric: ['m', 30], imperial: ['ft', 100] },
+  'fire-rough': { metric: ['m', 20], imperial: ['ft', 65] },
+};
+
+/**
+ * Allowances: scope the takeoff doesn't measure (no drawing for it, or not taken off yet) entered
+ * as a quantity and a rate, so the plan carries its time. Each becomes its own activity; nothing
+ * is added to the takeoff or the model. A trade with measured work shows it, so an allowance is
+ * only added on purpose.
+ */
+function AllowancesForm(props: { allowances: Record<string, ScopeAllowance>; measured: string[]; metric: boolean; onChange: (next: Record<string, ScopeAllowance>) => void }) {
+  const { allowances, measured, metric, onChange } = props;
+  const keys = [{ key: 'foundations', name: 'Foundations', colour: '#ffb340' }, ...TRADES.filter((t) => t.key !== 'other')];
+  const nameOf = (k: string) => keys.find((t) => t.key === k)?.name ?? k;
+  const missing = keys.filter((t) => !allowances[t.key]);
+  const put = (k: string, v: ScopeAllowance | null) => {
+    const next = { ...allowances };
+    if (v) next[k] = v;
+    else delete next[k];
+    onChange(next);
+  };
+  const add = (k: string) => {
+    const d = ALLOWANCE_DEFAULTS[k]?.[metric ? 'metric' : 'imperial'] ?? (metric ? ['m²', 20] : ['SF', 200]);
+    put(k, { quantity: 0, unit: d[0], rate: d[1], provisional: true });
+  };
+  const rows = Object.entries(allowances);
+  return (
+    <div className="bld-form">
+      <p className="dim small">Scope the takeoff doesn’t measure, so the plan still carries its time: a quantity and how much one crew does a day. Each becomes its own activity in the schedule; nothing is added to the takeoff or the model. A quantity of 0 is a draft.</p>
+      {rows.length === 0 && <p className="dim">No allowances.</p>}
+      {rows.map(([k, a]) => {
+        const days = a.quantity > 0 && a.rate > 0 ? Math.ceil(a.quantity / a.rate) : 0;
+        return (
+          <div key={k} className="bld-trade bld-allowance">
+            <b>
+              {nameOf(k)}
+              {measured.includes(k) && <em className="dim small"> · also measured in the takeoff</em>}
+              <button className="link-button" onClick={() => put(k, null)} title="Remove this allowance">
+                Remove
+              </button>
+            </b>
+            <div>
+              <label>
+                <input type="number" min={0} value={a.quantity} onChange={(e) => put(k, { ...a, quantity: Math.max(0, Number(e.target.value) || 0) })} />
+                <input type="text" className="bld-unit" value={a.unit} onChange={(e) => put(k, { ...a, unit: e.target.value })} />
+              </label>
+              <label>
+                <input type="number" min={0} value={a.rate} onChange={(e) => put(k, { ...a, rate: Math.max(0, Number(e.target.value) || 0) })} /> {a.unit || 'units'}/crew-day
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={a.provisional} onChange={(e) => put(k, { ...a, provisional: e.target.checked })} /> provisional
+              </label>
+            </div>
+            <p className="dim small">{days ? `${days} working day${days === 1 ? '' : 's'} for one crew` : a.quantity > 0 ? 'Set a rate above 0.' : 'Draft: not in the plan until it has a quantity.'}</p>
+          </div>
+        );
+      })}
+      {missing.length > 0 && (
+        <label className="bld-field">
+          <span>Add</span>
+          <select value="" onChange={(e) => e.target.value && add(e.target.value)}>
+            <option value="">Allowance for…</option>
+            {missing.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.name}
+                {measured.includes(t.key) ? ' (measured)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
 function SetupPanel(props: {
   project: Project;
   setup: PlanSetup | null;
@@ -785,15 +867,15 @@ function SetupPanel(props: {
       </label>
     );
   };
-  const [tab, setTab] = useState<'project' | 'trades' | 'levels'>('project');
+  const [tab, setTab] = useState<'project' | 'trades' | 'scope' | 'levels'>('project');
   const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const wd = val<number[]>('workDays', [1, 2, 3, 4, 5]);
   return (
     <aside className="bld-setup">
       <div className="bld-tabs" role="tablist">
-        {(['project', 'trades', 'levels'] as const).map((t) => (
+        {(['project', 'trades', 'scope', 'levels'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-            {t === 'project' ? 'Dates & reviews' : t === 'trades' ? 'Crews & rates' : 'Levels'}
+            {t === 'project' ? 'Dates & reviews' : t === 'trades' ? 'Crews & rates' : t === 'scope' ? 'Allowances' : 'Levels'}
           </button>
         ))}
       </div>
@@ -882,6 +964,7 @@ function SetupPanel(props: {
               })}
         </div>
       )}
+      {tab === 'scope' && <AllowancesForm allowances={val<Record<string, ScopeAllowance>>('allowances', {})} measured={props.tradeKeys} metric={metric} onChange={(next) => set('allowances', next)} />}
       {tab === 'levels' && (
         <div className="bld-form">
           <p className="dim small">Each measured plan sheet’s level, from its title or title block. Set the ones that aren’t known, or fix any that are wrong.</p>
