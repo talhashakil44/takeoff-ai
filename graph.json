@@ -151,7 +151,7 @@
     {
       "id": "T10",
       "owner": "claude",
-      "status": "doing",
+      "status": "done",
       "title": "Setup tab UI for allowances in BuildView",
       "depends": [
         "T9"
@@ -161,7 +161,9 @@
         "test",
         "build"
       ],
-      "updated": "2026-10-30T04:13:57.821Z"
+      "updated": "2026-10-30T04:15:46.083Z",
+      "branch": "claude/integration@0827570",
+      "evidence": "claude/integration@0827570"
     },
     {
       "id": "T11",
