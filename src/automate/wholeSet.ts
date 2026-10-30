@@ -1,6 +1,7 @@
 import { applyFinishes, ceilingsFromRcps, finishRooms, levelOfSheet, readFinishes } from './finishes';
 import { automateCeilings } from './ceilings';
 import { automateKeynotes } from './keynotes';
+import { automateDucts } from './ducts';
 import { automatePipes } from './pipes';
 import { automateRuns } from './runs';
 import { automateTrades } from './trades';
@@ -406,9 +407,12 @@ export async function takeOffWholeSet(
     const pipes = await automatePipes(project, access);
     apply('pipes', pipes);
     await hold();
-    const checks = pipes.apply ? r.checks.filter((c) => !/have no CAD layers/.test(c)) : r.checks;
-    for (const c of [...checks, ...pipes.checks]) review.push({ kind: 'check', text: c });
-    return [r.apply ? r.message : '', pipes.apply ? pipes.message : ''].filter(Boolean).join(' · ') || r.message;
+    const ducts = await automateDucts(project, access);
+    apply('ducts', ducts);
+    await hold();
+    const checks = pipes.apply || ducts.apply ? r.checks.filter((c) => !/have no CAD layers/.test(c)) : r.checks;
+    for (const c of [...checks, ...pipes.checks, ...ducts.checks]) review.push({ kind: 'check', text: c });
+    return [r.apply ? r.message : '', pipes.apply ? pipes.message : '', ducts.apply ? ducts.message : ''].filter(Boolean).join(' · ') || r.message;
   });
 
   await run('mechanical and electrical counts', async () => {

@@ -58,6 +58,11 @@ export interface InkOptions {
    * between: the gap in sheet points, smallest to largest. None: only heavy single lines are read.
    */
   hollow?: [number, number];
+  /**
+   * Instead of ink, bands of a tone: the light grey fill engineers draw ducts in, between `lo`
+   * and `hi` luminance, `minWidth` to `maxWidth` across (sheet points).
+   */
+  tone?: { lo: number; hi: number; minWidth: number };
   /** Dashed lines: the longest gap between dashes, in sheet points (none: dashes are not joined). */
   dashGap?: number;
   /** Darkest a pixel can be and still be paper (0–255 luminance). */
@@ -256,10 +261,37 @@ export async function inkRuns(page: PageLike, o: InkOptions): Promise<InkRun[] |
           const i = y * w + x;
           if (ink[i] && ink[i - 1] && ink[i + 1] && ink[i - w] && ink[i + w] && ink[i - w - 1] && ink[i - w + 1] && ink[i + w - 1] && ink[i + w + 1]) core[i] = 1;
         }
+      const toneMask = o.tone ? new Uint8Array(w * h) : null;
+      if (toneMask) for (let i = 0, j = 0; j < toneMask.length; i += 4, j++) {
+        const l = 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2];
+        if (l >= o.tone!.lo && l <= o.tone!.hi) toneMask[j] = 1;
+      }
       for (const horizontal of [true, false]) {
         const bands: { at: number; from: number; to: number; thick: number }[] = [];
-        bandsOf(core, w, h, horizontal, minLen, maxThick, dash, bands);
-        if (black) hollowBands(black, w, h, horizontal, minLen, hollow![0], hollow![1], bands);
+        if (toneMask) {
+          // Tone pixels in a stretch of tone as thick across as a duct, and no thicker.
+          const minT = Math.round(o.tone!.minWidth * scale);
+          const ok = new Uint8Array(w * h);
+          const lines = horizontal ? w : h;
+          const across = horizontal ? h : w;
+          for (let l = 0; l < lines; l++) {
+            let start = -1;
+            for (let k = 0; k <= across; k++) {
+              const idx = horizontal ? k * w + l : l * w + k;
+              const on = k < across && toneMask[idx] === 1;
+              if (on && start < 0) start = k;
+              else if (!on && start >= 0) {
+                const n = k - start;
+                if (n >= minT && n <= maxThick) for (let q = start; q < k; q++) ok[horizontal ? q * w + l : l * w + q] = 1;
+                start = -1;
+              }
+            }
+          }
+          bandsOf(ok, w, h, horizontal, minLen, maxThick + 2, null, bands);
+        } else {
+          bandsOf(core, w, h, horizontal, minLen, maxThick, dash, bands);
+          if (black) hollowBands(black, w, h, horizontal, minLen, hollow![0], hollow![1], bands);
+        }
         for (const b of bands) {
           const at = b.at + (horizontal ? y0 : x0);
           // Each band once: from the tile whose own (unpadded) area holds its centreline.
