@@ -1,16 +1,163 @@
 {
   "about": "Takeoff AI task graph. status: todo | doing | review | done | blocked. A todo task is READY when every task in depends is done.",
   "tasks": [
-    { "id": "T1", "owner": "claude", "status": "done", "title": "Whole-set takeoff: foundations, structure, site works", "branch": "claude/integration", "depends": [], "accept": ["tsc", "test", "build"] },
-    { "id": "T2", "owner": "claude", "status": "done", "title": "Piping by label on plans without CAD layers (Kelso M1-01/02/04)", "branch": "claude/integration@e8b9951", "depends": [], "accept": ["tsc", "test", "build"] },
-    { "id": "T3", "owner": "gpt", "status": "done", "title": "Div 31 excavation as its own site activity before foundations", "branch": "codex/build-it-earthwork@4fbd6a6", "depends": [], "accept": ["tsc", "test", "build", "audit"], "notes": ["2026-10-30 claude: merged into claude/integration (0cdd6e4), 419 tests pass"] },
-    { "id": "T4", "owner": "claude", "status": "todo", "title": "Refresh the Kelso and 84 Frederick demos with the new takeoffs (T1, T2) — added measurements only; Talha OKs installing them", "depends": ["T1", "T2", "T3"], "accept": ["tsc", "test", "build"], "prompt": "Run the whole-set takeoff on both demo sets, add the new sources (foundations, structure, site, pipes) to the demo projects without touching existing measurements, and give GPT the demo files to audit." },
-    { "id": "T5", "owner": "gpt", "status": "todo", "title": "Recompute Kelso and Frederick schedules from the refreshed demos; report finish dates and the critical path", "depends": ["T4"], "accept": ["audit"], "prompt": "Audit the refreshed demos (BUILD_PROJECTS_ROOT) on claude/integration. Report finish, duration, the critical path and anything that looks unrealistic (Kelso should come out near two years). Fix routing/rates in src/build on a codex/* branch if needed." },
-    { "id": "T6", "owner": "claude", "status": "todo", "title": "Ductwork on plans without CAD layers (double-line ducts, sized by label 300x300 S/A)", "depends": ["T2"], "accept": ["tsc", "test", "build"] },
-    { "id": "T7", "owner": "claude", "status": "todo", "title": "Beam lengths off the framing plans", "depends": ["T1"], "accept": ["tsc", "test", "build"] },
-    { "id": "T8", "owner": "claude", "status": "todo", "title": "Site grading, paving and erosion control off the civil drawings", "depends": ["T1"], "accept": ["tsc", "test", "build"] },
-    { "id": "T9", "owner": "gpt", "status": "todo", "title": "setup.allowances contract: editable allowances for scope not taken off (site, foundations, structure, M&E) in the plan", "depends": [], "accept": ["tsc", "test", "build", "audit"], "prompt": "Define the setup.allowances shape Build It reads (per trade: quantity, unit, rate, provisional flag), apply it in scope/plan, and post the exact type to claude so the Setup tab can edit it." },
-    { "id": "T10", "owner": "claude", "status": "todo", "title": "Setup tab UI for allowances in BuildView", "depends": ["T9"], "accept": ["tsc", "test", "build"] },
-    { "id": "T11", "owner": "gpt", "status": "doing", "title": "Explore Drawing tool (own worktree)", "branch": "codex/explore-drawing", "depends": [], "accept": ["tsc", "test", "build"] }
+    {
+      "id": "T1",
+      "owner": "claude",
+      "status": "done",
+      "title": "Whole-set takeoff: foundations, structure, site works",
+      "branch": "claude/integration",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ]
+    },
+    {
+      "id": "T2",
+      "owner": "claude",
+      "status": "done",
+      "title": "Piping by label on plans without CAD layers (Kelso M1-01/02/04)",
+      "branch": "claude/integration@e8b9951",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ]
+    },
+    {
+      "id": "T3",
+      "owner": "gpt",
+      "status": "done",
+      "title": "Div 31 excavation as its own site activity before foundations",
+      "branch": "codex/build-it-earthwork@4fbd6a6",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "notes": [
+        "2026-10-30 claude: merged into claude/integration (0cdd6e4), 419 tests pass",
+        "2026-10-30T04:00 claude: merged into claude/integration 0cdd6e4; 419 tests pass"
+      ],
+      "updated": "2026-10-30T04:00:19.457Z"
+    },
+    {
+      "id": "T4",
+      "owner": "claude",
+      "status": "todo",
+      "title": "Refresh the Kelso and 84 Frederick demos with the new takeoffs (T1, T2) — added measurements only; Talha OKs installing them",
+      "depends": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ],
+      "prompt": "Run the whole-set takeoff on both demo sets, add the new sources (foundations, structure, site, pipes) to the demo projects without touching existing measurements, and give GPT the demo files to audit."
+    },
+    {
+      "id": "T5",
+      "owner": "gpt",
+      "status": "todo",
+      "title": "Recompute Kelso and Frederick schedules from the refreshed demos; report finish dates and the critical path",
+      "depends": [
+        "T4"
+      ],
+      "accept": [
+        "audit"
+      ],
+      "prompt": "Audit the refreshed demos (BUILD_PROJECTS_ROOT) on claude/integration. Report finish, duration, the critical path and anything that looks unrealistic (Kelso should come out near two years). Fix routing/rates in src/build on a codex/* branch if needed."
+    },
+    {
+      "id": "T6",
+      "owner": "claude",
+      "status": "todo",
+      "title": "Ductwork on plans without CAD layers (double-line ducts, sized by label 300x300 S/A)",
+      "depends": [
+        "T2"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ]
+    },
+    {
+      "id": "T7",
+      "owner": "claude",
+      "status": "todo",
+      "title": "Beam lengths off the framing plans",
+      "depends": [
+        "T1"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ]
+    },
+    {
+      "id": "T8",
+      "owner": "claude",
+      "status": "todo",
+      "title": "Site grading, paving and erosion control off the civil drawings",
+      "depends": [
+        "T1"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ]
+    },
+    {
+      "id": "T9",
+      "owner": "gpt",
+      "status": "todo",
+      "title": "setup.allowances contract: editable allowances for scope not taken off (site, foundations, structure, M&E) in the plan",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "prompt": "Define the setup.allowances shape Build It reads (per trade: quantity, unit, rate, provisional flag), apply it in scope/plan, and post the exact type to claude so the Setup tab can edit it."
+    },
+    {
+      "id": "T10",
+      "owner": "claude",
+      "status": "todo",
+      "title": "Setup tab UI for allowances in BuildView",
+      "depends": [
+        "T9"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ]
+    },
+    {
+      "id": "T11",
+      "owner": "gpt",
+      "status": "doing",
+      "title": "Explore Drawing tool (own worktree)",
+      "branch": "codex/explore-drawing",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ]
+    }
   ]
 }
