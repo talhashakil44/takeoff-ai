@@ -3,6 +3,8 @@ import { loadCurrentProject, loadPdf } from "../storage";
 import { measurementVars, primaryOf } from "../quantities";
 import { loadBuild } from "../build/client";
 import { openPdf, type PDFDocumentProxy } from "../pdf";
+import { segmentsOf } from "../fill/sheetWalls";
+import type { DrawingLines } from "../build/roof";
 import { pageTexts } from "../pageText";
 import type { DrawingTexts } from "../build/building";
 import type { Project, Sheet } from "../model";
@@ -135,13 +137,20 @@ export function ExploreHost({
         });
         // Read local vector text once, progressively; no drawing upload or model mutation.
         const drawingTexts: DrawingTexts = {};
+        const drawingLines: DrawingLines = {};
         for (const sheet of project.sheets) {
           if (cancelled) break;
-          if (sheet.superseded || !sheet.metersPerPoint) continue;
+          if (sheet.superseded) continue;
           try {
-            drawingTexts[sheet.id] = await pageTexts(
-              await (await getPdf(sheet)).getPage(sheet.page),
-            );
+            const page = await (await getPdf(sheet)).getPage(sheet.page);
+            drawingTexts[sheet.id] = await pageTexts(page);
+            if (
+              (/^S/.test(sheet.name) &&
+                project.measurements.some((m) => m.sheetId === sheet.id)) ||
+              /WINDOW ELEVATION|WINDOW SCHEDULE/i.test(sheet.title ?? "")
+            ) {
+              drawingLines[sheet.id] = await segmentsOf(page);
+            }
           } catch {
             /* unavailable PDFs stay explicit sources */
           }
@@ -152,6 +161,7 @@ export function ExploreHost({
             model: saved.output.model,
             renderPage,
             drawingTexts,
+            drawingLines,
             indexing: false,
           });
       }

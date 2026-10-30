@@ -131,7 +131,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         const t = await sheetText(sid).catch(() => []);
         h[sid] = titleBlockWords(t, s.width, s.height);
         drawings[sid] = t;
-        if (sheetLines && /ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? '')) linework[sid] = await sheetLines(sid).catch(() => []);
+        if (sheetLines && ((/ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? '')) || (/^S/.test(s.name) && measured.includes(s.id)))) linework[sid] = await sheetLines(sid).catch(() => []);
       }
       if (!gone) { setHints(h); setDrawingTexts(drawings); setDrawingLines(linework); }
     })();
@@ -139,7 +139,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
       gone = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.sheets, sheetText, sheetLines]);
+  }, [project.sheets, sheetText, sheetLines, measured]);
   const ready = facts !== null && hints !== null;
 
   const requestVersion = useRef(0);

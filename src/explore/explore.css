@@ -995,3 +995,109 @@
   border-radius: 5px;
   cursor: pointer;
 }
+.ex-structural-fields {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: #f7f5ef;
+}
+.ex-structural-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  min-width: 110px;
+  max-width: 260px;
+}
+.ex-structural-fields input,
+.ex-structural-fields select {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  min-height: 34px;
+  width: 100%;
+  background: white;
+  color: var(--ink);
+}
+.ex-structural-fields .ex-evidence-note {
+  flex: 1;
+  max-width: none;
+  min-width: 280px;
+}
+.ex-structural-help,
+.ex-structural-confirm {
+  padding: 12px 20px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ex-structural-confirm {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: #ecefe5;
+}
+.ex-structural-proof {
+  margin-top: 20px;
+  padding: 15px;
+  background: #edf0e7;
+  border: 1px solid #ced6c5;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.ex-structural-proof h3 {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+.ex-structural-proof button {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+}
+.ex-structural-proof ul {
+  padding-left: 16px;
+}
+.ex-structural-editor .ex-align-panes {
+  flex: 1;
+  min-height: 180px;
+}
+@media (max-width: 850px) {
+  .ex-structural-editor {
+    overflow: auto;
+  }
+  .ex-structural-editor .ex-align-panes {
+    min-height: 450px;
+  }
+  .ex-structural-fields label {
+    flex: 1;
+  }
+  .ex-structural-editor header {
+    flex-wrap: wrap;
+  }
+}
+.ex-scope-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #e8e8de;
+  border-radius: 5px;
+  margin-top: 12px;
+  flex-shrink: 0;
+}
+.ex-scope-tabs button {
+  flex: 1;
+  padding: 7px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+}
+.ex-shell .ex-scope-tabs button[aria-pressed="true"] {
+  background: #364238;
+  color: #fff;
+}
+.ex-details > button{display:block;width:100%;text-align:left;margin:6px 0;padding:7px 9px;line-height:1.5}
+.ex-structural-proof dl{display:grid;grid-template-columns:1fr auto;gap:8px;margin:10px 0 16px}
+.ex-structural-proof dt,.ex-structural-proof dd{margin:0;padding:0;font-size:12px}

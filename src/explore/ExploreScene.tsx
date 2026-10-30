@@ -35,6 +35,7 @@ interface Props {
     opacity: number;
   }[];
   showBase?: boolean;
+  structureOnly?: boolean;
   resetView?: number;
   showGrids?: boolean;
   grids?: { label: string; a: Pt; b: Pt }[];
@@ -313,14 +314,26 @@ export function ExploreScene(props: Props) {
       Math.max(1, el.clientWidth) / Math.max(1, el.clientHeight);
     const board = (sheetMode: boolean) => {
       const focus = live.current.focus;
-      const target =
-        focus && sheetMode
-          ? new THREE.Vector3(focus[0], base, focus[1])
-          : center.clone();
-      const height =
-        focus && sheetMode
+      const selectedBox = items.find(
+        (item) => item.e.id === live.current.selected,
+      )?.mesh.geometry.boundingBox;
+      const target = focus
+        ? new THREE.Vector3(
+            focus[0],
+            sheetMode
+              ? base
+              : (selectedBox?.getCenter(new THREE.Vector3()).y ?? base),
+            focus[1],
+          )
+        : center.clone();
+      const height = focus
+        ? sheetMode
           ? Math.min(span * 0.6, 12)
-          : Math.max(size.z, size.x / aspect()) * 1.28;
+          : Math.max(
+              4,
+              selectedBox?.getSize(new THREE.Vector3()).length() ?? 4,
+            ) * 1.4
+        : Math.max(size.z, size.x / aspect()) * 1.28;
       const fov = sheetMode ? 1.5 : 38,
         dist = lensDistance(height, fov);
       const dir = sheetMode
@@ -616,7 +629,8 @@ export function ExploreScene(props: Props) {
     resize();
     let lastVisible: Set<string> | undefined,
       lastBase: boolean | undefined,
-      lastGrids: boolean | undefined;
+      lastGrids: boolean | undefined,
+      lastStructure: boolean | undefined;
     const draw = (now: number) => {
       if (disposed) return;
       const dt = Math.min(0.04, (now - clock) / 1000 || 0.016);
@@ -634,10 +648,12 @@ export function ExploreScene(props: Props) {
         dirty ||
         p.visibleSheets !== lastVisible ||
         p.showBase !== lastBase ||
-        p.showGrids !== lastGrids;
+        p.showGrids !== lastGrids ||
+        p.structureOnly !== lastStructure;
       lastVisible = p.visibleSheets;
       lastBase = p.showBase;
       lastGrids = p.showGrids;
+      lastStructure = p.structureOnly;
       if (transition < 1) {
         transition = Math.min(1, transition + dt / 0.95);
         const t = smooth(transition);
@@ -682,6 +698,7 @@ export function ExploreScene(props: Props) {
           const { mesh, min, layer, e } = item;
           mesh.visible =
             currentLift > 0.002 &&
+            (!p.structureOnly || e.trade === "structure") &&
             (e.origin === "building" ||
               !p.visibleSheets ||
               p.visibleSheets.has(e.sheetId)) &&

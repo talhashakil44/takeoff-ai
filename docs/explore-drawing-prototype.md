@@ -1,9 +1,10 @@
 # Explore Drawing — measured coordination workspace
 
 Branch: `codex/explore-drawing`, based on Build It checkpoint `e5ecd0d`.
-Work is isolated from Claude's review fixes. No changes to BuildView, facts,
-scope, extractModel, the shared viewer, or project storage writers are included.
-The only application integration is an additive `ExploreHost` in `src/App.tsx`.
+Work is isolated from Claude's review fixes. Facts, scope, extractModel, the shared viewer and project storage writers are unchanged.
+BuildView has a source-reader addition outside the separately owned header edits.
+The launcher is an additive `ExploreHost` in `src/App.tsx`. Structural recovery also
+runs in `buildAll`; the Build It source reader loads measured structural plans.
 
 ## Open it
 
@@ -123,4 +124,60 @@ The saved-model stale guard is partial; a full revision fingerprint is still nee
 Room movement remains within one measured room, without invented door connectivity.
 Review registration accuracy, long-session GPU/memory use and source coverage across
 more projects before production release. Integrate Claude's reviewed baseline fixes
-separately; this branch does not edit BuildView, shared Viewer or storage writers.
+separately; the structural source-reader addition is isolated from its header and scheduling edits.
+
+
+## Structural takeoff connections
+
+Explore now resolves existing structural count records through drawing evidence,
+without adding to or replacing accepted takeoff quantities. The Structure tab
+lists the current floor's structural takeoffs; selecting one enables its source
+layer. Isolate structural members removes other trades from the spatial view.
+
+The lintel resolver joins strong plan linework between drawn jamb supports,
+including strokes interrupted by text. Schedule extraction uses the SIZE column,
+not the adjacent POSTS column. Architectural elevation grid rows locate matching
+window tags; calibrated window details provide the opening head datum. The model
+records the resulting span, section, datum, source sheets and issued rough-carpentry
+specification link. All such placement remains inferred and reviewable.
+
+Kelso validation resolves all 14 existing L1/L2 tags on S2.0. Both schedule sizes
+are two 38 x 184 members (combined width 76 mm). The existing takeoff labels copied
+supporting-post descriptions instead; some also carry a Metals classification.
+Explore flags these conflicts and preserves the accepted labels, quantities and
+classification. This is not a silent estimate rewrite.
+
+The source-derived span is the drawn opening/member stroke, not a fabrication cut
+length. Bearing extensions, rough-opening allowances and final structural approval
+are not asserted. Addendum 2 Section 06 10 00 provides material/workmanship clauses;
+it does not resolve a numeric lintel bearing allowance. Opening heights derived
+from calibrated details remain inferred, with original evidence links.
+
+Review / connect geometry opens the original plan and a selectable reference
+sheet side by side. Users can define a member run, simple panel boundary or square
+post, supply section and datum, record their source explanation, then explicitly
+save a reviewed placement. Missing dimensions, missing sources, invalid polygons
+and unconfirmed reviews cannot be saved. Existing reviews reopen with their values.
+Reviews persist locally per project/model, invalidate when the source measurement,
+type or sheet changes, and can be reset. Manual reviews currently apply locally to Explore. Automatically recovered members
+also run through the shared Build It worker pipeline and native IFC export after
+a rebuild. IFC classifies lintels as beams, not walls. Original quantities stay intact.
+
+Unresolved steel profiles, panel extents and wall assemblies remain review items;
+no generic count cubes are rendered for them. A counted F1 span annotation is not
+silently converted into a measured CLT area. Source reading covers structural
+plans with existing takeoffs, structural schedules and window elevations locally.
+
+Validation adds schedule-column/conflict tests, supported-span tests, invalid-shape
+rejection, quantity/identity immutability and stale-review tests. The ignored real
+Kelso audit asserts 14 connected lintels with section and elevation references.
+Private PDFs and project fixtures are excluded from Git.
+
+
+Structural integration verification: 409 tests across 57 files pass; TypeScript and
+production build pass (baseline chunk-size warning remains). The local Kelso audit
+also executes the complete build pipeline with the same level hints and source
+linework as the app, verifies the 14 resolved records, writes IFC, and uses
+IfcOpenShell to instantiate all 14 IfcBeam/LINTEL meshes. This checks model/export
+geometry independently of the Three.js renderer. Reviewer-created placements are
+still local to Explore; they are not automatically promoted into the shared build.

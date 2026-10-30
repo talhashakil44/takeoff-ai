@@ -1,3 +1,4 @@
+import { connectStructure } from './connectStructure';
 import type { DrawingLines } from './roof';
 import type { DrawingTexts } from "./building";
 import type { Project } from '../model';
@@ -34,7 +35,7 @@ export function buildAll(input: BuildInput): BuildOutput {
   const probe = defaultSetup({ units: input.project.units } as BuildModel, input.facts, input.today);
   const ftf = applySetupEdits(probe, input.edits).floorToFloor.value;
   const ex: ExtractInput = { project: input.project, sections: input.sections, drawingTexts: input.drawingTexts, drawingLines: input.drawingLines, levelHints: input.levelHints, edits: input.edits, floorToFloor: input.project.units === 'imperial' ? ftf * 0.3048 : ftf };
-  const model = extractModel(ex);
+  const model = connectStructure(input.project, extractModel(ex), input.drawingTexts ?? {}, input.drawingLines ?? {});
   const t1 = Date.now();
   const setup = applySetupEdits(defaultSetup(model, input.facts, input.today), input.edits);
   return { model, setup, ...replan(model, setup, input), ms: { model: t1 - t0, plan: Date.now() - t1 } };

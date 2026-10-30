@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Project, Sheet, Pt } from "../model";
-import type { BuildModel } from "../build/types";
+import type { BuildModel, BuildElement } from "../build/types";
 import { measurementVars } from "../quantities";
 import { ExploreScene, type ExploreMode } from "./ExploreScene";
 import { inside, roomStops, sheetFrame, worldPoint } from "./spatial";
@@ -9,6 +9,14 @@ import { disciplines, drawingLayers, floorPlans, layerElement } from "./layers";
 import { gridAxes, type DrawingTexts } from "../build/building";
 import { AlignmentEditor } from "./AlignmentEditor";
 import type { SheetFrame } from "./spatial";
+import { StructuralEditor } from "./StructuralEditor";
+import {
+  structuralEvidence,
+  connectStructuralModel,
+  structuralFingerprint,
+  type StructuralPlacement,
+} from "../build/structural";
+import type { DrawingLines } from "../build/roof";
 import { SourceViewer } from "./SourceViewer";
 export interface ExploreWorkspaceProps {
   project: Project;
@@ -16,18 +24,21 @@ export interface ExploreWorkspaceProps {
   renderPage: (sheet: Sheet) => Promise<HTMLCanvasElement>;
   onClose: () => void;
   drawingTexts?: DrawingTexts;
+  drawingLines?: DrawingLines;
   indexing?: boolean;
   onOpenTakeoff?: (sheet: Sheet) => void;
 }
 const num = (v: number) =>
   v.toLocaleString(undefined, { maximumFractionDigits: 2 });
 const emptyTexts: DrawingTexts = {};
+const emptyLines: DrawingLines = {};
 export function ExploreWorkspace({
   project,
   model,
   renderPage,
   onClose,
   drawingTexts = emptyTexts,
+  drawingLines = emptyLines,
   indexing = false,
   onOpenTakeoff,
 }: ExploreWorkspaceProps) {
@@ -130,13 +141,56 @@ export function ExploreWorkspace({
     () => new Set([sid, ...enabled]),
     [sid, enabled],
   );
+  const [scope, setScope] = useState<"rooms" | "structure">("rooms");
+  const [structureOnly, setStructureOnly] = useState(false);
+  const structuralKey = `explore-structure:${project.id}:${model.sourceHash}`;
+  const [structuralReviews, setStructuralReviews] = useState<
+    Record<string, StructuralPlacement>
+  >(() => {
+    try {
+      return JSON.parse(localStorage.getItem(structuralKey) || "{}");
+    } catch {
+      return {};
+    }
+  });
+  const [editingStructural, setEditingStructural] =
+    useState<BuildElement | null>(null);
+  const frames = useMemo(
+    () =>
+      Object.fromEntries(
+        layers.filter((l) => l.frame).map((l) => [l.sheet.id, l.frame!]),
+      ),
+    [layers],
+  );
+  const recoveredStructure = useMemo(
+    () =>
+      structuralEvidence(project, model, drawingTexts, drawingLines, frames),
+    [project, model, drawingTexts, drawingLines, frames],
+  );
+  const structuralModel = useMemo(
+    () =>
+      connectStructuralModel(
+        project,
+        model,
+        recoveredStructure,
+        structuralReviews,
+        frames,
+      ),
+    [model, recoveredStructure, structuralReviews, frames, project],
+  );
   const coordinatedModel = useMemo(
     () => ({
       ...model,
-      elements: model.elements.flatMap((e) => {
+      elements: structuralModel.elements.flatMap((e) => {
         if (e.origin === "building" || e.sheetId === sid) return [e];
         const l = available.find((l) => l.sheet.id === e.sheetId);
         if (!l?.frame) return [];
+        const hasRecovered =
+          recoveredStructure[e.id]?.shape ||
+          (structuralReviews?.[e.id]?.fingerprint ===
+            structuralFingerprint(e, project) &&
+            e.shape);
+        if (hasRecovered) return [e];
         const placed = layerElement(
           e,
           sheetFrame(project, model, l.sheet),
@@ -159,7 +213,15 @@ export function ExploreWorkspace({
         ];
       }),
     }),
-    [project, model, sid, available],
+    [
+      project,
+      model,
+      structuralModel,
+      recoveredStructure,
+      structuralReviews,
+      sid,
+      available,
+    ],
   );
   const pins = useMemo(
     () =>
@@ -167,7 +229,10 @@ export function ExploreWorkspace({
         !l.frame
           ? []
           : l.elements
-              .filter((e) => !e.shape)
+              .filter(
+                (e) =>
+                  !structuralModel.elements.find((v) => v.id === e.id)?.shape,
+              )
               .flatMap((e) => {
                 const ref = e.sources.find((s) => s.id === l.sheet.id && s.box);
                 if (!ref?.box) return [];
@@ -187,7 +252,7 @@ export function ExploreWorkspace({
                 ];
               }),
       ),
-    [available],
+    [available, structuralModel],
   );
   const grids = useMemo(() => {
     if (!sheet || !frame) return [];
@@ -289,7 +354,7 @@ export function ExploreWorkspace({
   };
   const sheetUrl = useMemo(() => page?.toDataURL("image/png"), [page]);
   const room = rooms.find((r) => r.id === roomId) ?? null,
-    element = model.elements.find((e) => e.id === selected) ?? null;
+    element = structuralModel.elements.find((e) => e.id === selected) ?? null;
   const measurements = useMemo(
     () => new Map(project.measurements.map((m) => [m.id, m])),
     [project],
@@ -306,14 +371,36 @@ export function ExploreWorkspace({
   const source = element?.sources.find(
     (s) => s.kind === "sheet" && s.id === sheet?.id,
   );
-  const allSheetElements = model.elements.filter(
+  const allSheetElements = structuralModel.elements.filter(
     (e) => visibleSheets.has(e.sheetId) && e.origin === "takeoff",
   );
-  const candidates = query
-    ? allSheetElements.filter((e) =>
-        e.name.toLowerCase().includes(query.toLowerCase()),
-      )
-    : [];
+  const structuralElements = structuralModel.elements.filter(
+    (e) =>
+      e.origin === "takeoff" &&
+      e.trade === "structure" &&
+      (e.sheetId === sid || available.some((l) => l.sheet.id === e.sheetId)),
+  );
+  const candidates =
+    query || scope === "structure"
+      ? (scope === "structure" ? structuralElements : allSheetElements).filter(
+          (e) => e.name.toLowerCase().includes(query.toLowerCase()),
+        )
+      : [];
+  const selectedShape = element?.shape;
+  const memberSpan =
+    selectedShape?.type === "run"
+      ? selectedShape.points
+          .slice(1)
+          .reduce(
+            (sum, p, i) =>
+              sum +
+              Math.hypot(
+                p[0] - selectedShape.points[i][0],
+                p[1] - selectedShape.points[i][1],
+              ),
+            0,
+          )
+      : null;
   const totalArea = rooms.reduce((sum, r) => sum + r.element.quantity, 0);
   const lengthUnit = project.units === "metric" ? "m" : "ft",
     areaUnit = project.units === "metric" ? "m²" : "SF";
@@ -480,9 +567,37 @@ export function ExploreWorkspace({
               <span>room takeoff total</span>
             </div>
           </div>
+          <div className="ex-scope-tabs">
+            <button
+              aria-pressed={scope === "rooms"}
+              onClick={() => {
+                setScope("rooms");
+                setQuery("");
+                setStructureOnly(false);
+              }}
+            >
+              Spaces
+            </button>
+            <button
+              aria-pressed={scope === "structure"}
+              onClick={() => {
+                setScope("structure");
+                setQuery("");
+              }}
+            >
+              Structure
+            </button>
+          </div>
           <div className="ex-section-heading">
-            <h2>Spaces</h2>
-            <span>{rooms.length.toString().padStart(2, "0")}</span>
+            <h2>{scope === "structure" ? "Structural takeoffs" : "Spaces"}</h2>
+            <span>
+              {(scope === "structure"
+                ? structuralElements.length
+                : rooms.length
+              )
+                .toString()
+                .padStart(2, "0")}
+            </span>
           </div>
           <input
             className="ex-search"
@@ -492,12 +607,22 @@ export function ExploreWorkspace({
             onChange={(e) => setQuery(e.target.value)}
           />
           <div className="ex-room-list">
-            {query
+            {query || scope === "structure"
               ? candidates.slice(0, 60).map((e) => (
                   <button
                     key={e.id}
                     className={selected === e.id ? "active" : ""}
-                    onClick={() => setSelected(e.id)}
+                    onClick={() => {
+                      setSelected(e.id);
+                      if (e.sheetId !== sid && !enabled.has(e.sheetId)) {
+                        if (enabled.size < 4)
+                          setEnabled((old) => new Set([...old, e.sheetId]));
+                        else
+                          setLayerError(
+                            "Turn off a source layer before showing this member.",
+                          );
+                      }
+                    }}
                   >
                     <span>{e.name}</span>
                     <small>
@@ -561,6 +686,7 @@ export function ExploreWorkspace({
           {page ? (
             <ExploreScene
               model={coordinatedModel}
+              structureOnly={structureOnly}
               visibleSheets={visibleSheets}
               overlays={overlays}
               showBase={showBase}
@@ -612,7 +738,7 @@ export function ExploreWorkspace({
             aria-expanded={layerPanel}
             onClick={() => setLayerPanel((v) => !v)}
           >
-            Layers & sources · {indexing ? "Reading grids…" : enabled.size}
+            Layers & sources · {indexing ? "Reading geometry…" : enabled.size}
           </button>
           {layerPanel && (
             <section className="ex-layers" aria-label="Drawing layers">
@@ -677,8 +803,15 @@ export function ExploreWorkspace({
                           </label>
                           <small>
                             {l.reason} ·{" "}
-                            {l.elements.filter((e) => e.shape).length}/
-                            {l.elements.length} modelled
+                            {
+                              l.elements.filter(
+                                (e) =>
+                                  structuralModel.elements.find(
+                                    (v) => v.id === e.id,
+                                  )?.shape,
+                              ).length
+                            }
+                            /{l.elements.length} modelled
                           </small>
                           <button onClick={() => setSourceView(l.sheet)}>
                             Open original ↗
@@ -901,6 +1034,130 @@ export function ExploreWorkspace({
                   <dd>{element.division || element.trade}</dd>
                 </div>
               </dl>
+              {element?.trade === "structure" && (
+                <section
+                  className="ex-structural-proof"
+                  aria-label="Structural geometry evidence"
+                >
+                  <h3>STRUCTURAL GEOMETRY</h3>
+                  {selectedShape?.type === "run" && (
+                    <button
+                      onClick={() => {
+                        const points = selectedShape.points;
+                        setFocus([
+                          (points[0][0] + points.at(-1)![0]) / 2,
+                          (points[0][1] + points.at(-1)![1]) / 2,
+                        ]);
+                        setStructureOnly(true);
+                        setMode("lift");
+                      }}
+                    >
+                      Focus member in 3D
+                    </button>
+                  )}
+                  {selectedShape?.type === "run" && (
+                    <dl>
+                      <dt>Drawn span</dt>
+                      <dd>{num(memberSpan!)} m</dd>
+                      <dt>Section</dt>
+                      <dd>
+                        {num(selectedShape.thickness * 1000)} ×{" "}
+                        {num(selectedShape.height * 1000)} mm
+                      </dd>
+                      <dt>Bottom datum</dt>
+                      <dd>{num(selectedShape.z0)} m</dd>
+                    </dl>
+                  )}
+                  {structuralReviews?.[element.id]?.fingerprint ===
+                    structuralFingerprint(element, project) && (
+                    <p>
+                      Reviewed locally · {structuralReviews[element.id].note}
+                    </p>
+                  )}
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={structureOnly}
+                      onChange={(e) => {
+                        setStructureOnly(e.target.checked);
+                        setMode("lift");
+                      }}
+                    />{" "}
+                    Isolate structural members
+                  </label>
+                  <p>
+                    {element.shape
+                      ? "Connected to measured takeoff"
+                      : "Placement needs review"}
+                  </p>
+                  {recoveredStructure[element.id]?.section && (
+                    <p>
+                      <b>Schedule member size</b>
+                      <br />
+                      {recoveredStructure[element.id].section!.description}
+                      <br />
+                      Posts:{" "}
+                      {recoveredStructure[element.id].section!.posts ??
+                        "See schedule"}
+                    </p>
+                  )}
+                  {recoveredStructure[element.id]?.opening && (
+                    <p>
+                      Head linked to {recoveredStructure[element.id].opening} ·{" "}
+                      {num(recoveredStructure[element.id].head!)} m datum
+                    </p>
+                  )}
+                  <ul>
+                    {recoveredStructure[element.id]?.issues.map((issue, i) => (
+                      <li key={i}>{issue}</li>
+                    ))}
+                  </ul>
+                  {(recoveredStructure[element.id]?.sources ?? [])
+                    .filter((s) => s.kind === "sheet")
+                    .map((ref, i) => (
+                      <button
+                        key={i}
+                        title={ref.quote}
+                        onClick={() =>
+                          setSourceView(
+                            project.sheets.find((s) => s.id === ref.id) ?? null,
+                          )
+                        }
+                      >
+                        {ref.label} · {ref.quote?.split(":")[0]} ↗
+                      </button>
+                    ))}
+                  <button
+                    disabled={!frames[element.sheetId]}
+                    onClick={() => setEditingStructural(element)}
+                  >
+                    Review / connect geometry
+                  </button>
+                  {!frames[element.sheetId] && (
+                    <p>Align this source to the floor first.</p>
+                  )}
+                  {structuralReviews?.[element.id] && (
+                    <button
+                      onClick={() => {
+                        const next = { ...structuralReviews };
+                        delete next[element.id];
+                        setStructuralReviews(next);
+                        try {
+                          localStorage.setItem(
+                            structuralKey,
+                            JSON.stringify(next),
+                          );
+                        } catch {
+                          setLayerError("Review reset for this session only.");
+                        }
+                      }}
+                    >
+                      Reset geometry review
+                    </button>
+                  )}
+                </section>
+              )}
+
               {crop && sheetUrl && (
                 <div className="ex-source">
                   <svg
@@ -1067,6 +1324,35 @@ export function ExploreWorkspace({
                 "Alignment saved. Turn off a layer before enabling this drawing.",
               );
             setAligning(null);
+          }}
+        />
+      )}
+      {editingStructural && frames[editingStructural.sheetId] && (
+        <StructuralEditor
+          element={editingStructural}
+          existing={structuralReviews?.[editingStructural.id]?.fingerprint === structuralFingerprint(editingStructural,project) ? structuralReviews[editingStructural.id] : undefined}
+          evidence={recoveredStructure[editingStructural.id]}
+          project={project}
+          sheet={project.sheets.find(
+            (s) => s.id === editingStructural.sheetId,
+          )!}
+          frame={frames[editingStructural.sheetId]}
+          renderPage={renderPage}
+          onClose={() => setEditingStructural(null)}
+          onSave={(placement) => {
+            const next = {
+              ...structuralReviews,
+              [editingStructural.id]: placement,
+            };
+            setStructuralReviews(next);
+            try {
+              localStorage.setItem(structuralKey, JSON.stringify(next));
+            } catch {
+              setLayerError(
+                "Geometry is applied for this session; local storage is unavailable.",
+              );
+            }
+            setEditingStructural(null);
           }}
         />
       )}
