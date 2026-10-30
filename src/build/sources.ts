@@ -17,11 +17,17 @@ const CACHE_VERSION = 3;
 
 /**
  * Sheets whose linework the model reads: exterior elevations and building sections (façades,
- * roof), and the measured plans in `plans` (see `linePlans`: door swings and wall openings,
+ * roof), structural sections and framing elevations, and the measured plans in `plans` (see `linePlans`: door swings and wall openings,
  * structural member strokes).
  */
-export const needsLines = (s: Pick<Sheet, 'title'> & { id?: string }, plans?: Set<string>) =>
-  (/ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? '')) || (!!s.id && !!plans?.has(s.id));
+export const needsLines = (s: Pick<Sheet, 'title'> & { id?: string; name?: string }, plans?: Set<string>) =>
+  (/ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? '')) ||
+  structuralSection(s) ||
+  (!!s.id && !!plans?.has(s.id));
+
+/** Structural sections and framing elevations (S-sheets titled SECTIONS or ELEVATIONS): beam tops and floor build-ups against the level heads. */
+const structuralSection = (s: Pick<Sheet, 'title'> & { name?: string }) =>
+  /^S[-\d.]/i.test(s.name ?? '') && /\b(?:SECTIONS?|ELEVATIONS?)\b/i.test(s.title ?? '') && !/DETAIL/i.test(s.title ?? '');
 
 /** Sheets with door counts: by the door takeoff (source doors) or on a Doors count type. */
 export function doorSheets(project: Pick<Project, 'measurements'> & { types?: Project['types'] }): Set<string> {
