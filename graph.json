@@ -204,7 +204,7 @@
       "by": "claude"
     },
     {
-      "status": "doing",
+      "status": "done",
       "depends": [
         "T1"
       ],
@@ -218,7 +218,9 @@
       "title": "Envelope takeoff: roof area off the roof plans (by roof type), exterior wall area by wall type",
       "added": "2026-10-30T04:21:36.667Z",
       "by": "claude",
-      "updated": "2026-10-30T04:22:03.360Z"
+      "updated": "2026-10-30T04:25:38.730Z",
+      "branch": "claude/integration@e8391a0",
+      "evidence": "claude/integration@e8391a0"
     },
     {
       "status": "todo",
