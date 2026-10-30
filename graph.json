@@ -50,7 +50,7 @@
       "id": "T4",
       "owner": "claude",
       "status": "done",
-      "title": "Refresh the Kelso and 84 Frederick demos with the new takeoffs (T1, T2) \u2014 added measurements only; Talha OKs installing them",
+      "title": "Refresh the Kelso and 84 Frederick demos with the new takeoffs (T1, T2) — added measurements only; Talha OKs installing them",
       "depends": [
         "T1",
         "T2",
@@ -99,7 +99,7 @@
     {
       "id": "T7",
       "owner": "claude",
-      "status": "doing",
+      "status": "done",
       "title": "Beam lengths off the framing plans",
       "depends": [
         "T1"
@@ -109,7 +109,9 @@
         "test",
         "build"
       ],
-      "updated": "2026-10-30T04:03:44.815Z"
+      "updated": "2026-10-30T04:11:27.747Z",
+      "branch": "claude/integration@543763c",
+      "evidence": "claude/integration@543763c"
     },
     {
       "id": "T8",
