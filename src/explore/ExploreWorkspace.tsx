@@ -1115,7 +1115,7 @@ export function ExploreWorkspace({
                   <dd>{element.division || element.trade}</dd>
                 </div>
               </dl>
-              {element.issues.filter(issue => /revision|supersed|discrepancy|^Roof framing detail:/i.test(issue)).map((issue, index) => (
+              {element.issues.filter(issue => /revision|supersed|discrepancy|^Roof framing detail:|^Roof cantilever elevation unresolved:/i.test(issue)).map((issue, index) => (
                 <p className="ex-revision-note" key={index}>{issue}</p>
               ))}
               {element?.trade === "structure" && (

@@ -424,3 +424,37 @@ Next bounded geometry work shifts to the unresolved roof free-end elevation
 chains while Claude reviews whether any additional north-pad detail exists.
 Northern A/D recovery requires independent boundary/datum evidence before retry;
 the source ambiguity must remain exposed, not converted to measured geometry.
+
+## Roof end-bay source audit — October 30, 23:03 wake
+
+Claude confirmed the northern8/A typical exterior low-pier detail5/S1.1 is only
+an inference candidate; it does not close the missing pad footprint. No north
+pad solid was added. Integration and bus were fetched; shared files remain untouched.
+
+Revised S3.1 page30 has a material title/grid/member conflict. The E8–9 title
+is above actual grid bubbles6/7 at [1418.55,193.54]/[1718.79,193.54], with B3
+at [1568.69,331.59]. The E1–2 title is above actual4/5 bubbles and another B3.
+S2.1 references1/2 S3.1 match those interior bays. Neither can establish B2
+end-bay extensions. Its lower rowA B2 profiles apply to already recovered A
+members. Revised S3.0 covers leftC–E/rightD–B only. S4.2 sections7/8 show
+purlin profiles; S5.0 entry/stair/transition details do not uniquely identify
+leftB/rightE B2. Architectural A3.3 cuts lie between letter grids. These are
+specific source association gaps, not permission to mirror or substitute levels.
+
+Source crops and exact associations: `/tmp/roof-freeend-review/source-proof.md`,
+`s31-gridE-title-vs-actual-grids.png` and `s42-sections7-8-purlin-profiles.png`
+in that directory. Original revised-PDF crops were visually reviewed.
+
+The existing unresolved-cantilever warning was buried in collapsed review notes.
+It now appears alongside the selected beam's revision evidence, explicitly
+stating that the displayed support span omits an unresolved free-end extension.
+Compiled live UI verified both leftB grids1–2 and rightE grids8–9, 2D/3D switching,
+unchanged265×608mm sections, and no browser errors. Private proof:
+`diag/explore/proofs/roof-incomplete-span-warning.png`. No model geometry or
+accepted quantity changed; eight qualified extensions and135 structural solids
+remain the last verified geometry checkpoint.
+
+Next: request Claude's independent source resolution for the conflicting S3.1
+end-bay titles; continue independent stepped-strip placement/section association
+while these two free ends await unique applicable evidence. Do not repeat
+unchanged searches or count support-only spans as complete cantilevers.
