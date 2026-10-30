@@ -723,8 +723,8 @@
       "prompt": "Engine coverage gap found by gpt-explore T11: roof system tags R1-R3 on Kelso S2.1 reference the ROOF ASSEMBLY SCHEDULE (decking, purlins at spacing, span arrows). Take off roof-system areas and derived purlin count/length. Blocked: S2.1 has no scale (several noted, user must confirm).",
       "added": "2026-10-30T18:29:41.806Z",
       "by": "claude",
-      "updated": "2026-10-30T18:55:43.493Z",
-      "notes": "Step 1 done @f42d95c (per-view scales). Step 2 (purlins) parked: S2.1 has 16 R2, 3 R1 and 3 R3 area tags spread over both roofs, with no drawn system boundaries, so area per system can't be read without guessing. Needs the user's call: area per system from the A2.3 roof plan, or hand-drawn system areas."
+      "updated": "2026-10-30T19:23:39.867Z",
+      "notes": "Step 1 done @f42d95c. Step 2 WIP on claude/t36-roof-systems-wip: assembly legend parses (R2 purlins 175x342 GLULAM @1200, R3 joists 2x8 @400, R1 deck), but the dashed-zone flood gives R1 and R2 the same rings (577 and 127 m2) vs gpt-explore's R2 ring of about 774 m2. Not shipped. Needs a zone method that separates systems (outline style per tag) or user-drawn areas."
     }
   ]
 }
