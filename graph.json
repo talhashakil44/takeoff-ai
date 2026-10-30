@@ -551,7 +551,7 @@
       "evidence": "claude/integration@a7559db"
     },
     {
-      "status": "review",
+      "status": "done",
       "depends": [
         "T28"
       ],
@@ -569,7 +569,9 @@
       "added": "2026-10-30T10:55:58.421Z",
       "by": "claude",
       "branch": "codex/build-it-frederick-qa@2fc17ca",
-      "updated": "2026-10-30T11:12:59.423Z"
+      "updated": "2026-10-30T11:14:58.988Z",
+      "ref": "claude/integration@2fc17ca",
+      "evidence": "codex/build-it-frederick-qa@2fc17ca"
     }
   ]
 }
