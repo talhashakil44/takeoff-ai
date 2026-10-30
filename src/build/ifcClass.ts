@@ -37,6 +37,16 @@ export function ifcClassOf(e: BuildElement): { cls: string; tail: string } {
   const name = e.typeName.toLowerCase();
   const t9 = (cls: string, pre: string) => ({ cls, tail: `,${pre}` });
   if (e.trade === 'demolition') return t9('IFCBUILDINGELEMENTPROXY', '.NOTDEFINED.');
+  // Classify only recovered physical members. A count locator or unresolved tag
+  // does not establish a physical footing/column, even when its name matches.
+  const solid = e.shape?.type === 'point' || e.shape?.type === 'run';
+  const foundation = e.measurementSource === 'foundations' || e.trade === 'foundations';
+  if (solid && foundation) {
+    if (/\bstrip footing\b|^sf[- ]?\d+\b/.test(name)) return t9('IFCFOOTING', '.STRIP_FOOTING.');
+    if (/\b(?:pad|mass) footing\b|^(?:mf|f)[- ]?\d+\b/.test(name)) return t9('IFCFOOTING', '.PAD_FOOTING.');
+    if (/\bconcrete pier\b/.test(name)) return t9('IFCCOLUMN', '.COLUMN.');
+  }
+  if (solid && e.trade === 'structure' && /\bcolumn\b/.test(name)) return t9('IFCCOLUMN', '.COLUMN.');
   if (e.trade === 'structure' && /\bbeam\b/.test(name)) return t9('IFCBEAM', '.BEAM.');
   if (e.shape?.type === 'run') {
     if (e.trade === 'structure' && /^(?:l|bl)\d+\b|\blintel\b/.test(name)) return t9('IFCBEAM', '.LINTEL.');
@@ -72,6 +82,8 @@ const NAMES: Record<string, string> = {
   IFCCABLECARRIERSEGMENT: 'IfcCableCarrierSegment',
   IFCWALL: 'IfcWall',
   IFCBEAM: 'IfcBeam',
+  IFCFOOTING: 'IfcFooting',
+  IFCCOLUMN: 'IfcColumn',
   IFCCOVERING: 'IfcCovering',
   IFCSLAB: 'IfcSlab',
   IFCROOF: 'IfcRoof',

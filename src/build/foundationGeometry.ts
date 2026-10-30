@@ -972,7 +972,8 @@ export function recoverFoundationGeometry(
     lines,
     revision,
   );
-  const recovered=recoverRevisedPiers(project,model,recoverRevisedMassFootings(project,model,stripped,texts,lines,revision),texts,lines,revision);
+  const padConnected=recoverRevisedPads(project,model,stripped,texts,lines,revision);
+  const recovered=recoverRevisedPiers(project,model,recoverRevisedMassFootings(project,model,padConnected,texts,lines,revision),texts,lines,revision);
   return {...recovered,elements:recovered.elements.map(e=>{
     if(e.measurementSource!=='foundations')return e;
     const resolved=e.issues.some(i=>i.startsWith('Foundation revision applied:'));
@@ -1065,6 +1066,652 @@ export function revisedPlan(
   }
   return candidates.length === 1 ? candidates[0] : null;
 }
+/** A local leader can terminate on an adjoining strip, but its datum reaches a
+ * pad only through drawn, scheduled parallel edges without an intervening step. */
+function padStripDatum(
+  plan: RevisedPlan,
+  box: number[],
+  depth: number,
+  leaders: LocalFootingLeader[],
+  strips: { width: number; depth: number; source: SourceRef }[],
+) {
+  const scale = Math.hypot(plan.frame.a, plan.frame.b);
+  return leaders.flatMap((leader) => {
+    if (Math.abs(leader.top - leader.bottom - depth) > 0.002) return [];
+    const matches = [];
+    for (const axis of [0, 1]) {
+      const cross = 1 - axis,
+        tip = leader.tip,
+        edge =
+          tip[axis] < box[axis]
+            ? box[axis]
+            : tip[axis] > box[axis + 2]
+              ? box[axis + 2]
+              : null;
+      if (
+        edge === null ||
+        Math.abs(edge - tip[axis]) * scale > 2 ||
+        Math.abs(edge - tip[axis]) * scale < 0.01
+      )
+        continue;
+      const lo = Math.min(edge, tip[axis]),
+        hi = Math.max(edge, tip[axis]);
+      const useful = plan.lines.filter(
+        (l) =>
+          !l.filled &&
+          !l.curve &&
+          (!l.color || l.color === '#000000') &&
+          l.width >= 0.5 &&
+          Math.abs(axis === 0 ? l.y1 - l.y2 : l.x1 - l.x2) < 0.05,
+      );
+      const coords = [
+        ...new Set(
+          useful.map((l) => Math.round((axis === 0 ? l.y1 : l.x1) * 100) / 100),
+        ),
+      ].filter((v) => v >= box[cross] - 0.3 && v <= box[cross + 2] + 0.3);
+      const covered = (at: number, width: number) => {
+        const spans = useful
+          .filter(
+            (l) =>
+              Math.abs(l.width - width) < 0.05 &&
+              Math.abs((axis === 0 ? l.y1 : l.x1) - at) < 0.1,
+          )
+          .map((l) => [
+            Math.max(
+              lo,
+              Math.min(axis === 0 ? l.x1 : l.y1, axis === 0 ? l.x2 : l.y2),
+            ),
+            Math.min(
+              hi,
+              Math.max(axis === 0 ? l.x1 : l.y1, axis === 0 ? l.x2 : l.y2),
+            ),
+          ])
+          .filter((v) => v[1] > v[0])
+          .sort((a, b) => a[0] - b[0]);
+        let last = lo,
+          total = 0,
+          gap = 0;
+        for (const [a, b] of spans) {
+          gap = Math.max(gap, a - last);
+          total += Math.max(0, b - Math.max(a, last));
+          last = Math.max(last, b);
+        }
+        gap = Math.max(gap, hi - last);
+        return total / (hi - lo) > 0.5 && gap * scale <= 0.25;
+      };
+      for (const a of coords)
+        for (const b of coords) {
+          if (
+            b <= a ||
+            Math.min(Math.abs(tip[cross] - a), Math.abs(tip[cross] - b)) > 0.3
+          )
+            continue;
+          const schedules = strips.filter(
+            (s) =>
+              Math.abs(s.width - (b - a) * scale) < 0.015 &&
+              Math.abs(s.depth - depth) < 0.002,
+          );
+          const weights = [
+            ...new Set(
+              useful
+                .filter(
+                  (l) =>
+                    Math.abs((axis === 0 ? l.y1 : l.x1) - tip[cross]) < 0.3,
+                )
+                .map((l) => l.width),
+            ),
+          ];
+          if (
+            !schedules.length ||
+            !weights.some((w) => covered(a, w) && covered(b, w))
+          )
+            continue;
+          if (
+            plan.texts.some(
+              (t) =>
+                /^S\.?F\.?$/.test(t.str.trim()) &&
+                (axis === 0 ? t.cx : t.cy) >= lo - 0.3 &&
+                (axis === 0 ? t.cx : t.cy) <= hi + 0.3 &&
+                (axis === 0 ? t.cy : t.cx) >= a - 20 &&
+                (axis === 0 ? t.cy : t.cx) <= b + 20,
+            )
+          )
+            continue;
+          const stepLabels = plan.texts.filter((t) =>
+            /^S\.?F\.?$/.test(t.str.trim()),
+          );
+          const crosses = plan.lines
+            .filter(
+              (l) =>
+                !l.filled &&
+                !l.curve &&
+                (!l.color || l.color === '#000000') &&
+                l.width >= 0.5 &&
+                Math.abs(axis === 0 ? l.x1 - l.x2 : l.y1 - l.y2) < 0.05,
+            )
+            .filter((l) => {
+              const at = axis === 0 ? l.x1 : l.y1,
+                c0 = Math.min(
+                  axis === 0 ? l.y1 : l.x1,
+                  axis === 0 ? l.y2 : l.x2,
+                ),
+                c1 = Math.max(
+                  axis === 0 ? l.y1 : l.x1,
+                  axis === 0 ? l.y2 : l.x2,
+                );
+              return (
+                at > lo + 0.3 &&
+                at < hi - 0.3 &&
+                Math.min(c1, b) - Math.max(c0, a) > (b - a) * 0.2 &&
+                stepLabels.some(
+                  (t) =>
+                    Math.abs((axis === 0 ? t.cx : t.cy) - at) < 30 &&
+                    (axis === 0 ? t.cy : t.cx) >= a - 25 &&
+                    (axis === 0 ? t.cy : t.cx) <= b + 25,
+                )
+              );
+            });
+          if (crosses.length) continue;
+          matches.push({
+            leader,
+            schedule: schedules[0].source,
+            box: axis === 0 ? [lo, a, hi, b] : [a, lo, b, hi],
+          });
+        }
+    }
+    return matches.length === 1 ? matches : [];
+  });
+}
+
+interface InteriorPadCut {
+  axis: 0 | 1;
+  at: number;
+  lo: number;
+  hi: number;
+  gridAt: number;
+  drop: number;
+  cover: number;
+  alternate: boolean;
+  source: SourceRef;
+  planSource: SourceRef;
+}
+
+/** A named detail supplies a datum only to the one pad crossed by its actual cut. */
+function interiorPadCuts(
+  plan: RevisedPlan,
+  original: BuildModel,
+  texts: DrawingTexts,
+  pages: { docId: string; page: number }[],
+): InteriorPadCut[] {
+  const result: InteriorPadCut[] = [];
+  const scale = Math.hypot(plan.frame.a, plan.frame.b);
+  const axes = gridAxes(
+    plan.texts,
+    Math.max(...plan.texts.map((t) => t.cx)) + 50,
+    Math.max(...plan.texts.map((t) => t.cy)) + 50,
+  );
+  for (const page of pages.filter((p) => p.docId === plan.docId)) {
+    const ts = texts[foundationRevisionKey(page.docId, page.page)] ?? [];
+    const titles = ts.filter((t) => /^SECTION\s*-/i.test(t.str.trim()));
+    for (const title of titles.filter((t) =>
+      /^SECTION\s*-\s*(?:TYPICAL\s+)?INTERIOR PAD FOOTING$/i.test(t.str.trim()),
+    )) {
+      const peers = titles.filter((t) => Math.abs(t.cy - title.cy) < 20);
+      const left = Math.max(
+        title.cx - 350,
+        ...peers
+          .filter((t) => t.cx < title.cx)
+          .map((t) => (t.cx + title.cx) / 2),
+      );
+      const right = Math.min(
+        title.cx + 350,
+        ...peers
+          .filter((t) => t.cx > title.cx)
+          .map((t) => (t.cx + title.cx) / 2),
+      );
+      const local = ts.filter(
+        (t) =>
+          t.cx > left &&
+          t.cx < right &&
+          t.cy < title.cy &&
+          t.cy > title.cy - 450,
+      );
+      const numbers = ts.filter(
+        (t) =>
+          /^\d+$/.test(t.str.trim()) &&
+          Math.abs(t.cy - title.cy) < 5 &&
+          t.cx < title.cx &&
+          t.cx > left,
+      );
+      if (numbers.length !== 1) continue;
+      const number = numbers[0];
+      const sheetNames = ts.filter(
+        (t) =>
+          /^S\d+(?:\.\d+)?$/i.test(t.str.trim()) &&
+          Math.abs(t.cx - number.cx) < 5 &&
+          t.cy > number.cy &&
+          t.cy - number.cy < 25,
+      );
+      if (sheetNames.length !== 1) continue;
+      const sheetName = sheetNames[0].str.trim().toUpperCase();
+      const drops = local.flatMap((t) => {
+        const match = /^DROP T\/O FOOTING (\d+)$/i.exec(t.str.trim());
+        return match ? [{ text: t, drop: Number(match[1]) / 1000 }] : [];
+      });
+      const floors = local.filter((t) =>
+        /^(?:FIN\.?|FINISHED)\s+GROUND\s+FLOOR$/i.test(t.str.trim()),
+      );
+      if (
+        drops.length !== 1 ||
+        drops[0].drop <= 0 ||
+        drops[0].drop > 1 ||
+        floors.length !== 1
+      )
+        continue;
+      const floor = floors[0];
+      if (
+        !local.some(
+          (t) =>
+            t.str.trim() === '0' &&
+            t.cy >= floor.cy &&
+            t.cy - floor.cy < 20 &&
+            Math.abs(t.cx - floor.cx) < 100,
+        )
+      )
+        continue;
+      if (!local.some((t) => /AND POUR SLAB OVER/i.test(t.str))) continue;
+      const grids = local.filter(
+        (t) =>
+          /^[A-Z]$/.test(t.str.trim()) &&
+          axes[t.str.trim()] &&
+          t.cy < drops[0].text.cy,
+      );
+      if (grids.length !== 1) continue;
+      const covers = local.flatMap((t) => {
+        const match = /^MIN\.?\s*(\d+)\s*mm CONCRETE$/i.exec(t.str.trim());
+        return match &&
+          local.some(
+            (v) =>
+              /^COVER TO ALL STEEL$/i.test(v.str.trim()) &&
+              v.cy > t.cy &&
+              v.cy - t.cy < 20 &&
+              Math.abs(v.cx - t.cx) < 100,
+          )
+          ? [Number(match[1]) / 1000]
+          : [];
+      });
+      if (covers.length !== 1 || covers[0] <= 0) continue;
+      const grid = axes[grids[0].str.trim()];
+      const alternate = local.some((t) =>
+        /^ALTERNATE DETAIL$/i.test(t.str.trim()),
+      );
+      const callouts = plan.texts
+        .filter((t) => t.str.trim().toUpperCase() === sheetName)
+        .flatMap((sheet) => {
+          const ns = plan.texts.filter(
+            (t) =>
+              t.str.trim() === number.str.trim() &&
+              Math.abs(t.cx - sheet.cx) < 3 &&
+              t.cy < sheet.cy &&
+              sheet.cy - t.cy < 22,
+          );
+          return ns.length === 1 ? [{ sheet, number: ns[0] }] : [];
+        });
+      for (const callout of callouts) {
+        const axis: 0 | 1 = grid.axis === 'y' ? 1 : 0;
+        const cross = 1 - axis;
+        const cuts = plan.lines
+          .filter(
+            (l) =>
+              !l.filled &&
+              !l.curve &&
+              (!l.color || l.color === '#000000') &&
+              l.width >= 0.5,
+          )
+          .flatMap((l) => {
+            const start = [l.x1, l.y1],
+              end = [l.x2, l.y2];
+            if (
+              Math.abs(start[cross] - end[cross]) > 0.1 ||
+              Math.abs(
+                start[cross] -
+                  (axis === 1 ? callout.sheet.cx : callout.sheet.cy),
+              ) > 1
+            )
+              return [];
+            const lo = Math.min(start[axis], end[axis]),
+              hi = Math.max(start[axis], end[axis]);
+            const bubble = axis === 1 ? callout.number.cy : callout.number.cx;
+            if (
+              Math.min(Math.abs(lo - bubble), Math.abs(hi - bubble)) > 35 ||
+              grid.at <= lo ||
+              grid.at >= hi
+            )
+              return [];
+            const crossed = original.elements
+              .filter(
+                (e) =>
+                  e.sheetId === plan.sheetId &&
+                  /^F-?\d+\b/.test(e.typeName) &&
+                  e.status !== 'demolished',
+              )
+              .flatMap((e) => {
+                const at = atOf(e);
+                if (!at) return [];
+                const p = sheetPoint(at, plan.frame);
+                return Math.abs(p[cross] - start[cross]) * scale < 0.1 &&
+                  p[axis] > lo &&
+                  p[axis] < hi
+                  ? [e.id]
+                  : [];
+              });
+            return crossed.length === 1 ? [{ at: start[cross], lo, hi }] : [];
+          });
+        if (cuts.length !== 1) continue;
+        const cut = cuts[0];
+        result.push({
+          ...cut,
+          axis,
+          gridAt: grid.at,
+          drop: drops[0].drop,
+          cover: covers[0],
+          alternate,
+          source: {
+            kind: 'spec',
+            id: page.docId,
+            page: page.page,
+            label: 'Revised locally referenced interior pad section',
+            quote: `${number.str}/${sheetName}; ${title.str}; grid ${grids[0].str}; ${drops[0].text.str}; FIN. GROUND FLOOR 0; AND POUR SLAB OVER.${alternate ? ' ALTERNATE DETAIL — local applicability inferred from the explicit plan cut.' : ''} Detail minimum concrete cover ${covers[0] * 1000} mm; scheduled depth requires local anchor-embedment compatibility.`,
+            box: [left, title.cy - 450, right, title.cy + 25],
+          },
+          planSource: {
+            kind: 'spec',
+            id: plan.docId,
+            page: plan.page,
+            label: 'Revised interior pad section cut',
+            quote: `${number.str}/${sheetName} actual section cut crosses one pad at grid ${grids[0].str}; no datum propagation to adjacent pads.`,
+            box:
+              axis === 1
+                ? [
+                    cut.at - 18,
+                    Math.min(cut.lo, callout.number.cy - 10),
+                    cut.at + 18,
+                    cut.hi,
+                  ]
+                : [
+                    Math.min(cut.lo, callout.number.cx - 10),
+                    cut.at - 18,
+                    cut.hi,
+                    cut.at + 18,
+                  ],
+          },
+        });
+      }
+    }
+  }
+  return result;
+}
+
+/** A section's depth allowance is usable only with the actual local base plate. */
+function interiorPadAnchor(
+  plan: RevisedPlan,
+  box: number[],
+  code: string,
+  depth: number,
+  cover: number,
+  texts: DrawingTexts,
+  pages: { docId: string; page: number }[],
+): SourceRef | null {
+  const scale = Math.hypot(plan.frame.a, plan.frame.b);
+  const distance = (t: DrawingText) =>
+    Math.hypot(
+      Math.max(box[0] - t.cx, 0, t.cx - box[2]),
+      Math.max(box[1] - t.cy, 0, t.cy - box[3]),
+    );
+  const padTags = plan.texts.filter(
+    (t) => normalized(t.str) === code && distance(t) * scale < 0.6,
+  );
+  if (padTags.length !== 1) return null;
+  const tag = padTags[0];
+  const plates = plan.texts.filter(
+    (t) =>
+      /^BP\d+[A-Z]?$/i.test(t.str.trim()) &&
+      distance(t) * scale < 0.6 &&
+      Math.hypot(t.cx - tag.cx, t.cy - tag.cy) < 25,
+  );
+  if (plates.length !== 1) return null;
+  const mark = plates[0].str.trim().toUpperCase();
+  const evidence: { embedment: number; source: SourceRef }[] = [];
+  for (const page of pages.filter((p) => p.docId === plan.docId)) {
+    const ts = texts[foundationRevisionKey(page.docId, page.page)] ?? [];
+    for (const title of ts.filter((t) =>
+      /^BASE PLATE SCHEDULE$/i.test(t.str.trim()),
+    )) {
+      const heads = ts.filter(
+        (t) =>
+          t.cy > title.cy &&
+          t.cy < title.cy + 40 &&
+          Math.abs(t.cx - title.cx) < 350,
+      );
+      const markHead = heads.find(
+        (t) => /^MARK$/i.test(t.str.trim()) && t.cx < title.cx,
+      );
+      const anchorsHead = heads.find((t) => /^ANCHORS$/i.test(t.str.trim()));
+      if (!markHead || !anchorsHead) continue;
+      const rows = ts.filter(
+        (t) =>
+          /^BP\d+[A-Z]?$/i.test(t.str.trim()) &&
+          Math.abs(t.cx - markHead.cx) < 25 &&
+          t.cy > markHead.cy &&
+          t.cy < markHead.cy + 250,
+      );
+      for (const row of rows.filter(
+        (t) => t.str.trim().toUpperCase() === mark,
+      )) {
+        const nextY = Math.min(
+          row.cy + 30,
+          ...rows.filter((t) => t.cy > row.cy + 2).map((t) => t.cy),
+        );
+        const anchors = ts.filter(
+          (t) =>
+            Math.abs(t.cy - row.cy) < 3 &&
+            Math.abs(t.cx - anchorsHead.cx) < 150 &&
+            /ANCHOR|TITEN|RODS/i.test(t.str),
+        );
+        const notes = ts.flatMap((t) => {
+          if (
+            t.cy < row.cy ||
+            t.cy >= nextY ||
+            Math.abs(t.cx - anchorsHead.cx) > 150
+          )
+            return [];
+          const match = /^\(?MIN\.?\s+(\d+)\s*(?:mm\s*)?EMBEDMENT\)?$/i.exec(
+            t.str.trim(),
+          );
+          return match ? [{ text: t, value: Number(match[1]) / 1000 }] : [];
+        });
+        if (anchors.length !== 1 || notes.length !== 1 || notes[0].value <= 0)
+          continue;
+        const embedment = notes[0].value;
+        evidence.push({
+          embedment,
+          source: {
+            kind: 'spec',
+            id: page.docId,
+            page: page.page,
+            label: 'Revised local pad anchor compatibility',
+            quote: `${code} local ${mark} tag group; ${anchors[0].str}; ${notes[0].text.str}. Detail concrete cover ${cover * 1000} mm + scheduled minimum embedment ${embedment * 1000} mm = ${Math.round((cover + embedment) * 1000)} mm, within scheduled pad depth ${depth * 1000} mm. Minimum-depth compatibility only; increased anchor embedment requires rechecking.`,
+            box: [
+              row.cx - 15,
+              row.cy - 5,
+              anchorsHead.cx + 150,
+              notes[0].text.cy + 5,
+            ],
+          },
+        });
+      }
+    }
+  }
+  if (evidence.length !== 1 || evidence[0].embedment + cover > depth + 0.0001)
+    return null;
+  return evidence[0].source;
+}
+
+/** A closed pad junction may inherit the top of a separately resolved strip.
+ * Both incoming and outgoing strip boundaries must reach the pad footprint. */
+function embeddedPadDatum(
+  plan: RevisedPlan,
+  box: number[],
+  depth: number,
+  model: BuildModel,
+) {
+  const scale = Math.hypot(plan.frame.a, plan.frame.b);
+  return model.elements.flatMap((strip) => {
+    const shape = strip.shape;
+    if (
+      strip.sheetId !== plan.sheetId ||
+      !/^SF-?\d+\b/.test(strip.typeName) ||
+      shape?.type !== 'run' ||
+      shape.points.length !== 2 ||
+      Math.abs(shape.height - depth) > 0.002 ||
+      !strip.issues.some((i) => i.startsWith('Foundation revision applied:'))
+    )
+      return [];
+    const ps = shape.points.map((p) => sheetPoint(p, plan.frame));
+    const horizontal = Math.abs(ps[0][1] - ps[1][1]) < 0.1;
+    const vertical = Math.abs(ps[0][0] - ps[1][0]) < 0.1;
+    if (!horizontal && !vertical) return [];
+    const axis = horizontal ? 0 : 1,
+      cross = 1 - axis;
+    const lo = Math.min(ps[0][axis], ps[1][axis]),
+      hi = Math.max(ps[0][axis], ps[1][axis]);
+    const a = ps[0][cross] - shape.thickness / scale / 2,
+      b = ps[0][cross] + shape.thickness / scale / 2;
+    if (
+      lo >= box[axis] ||
+      hi <= box[axis + 2] ||
+      a < box[cross] - 0.3 ||
+      b > box[cross + 2] + 0.3
+    )
+      return [];
+    const stepLabels = plan.texts.filter((t) =>
+      /^S\.?F\.?$/.test(t.str.trim()),
+    );
+    if (
+      stepLabels.some(
+        (t) =>
+          (axis === 0 ? t.cx : t.cy) > box[axis] - 1 &&
+          (axis === 0 ? t.cx : t.cy) < box[axis + 2] + 1 &&
+          (axis === 0 ? t.cy : t.cx) >= a - 20 &&
+          (axis === 0 ? t.cy : t.cx) <= b + 20,
+      )
+    )
+      return [];
+    const black = plan.lines.filter(
+      (l) =>
+        !l.filled &&
+        !l.curve &&
+        (!l.color || l.color === '#000000') &&
+        l.width >= 0.5,
+    );
+    if (
+      black.some((l) => {
+        const u1 = horizontal ? l.x1 : l.y1,
+          u2 = horizontal ? l.x2 : l.y2;
+        const v1 = horizontal ? l.y1 : l.x1,
+          v2 = horizontal ? l.y2 : l.x2;
+        return (
+          Math.abs(u1 - u2) < 0.05 &&
+          u1 > box[axis] + 0.3 &&
+          u1 < box[axis + 2] - 0.3 &&
+          Math.min(Math.max(v1, v2), b) - Math.max(Math.min(v1, v2), a) >
+            (b - a) * 0.2 &&
+          stepLabels.some(
+            (t) =>
+              Math.abs((horizontal ? t.cx : t.cy) - u1) < 30 &&
+              (horizontal ? t.cy : t.cx) >= a - 25 &&
+              (horizontal ? t.cy : t.cx) <= b + 25,
+          )
+        );
+      })
+    )
+      return [];
+    const approach = [
+      [Math.max(lo, box[axis] - 0.3 / scale), box[axis]],
+      [box[axis + 2], Math.min(hi, box[axis + 2] + 0.3 / scale)],
+    ];
+    if (approach.some(([start, end]) => (end - start) * scale < 0.1)) return [];
+    const parallel = black.filter(
+      (l) => Math.abs(horizontal ? l.y1 - l.y2 : l.x1 - l.x2) < 0.05,
+    );
+    const weights = [
+      ...new Set(
+        parallel
+          .filter((l) => Math.abs((horizontal ? l.y1 : l.x1) - a) < 0.15)
+          .map((l) => l.width),
+      ),
+    ];
+    const reaches = (
+      edge: number,
+      weight: number,
+      start: number,
+      end: number,
+    ) => {
+      const spans = parallel
+        .filter(
+          (l) =>
+            Math.abs(l.width - weight) < 0.05 &&
+            Math.abs((horizontal ? l.y1 : l.x1) - edge) < 0.15,
+        )
+        .map((l) => [
+          Math.max(
+            start,
+            Math.min(horizontal ? l.x1 : l.y1, horizontal ? l.x2 : l.y2),
+          ),
+          Math.min(
+            end,
+            Math.max(horizontal ? l.x1 : l.y1, horizontal ? l.x2 : l.y2),
+          ),
+        ])
+        .filter((v) => v[1] > v[0])
+        .sort((x, y) => x[0] - y[0]);
+      let last = start,
+        total = 0,
+        gap = 0;
+      for (const [x, y] of spans) {
+        gap = Math.max(gap, x - last);
+        total += Math.max(0, y - Math.max(x, last));
+        last = Math.max(last, y);
+      }
+      gap = Math.max(gap, end - last);
+      return total / (end - start) > 0.4 && gap * scale <= 0.25;
+    };
+    if (
+      !weights.some((weight) =>
+        [a, b].every((edge) =>
+          approach.every(([start, end]) => reaches(edge, weight, start, end)),
+        ),
+      )
+    )
+      return [];
+    return [
+      {
+        top: Math.round((shape.z0 + shape.height) * 1e6) / 1e6,
+        strip,
+        source: {
+          kind: 'spec' as const,
+          id: plan.docId,
+          page: plan.page,
+          label: 'Revised closed pad junction',
+          quote:
+            'Actual scheduled closed pad footprint intersects a separately source-resolved strip. Matching incoming and outgoing boundary strokes connect both sides; no intervening S.F. step. Local top continuity is inferred.',
+          box: box as SourceRef['box'],
+        },
+      },
+    ];
+  });
+}
+
 function recoverRevisedPads(
   project: Project,
   original: BuildModel,
@@ -1075,6 +1722,10 @@ function recoverRevisedPads(
 ): BuildModel {
   const plan = revisedPlan(project, original, texts, lines, pages);
   if (!plan) return held;
+  const stripSections: { width: number; depth: number; source: SourceRef }[] =
+    [];
+  const localLeaders = localFootingLeaders(plan);
+  const interiorCuts = interiorPadCuts(plan, original, texts, pages);
   const sections = new Map<
     string,
     { width: number; length: number; depth: number; source: SourceRef }[]
@@ -1084,6 +1735,19 @@ function recoverRevisedPads(
       detailed(texts[foundationRevisionKey(r.docId, r.page)] ?? []),
     )) {
       for (const mark of foundationMarks([table], true)) {
+        if (mark.kind === 'strip' && mark.width && mark.depth)
+          stripSections.push({
+            width: mark.width,
+            depth: mark.depth,
+            source: {
+              kind: 'spec',
+              id: r.docId,
+              page: r.page,
+              label: 'Revised strip footing schedule',
+              quote: `${mark.mark}: width ${mark.width} m; depth ${mark.depth} m`,
+              box: table.box,
+            },
+          });
         if (mark.kind !== 'pad' || !mark.width || !mark.length || !mark.depth)
           continue;
         const key = normalized(mark.mark),
@@ -1162,6 +1826,11 @@ function recoverRevisedPads(
         e.sheetId !== plan.sheetId ||
         e.measurementSource !== 'foundations' ||
         !/^F-?\d+\b/.test(e.typeName)
+      )
+        return e;
+      if (
+        e.shape?.type === 'point' &&
+        e.issues.some((i) => i.startsWith('Foundation revision applied:'))
       )
         return e;
       const old = original.elements.find((v) => v.id === e.id),
@@ -1339,18 +2008,101 @@ function recoverRevisedPads(
             'Revised footing has a sump-pit coordination/drop leader. Fixed elevation withheld until architectural and mechanical sump requirements are resolved.',
           ],
         };
+      const adjoining =
+        leaders.length === 0
+          ? padStripDatum(plan, box, section.depth, localLeaders, stripSections)
+          : [];
+      const propagated = adjoining.length === 1;
+      const embedded =
+        leaders.length === 0 && adjoining.length === 0
+          ? embeddedPadDatum(plan, box, section.depth, held)
+          : [];
+      const junction = embedded.length === 1 ? embedded[0] : undefined;
+      const localCuts =
+        leaders.length === 0 && adjoining.length === 0 && !junction
+          ? interiorCuts.filter((cut) => {
+              const cross = 1 - cut.axis;
+              return (
+                cut.at > box[cross] &&
+                cut.at < box[cross + 2] &&
+                cut.lo < box[cut.axis] &&
+                cut.hi > box[cut.axis + 2] &&
+                Math.abs((box[cut.axis] + box[cut.axis + 2]) / 2 - cut.gridAt) *
+                  scale <
+                  0.025
+              );
+            })
+          : [];
+      const candidateCut = localCuts.length === 1 ? localCuts[0] : undefined;
+      const anchor = candidateCut
+        ? interiorPadAnchor(
+            plan,
+            box,
+            code,
+            section.depth,
+            candidateCut.cover,
+            texts,
+            pages,
+          )
+        : null;
+      const cut = anchor ? candidateCut : undefined;
       if (
-        leaders.length !== 1 ||
-        Math.abs(leaders[0].z - leaders[0].bottom - section.depth) > 0.002
+        !propagated &&
+        !cut &&
+        !junction &&
+        (leaders.length !== 1 ||
+          Math.abs(leaders[0].z - leaders[0].bottom - section.depth) > 0.002)
       )
         return e;
-      const d = leaders[0];
+      const d =
+        leaders[0] ??
+        (junction
+          ? {
+              z: junction.top,
+              bottom: Math.round((junction.top - section.depth) * 1e6) / 1e6,
+              t: {
+                str: `T/O FTG: ${junction.top * 1000}`,
+                cx: (box[0] + box[2]) / 2,
+                cy: (box[1] + box[3]) / 2,
+              },
+              under: {
+                str: `U/S FTG: ${(junction.top - section.depth) * 1000}`,
+                cy: (box[1] + box[3]) / 2,
+              },
+            }
+          : cut
+            ? {
+                z: -cut.drop,
+                bottom: -cut.drop - section.depth,
+                t: {
+                  str: `T/O FTG: ${-cut.drop * 1000}`,
+                  cx: (box[0] + box[2]) / 2,
+                  cy: (box[1] + box[3]) / 2,
+                },
+                under: {
+                  str: `U/S FTG: ${(-cut.drop - section.depth) * 1000}`,
+                  cy: (box[1] + box[3]) / 2,
+                },
+              }
+            : {
+                z: adjoining[0].leader.top,
+                bottom: adjoining[0].leader.bottom,
+                t: {
+                  str: `T/O FTG: ${adjoining[0].leader.top * 1000}`,
+                  cx: adjoining[0].leader.tip[0],
+                  cy: adjoining[0].leader.tip[1],
+                },
+                under: {
+                  str: `U/S FTG: ${adjoining[0].leader.bottom * 1000}`,
+                  cy: adjoining[0].leader.tip[1],
+                },
+              });
       const source: SourceRef = {
         kind: 'spec',
         id: plan.docId,
         page: plan.page,
         label: 'Revised foundation plan',
-        quote: `${d.t.str}; ${d.under.str}; direct leader associated with drawn ${code} footing perimeter`,
+        quote: `${d.t.str}; ${d.under.str}; ${junction ? 'datum inferred through the closed pad junction on a source-resolved no-step strip' : cut ? 'datum inferred from the explicitly crossing interior section cut' : propagated ? 'datum inferred through source-bounded adjoining strip without an intervening S.F. marker' : 'direct leader associated with drawn'} ${code} footing perimeter`,
         box: [
           Math.min(box[0], d.t.cx - 40),
           Math.min(box[1], d.t.cy - 10),
@@ -1376,17 +2128,28 @@ function recoverRevisedPads(
         },
         sources: [
           ...new Map(
-            [...e.sources, section.source, source].map((s) => [
-              JSON.stringify(s),
-              s,
-            ]),
+            [
+              ...e.sources,
+              section.source,
+              source,
+              ...(cut && anchor ? [cut.source, cut.planSource, anchor] : []),
+              ...(junction
+                ? [
+                    junction.source,
+                    ...junction.strip.sources.filter((s) => s.kind === 'spec'),
+                  ]
+                : []),
+              ...(propagated
+                ? [adjoining[0].leader.source, adjoining[0].schedule]
+                : []),
+            ].map((s) => [JSON.stringify(s), s]),
           ).values(),
         ],
         issues: [
           ...e.issues.filter(
             (i) => !i.startsWith('Foundation revision unresolved:'),
           ),
-          `Foundation revision applied: revised grid registration, drawn footing perimeter and local elevation leader agree. Top ${d.z} m; bottom ${d.bottom} m. Source takeoff quantity unchanged.`,
+          `Foundation revision applied: revised grid registration, drawn footing perimeter and ${junction ? 'closed pad junction on source-resolved strip (top continuity inferred)' : cut ? 'explicitly crossing interior section cut (local datum applicability inferred)' : propagated ? 'source-bounded adjoining strip datum (inferred continuity)' : 'local elevation leader'} agree.${cut?.alternate ? ' ALTERNATE DETAIL applies only to this explicitly cut pad; confirm local detail selection.' : ''} Top ${d.z} m; bottom ${d.bottom} m. Source takeoff quantity unchanged.`,
         ],
       };
     }),
@@ -1780,7 +2543,7 @@ function recoverRevisedMassFootings(
     // candidates have no fabricated project type, measurement, or quantity.
     if(original.elements.some(e=>e.sheetId===plan.sheetId&&normalized(/^([A-Z]+-?\d+)/.exec(e.typeName)?.[1]??'')===code))return [];
     const id=`drawing:foundation:${plan.docId}:${plan.page}:${code}:${tag.cx.toFixed(2)}:${tag.cy.toFixed(2)}`;
-    return [{id,measurementId:id,name:`${code} – Drawing-derived mass footing`,typeId:'',typeName:code,trade:'structure',division:'03',level:current.elements.find(e=>e.sheetId===plan.sheetId&&e.measurementSource==='foundations')?.level??null,sheetId:plan.sheetId,measurementSource:'foundations',origin:'drawing' as const,status:'new' as const,shape:null,quantity:0,unit:'',planningExcluded:'Drawing-derived geometry; no accepted takeoff quantity',placement:'inferred' as const,sources:[],specs:[],issues:['Drawing-derived geometry: no accepted takeoff quantity. Top continuity requires source review.']}];
+    return [{id,measurementId:id,name:`${code} – Drawing-derived mass footing`,typeId:'',typeName:code,trade:'structure',division:'03',level:current.elements.find(e=>e.sheetId===plan.sheetId&&e.measurementSource==='foundations')?.level??null,sheetId:plan.sheetId,measurementSource:'foundations',origin:'drawing' as const,status:'new' as const,shape:null,quantity:0,unit:'',planningExcluded:'Drawing-derived geometry; no accepted takeoff quantity',placement:'inferred' as const,sources:[],specs:[],issues:['Drawing-derived geometry: no accepted takeoff quantity.']}];
   });
   const generated=new Map(candidates.map(e=>[e.id,plan.texts.find(t=>`drawing:foundation:${plan.docId}:${plan.page}:${normalized(t.str)}:${t.cx.toFixed(2)}:${t.cy.toFixed(2)}`===e.id)!]));
   const resolved=[...current.elements,...candidates].map((e) => {
@@ -1909,7 +2672,6 @@ function recoverRevisedMassFootings(
       const connected=adjacent.length>0&&adjacent.every(a=>Math.abs(a.top-adjacent[0].top)<.002)&&directAtMass.every(d=>Math.abs(d.top-adjacent[0].top)<.002&&Math.abs(d.top-d.bottom-section.depth)<.002);
       const propagated=local.length===0&&connected;
       if(local.length!==1&&!propagated)return e;
-      if(e.origin==='drawing'&&!connected)return e;
       const d = local[0]??{top:adjacent[0].top,bottom:Math.round((adjacent[0].top-section.depth)*1e6)/1e6,t:{str:'inferred connected top',cx:tag.cx,cy:tag.cy},us:{str:'underside from own schedule thickness',cy:tag.cy}},
         width =
           Math.abs(r.w - section.width) < 0.015

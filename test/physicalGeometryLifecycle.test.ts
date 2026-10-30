@@ -234,3 +234,14 @@ it('retains revision conflict references when withholding a formerly physical me
   expect(held.sources.some((s) => s.id === 'section')).toBe(false);
   expect(held.quantity).toBe(e.quantity);
 });
+
+it('replaces obsolete locator warnings only while current physical evidence qualifies', () => {
+  const warning = 'Symbolic 3D location inferred at structural grid 8/D; member section and height are not inferred.';
+  const source = { ...model, elements: [{ ...e, issues: [warning, 'Accepted quantity needs review'] }] };
+  const qualified = endPhysicalGeometry(enrich(beginPhysicalGeometry(project, source)));
+  expect(qualified.elements[0].issues).not.toContain(warning);
+  expect(qualified.elements[0].issues).toContain('Accepted quantity needs review');
+  const withdrawn = endPhysicalGeometry(beginPhysicalGeometry(project, qualified));
+  expect(withdrawn.elements[0].issues).toContain(warning);
+  expect(withdrawn.elements[0].shape).toEqual(e.shape);
+});

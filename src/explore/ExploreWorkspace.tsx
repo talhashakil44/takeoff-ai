@@ -215,7 +215,7 @@ export function ExploreWorkspace({
   const coordinatedModel = useMemo(
     () => ({
       ...model,
-      drawingGeometry: showDrawingGeometry ? structuralModel.drawingGeometry : [],
+      drawingGeometry: structuralModel.drawingGeometry,
       elements: structuralModel.elements.flatMap((e) => {
         // Source-built structural solids and accepted member reviews are already
         // in the canonical world frame. A selected-floor overlay is not a new
@@ -252,7 +252,6 @@ export function ExploreWorkspace({
       project,
       model,
       structuralModel,
-      showDrawingGeometry,
       originalFrames,
       structuralReviews,
       roofRegistrations,
@@ -746,6 +745,7 @@ export function ExploreWorkspace({
               visibleSheets={visibleSheets}
               overlays={overlays}
               showBase={showBase}
+              showDrawingGeometry={showDrawingGeometry}
               showAllowances={showAllowances}
               showFootprints={showFootprints}
               resetView={resetView}
@@ -1078,7 +1078,7 @@ export function ExploreWorkspace({
               <dl className="ex-facts">
                 <div>
                   <dt>Geometry</dt>
-                  <dd>{element.shape?.type === "axis" ? "Plan axis · section and height unverified" : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : "Unplaced"}</dd>
+                  <dd>{element.shape?.type === "axis" ? (element.origin === "drawing" ? "Plan outline only · elevation unverified" : "Plan axis · section and height unverified") : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : "Unplaced"}</dd>
                 </div>
                 <div>
                   <dt>Source</dt>
@@ -1123,7 +1123,7 @@ export function ExploreWorkspace({
                   className="ex-structural-proof"
                   aria-label="Structural geometry evidence"
                 >
-                  <h3>STRUCTURAL GEOMETRY</h3>
+                  <h3>{element.origin === "drawing" && selectedShape?.type === "axis" ? "DRAWING COVERAGE" : "STRUCTURAL GEOMETRY"}</h3>
                   {(selectedShape?.type === "run" || selectedShape?.type === "point") && (
                     <button
                       onClick={() => {
@@ -1368,7 +1368,7 @@ export function ExploreWorkspace({
                     </div>
                   ))
                 ) : (
-                  <p>No specification linked to this takeoff.</p>
+                  <p>{element.origin === "drawing" ? "No specification section linked to this drawing geometry." : "No specification linked to this takeoff."}</p>
                 )}
               </section>
               {element.issues.length > 0 && (

@@ -7,7 +7,7 @@ or deployment is authorized by this checkpoint.
 
 ## Current source and integration
 
-Claude's source loader and extraction fixes are merged through `cc35e6f`, with per-view scale `f42d95c` and schedule-row material classification `d874e4e`.
+Claude's source loader and extraction fixes are merged through `cc35e6f`, with per-view scale `f42d95c`, schedule-row material classification `d874e4e`, and MF3 schedule-mark recovery `823b1d7`.
 Addendum 5 reissues structural drawings on PDF pages 19–34, dated September 16,
 including the new S0.3 schedule. These supersede the corresponding July sheets.
 The shared loader reads drawing-sized addendum pages, including added sheets,
@@ -47,7 +47,7 @@ credible zero lengths. Source-derived spans remain separate.
 - Four canopy B7 beams have centred plan ink, traced dogleg grid leaders and a
   drawn 20-vertex I-profile. Revised S5.0 corroborates the 6.623 m datum through
   the web; inferred steel bottom/top are 6.562675 / 6.769050 m.
-- Seventeen foundations: four locally dimensioned pads, seven exterior piers,
+- Twenty-eight foundations: thirteen source-qualified pads, nine exterior piers,
   two east MF2 mass footings, and four source-bounded SF1/SF2 spans. Revised
   pier tops are -0.250 m. Mass-footing depth is 400 mm and is not confused with
   adjacent 300 mm strip-footing notes. Pad/pier centres follow actual eccentric
@@ -60,13 +60,22 @@ credible zero lengths. Source-derived spans remain separate.
   with accepted H=1.200 m formulas; accepted quantities remain unchanged.
 - Six earlier pier solids were withdrawn after connected-footing review: their full
   footprints did not have a recovered local pad or bounded strip support at the
-  required datum. A typical section alone does not establish each pier base.
-- Two MF3 foundations are recovered from closed revised plan outlines and the
+  required datum. A typical section alone does not establish each pier base. Two were subsequently recovered with their F2 pads through locally drawn SF2 bands and direct elevation leaders; the step must lie beyond the connection. Matching boundary stroke weights prevent wall faces from masquerading as narrow footing edges.
+- Six northern F1 pads inherit top -1.200 m through closed, equal-depth junctions
+  on the recovered no-step SF1 strip; both approach boundaries require matching
+  source line weight. Nearby -0.250/-0.550 and -1.500/-1.800 leaders target
+  separate interior pads, not these six. Continuity remains explicitly inferred.
+- Grid 3/C F1 has an actual 4/S1.1 cut crossing only that pad. The local section
+  specifies ground zero and a 250 mm drop; its ALTERNATE DETAIL qualification
+  remains visible. The local BP3 schedule minimum embedment (150 mm) plus section cover (75 mm)
+  must fit within the scheduled 300 mm depth. Missing or incompatible evidence
+  withdraws this pad; increased actual embedment requires rechecking.
+- Three MF3 foundations are recovered from closed revised plan outlines and the
   6200 × 1500 × 400 mm schedule. They have no accepted takeoff records and live
   separately in `model.drawingGeometry`: no quantities, materials or schedule
-  assignments. Left top -0.250 m is direct; right top -0.250 m is inferred through
-  the adjoining unstepped strip. Both bottoms are -0.650 m. Explore and Build
-  expose their drawing references and acceptance status. Model version 26 forces
+  assignments. The first and southeast top -0.250 m are direct; the middle top -0.250 m is inferred through
+  the adjoining unstepped strip. All bottoms are -0.650 m. Explore and Build
+  expose their drawing references and acceptance status. Model version 29 forces
   older geometry to rebuild; imported accepted takeoffs remain unchanged.
 - Three WT-1 wall defaults are axes, not unsupported four-metre-high solids.
   Their complete footprints, opening cuts and vertical sections are unresolved.
@@ -80,12 +89,18 @@ missing faces and coincident internal caps.
 
 ## Evidence and gates
 
-Latest independent v26 production replay: 119 accepted-source structural/foundation
-solids plus two drawing-only MF3 solids; all 2,108 accepted quantity tuples unchanged.
+Latest v29 independent production replay: 130 accepted-source structural/foundation
+solids plus three drawing-only MF3 solids; all 2,108 accepted quantity tuples unchanged.
 A complete replay changes no recovered objects; removing all evidence withdraws
-all derived solids and candidates. Independent IFC validation creates all 121 closed
+all derived solids and candidates. Independent IFC validation creates all 133 closed
 solids without topology failures (maximum relative volume discrepancy 0.00345%).
-Drawing candidates have no IFC quantity sets. This verifies geometry integrity,
+Drawing candidates have no IFC quantity sets. The rebuilt 2,115-record engine project
+connects the same three MF3 footprints to accepted takeoffs, with no duplicate
+drawing candidates; all 133 physical solids are then accepted-source geometry.
+Physical pads/mass footings and strip footings export as IfcFooting; recovered
+columns and piers export as IfcColumn. Inspector dimensions preserve millimetres.
+Obsolete locator warnings are hidden only while fresh physical evidence qualifies;
+withdrawing that evidence restores the baseline warning. This verifies geometry integrity,
 not completeness against the drawings; the remaining source gaps below stay open.
 
 
@@ -98,10 +113,21 @@ Floor overlays and metrics are under `diag/explore/proofs`.
 
 A separate local project, “Kelso geometry integration review”, was imported through
 the normal application UI. The user's original project/PDFs were not changed by
-that import. Complete main-app visual checks again after the checkpoint; HMR
-reloads during development are not final visual acceptance.
+that import. The final compiled v29 main app was reviewed with the normal imported project.
+HMR reloads during development are not treated as final visual acceptance.
 
 ## Remaining — do not mark T11 complete
+
+All seven MF3 tags remain on both July and revised S1.0. Three recovered physical
+MF3 solids are a geometry coverage count, not evidence of a seven-to-three revision.
+Mechanical M1-05 gives curb heights but no horizontal purlin-to-curb offsets.
+The experimental dashed-boundary graph finds competing source edges about 174 mm apart
+and a small curb detour; graph connectivity does not establish the R2 zone. The
+experiment is withheld from production, not presented as recovered roof geometry.
+A2.3 roof lines repeat at 600 mm, not the R2 1200 mm spacing; alternating those
+lines would invent the purlin phase. A3.3 section cuts lie between grid rows and
+do not uniquely establish left-B/right-E B2 free-end elevations.
+
 
 - Eight roof cantilevers now reach drawn free ends. Three left C/D/E placements
   use plan 6/S3.0 and a grid-1 girt note despite a contradictory elevation title;
@@ -109,6 +135,9 @@ reloads during development are not final visual acceptance.
   extensions remain unresolved and their support spans are labelled incomplete. Distinguish
   B2/B3 frames from separate R2 purlins. Do not assign an upper purlin level to a
   lower frame beam or apply purlin notch notes indiscriminately to B2/B3.
+- Pad coverage: 13 of 34 accepted F1/F2 pads recovered (one alternate-qualified);
+  16 have closed footprints but unresolved local datums, four lack unambiguous
+  closed footprints, and one remains sump-dependent.
 - Resolve additional footing leaders, west mass-footing datums, stepped strip
   intervals and foundation wall heights. Do not flatten stepped runs to one datum.
 - The saved 702.065 m² slab outline follows exterior buttress projections and lacks
@@ -119,18 +148,16 @@ reloads during development are not final visual acceptance.
 - Recover remaining column base/head and wall-opening associations, connection
   details and roof assembly coverage. Scaled drawing inferences are not fabrication
   dimensions. Show source-specific uncertainty rather than a plausible default.
-- Finish main-app both-floor, source-link, layer and zoom checks. Share the actual
+- Finish final compiled main-app review after the latest source gates and camera fixes. Share the actual
   checkpoint and evidence with Claude. Automated PASS alone is never acceptance.
 
-## Latest independent audit
+## Renderer and cantilever verification
 
-All 125 current structural/foundation solids (111 lifecycle-qualified plus 14
-canonical opening/lintel solids) load through IFC and have manifold welded
-topology. Maximum independent volume difference is 0.00345%. All 2,108 takeoff
-records retain quantities, units and identities. Complete geometry replay is
-stable. Removing the grid-1 note withdraws exactly three cantilever extensions;
-removing S3.0 profile vectors leaves only the two independently supported
-longitudinal extensions. These checks establish consistency, not full coverage.
+The earlier 026d9d0 checkpoint established manifold topology, unchanged quantities
+and replay stability before the later pier-datum review. Current counts are above.
+Removing the grid-1 note withdraws exactly three cantilever extensions; removing
+S3.0 profile vectors leaves only the two independently supported longitudinal
+extensions. These checks establish consistency, not full coverage.
 
 Main-app QA exposed costly synchronous reconstruction on a floor change. The
 fix separates canonical source geometry from floor presentation. Actual-snapshot
@@ -144,8 +171,23 @@ A private lifecycle check also covers actual lost/restored events and 12 scene
 rebuilds. Real initial source loading still takes several seconds; coverage
 remains incomplete even though these interaction checks pass.
 
-Latest checks: 561 tests passed including the optional private-fixture check with its
+Version 29 checks: 576 tests passed including the optional private-fixture check with its
 required environment; TypeScript and production build passed. Full source
 withdrawal removes all structural/foundation solids, full replay changes no
 elements, and all 2,108 takeoff quantity/unit/type/measurement/sheet tuples remain
 unchanged. Initial loading and unresolved coverage remain open work.
+
+Current v29 review: main Build isolated-footing framing now fits beside the inspector
+at 1075px viewport width. Live wheel zoom in/out on both floors retained drawing/
+footprint alignment. Explore 3D Fit now accounts for camera-space perspective depth and canvas aspect,
+including selected members and assembly offsets. Whole-view framing prioritizes
+visible physical solids; distant unresolved symbols no longer shrink the building.
+Symbolic-only views retain their own fit fallback. Drawing-only visibility changes
+without reconstructing the model or scene. Four projected-corner tests and the
+private renderer lifecycle check pass. Final compiled v29 review confirms complete selected-MF3 framing, whole-model
+framing without cropping, and immediate drawing-only toggles without camera jumps.
+The MF3 solid was compared directly against the revised foundation overlay; source
+page 21 opens in the evidence viewer. Both-floor wheel zoom round trips retained
+alignment. Independent replay and IFC checks pass for both project versions.
+Private proof: `diag/explore/proofs/mf3-foundation-overlay-v29.png`; camera proof
+`main-build-mf3-camera-v28.png`; second-floor zoom proof `second-floor-zoom-v28.png`.

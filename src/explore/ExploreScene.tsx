@@ -4,7 +4,12 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { geometryOf } from "../build/sceneGeometry";
 import type { BuildElement, BuildModel } from "../build/types";
 import type { Pt, Sheet } from "../model";
-import { lensDistance, logMix, smooth } from "./camera";
+import {
+  lensDistance,
+  logMix,
+  smooth,
+  perspectiveBoundsDistance,
+} from "./camera";
 import {
   moveInside,
   sheetPoint,
@@ -36,6 +41,7 @@ interface Props {
   }[];
   showBase?: boolean;
   showAllowances?: boolean;
+  showDrawingGeometry?: boolean;
   showFootprints?: boolean;
   structureOnly?: boolean;
   resetView?: number;
@@ -47,14 +53,14 @@ const palette = (e: BuildElement) =>
   e.shape?.type === "axis" || e.shape?.type === "locator"
     ? "#b47620"
     : /window|glaz/i.test(e.name)
-    ? "#a4b6b0"
-    : /roof/i.test(e.name)
-      ? "#626d64"
-      : e.trade === "structure"
-        ? "#c5b696"
-        : e.shape?.type === "surface"
-          ? "#d6d1c3"
-          : "#e8e3d6";
+      ? "#a4b6b0"
+      : /roof/i.test(e.name)
+        ? "#626d64"
+        : e.trade === "structure"
+          ? "#c5b696"
+          : e.shape?.type === "surface"
+            ? "#d6d1c3"
+            : "#e8e3d6";
 const emptyPins: NonNullable<Props["pins"]> = [];
 export function ExploreScene(props: Props) {
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -75,11 +81,13 @@ export function ExploreScene(props: Props) {
     if (!el) return;
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = rendererRef.current ?? new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: false,
-        powerPreference: "high-performance",
-      });
+      renderer =
+        rendererRef.current ??
+        new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: false,
+          powerPreference: "high-performance",
+        });
       rendererRef.current = renderer;
     } catch {
       setError(
@@ -87,7 +95,8 @@ export function ExploreScene(props: Props) {
       );
       return;
     }
-    const lostMessage = "The graphics connection was lost. Waiting for the browser to restore 3D; the source drawing is still available.";
+    const lostMessage =
+      "The graphics connection was lost. Waiting for the browser to restore 3D; the source drawing is still available.";
     setError(renderer.getContext().isContextLost() ? lostMessage : "");
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setClearColor("#ece9e1");
@@ -123,9 +132,18 @@ export function ExploreScene(props: Props) {
     )?.level;
     const base =
       props.model.levels.find((l) => l.id === floorLevel)?.elevation ?? 0;
-    const renderElements = [...new Map([...props.model.elements, ...(props.model.drawingGeometry ?? [])].map(e => [e.id, e])).values()];
+    const renderElements = [
+      ...new Map(
+        [...props.model.elements, ...(props.model.drawingGeometry ?? [])].map(
+          (e) => [e.id, e],
+        ),
+      ).values(),
+    ];
     const floorEls = renderElements.filter(
-      (e) => e.shape && e.status !== "demolished" && (e.origin !== "building" || e.level === floorLevel),
+      (e) =>
+        e.shape &&
+        e.status !== "demolished" &&
+        (e.origin !== "building" || e.level === floorLevel),
     );
     const box = new THREE.Box3();
     for (const e of floorEls.filter(
@@ -204,14 +222,32 @@ export function ExploreScene(props: Props) {
     // Project the actual takeoff geometry onto the same datum as the PDF.
     // No hull, envelope or roof allowance participates in this alignment check.
     const footprints = new THREE.Group();
-    for (const e of floorEls.filter(e => e.origin !== "building" && e.sheetId === props.sheet.id)) {
+    for (const e of floorEls.filter(
+      (e) => e.origin !== "building" && e.sheetId === props.sheet.id,
+    )) {
       const shape = e.shape;
-      const paths: Pt[][] = (shape?.type === "run" || shape?.type === "axis") ? [shape.points]
-        : shape?.type === "surface" ? [shape.ring, ...(shape.holes ?? [])].map(r => [...r, r[0]]) : [];
+      const paths: Pt[][] =
+        shape?.type === "run" || shape?.type === "axis"
+          ? [shape.points]
+          : shape?.type === "surface"
+            ? [shape.ring, ...(shape.holes ?? [])].map((r) => [...r, r[0]])
+            : [];
       for (const path of paths) {
         if (path.length < 2) continue;
-        const geometry = new THREE.BufferGeometry().setFromPoints(path.map(([x, y]) => new THREE.Vector3(x, base + 0.025, y)));
-        footprints.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#007a75", depthTest: false, transparent: true, opacity: 0.85 })));
+        const geometry = new THREE.BufferGeometry().setFromPoints(
+          path.map(([x, y]) => new THREE.Vector3(x, base + 0.025, y)),
+        );
+        footprints.add(
+          new THREE.Line(
+            geometry,
+            new THREE.LineBasicMaterial({
+              color: "#007a75",
+              depthTest: false,
+              transparent: true,
+              opacity: 0.85,
+            }),
+          ),
+        );
       }
     }
     footprints.renderOrder = 5;
@@ -343,11 +379,72 @@ export function ExploreScene(props: Props) {
       endFov = 1.5;
     const aspect = () =>
       Math.max(1, el.clientWidth) / Math.max(1, el.clientHeight);
+    const itemVisible = (e: BuildElement, min: number, p: Props) =>
+      (e.origin !== "building" || !!p.showAllowances) &&
+      (e.origin !== "drawing" || p.showDrawingGeometry !== false) &&
+      (!p.structureOnly || e.trade === "structure") &&
+      (e.origin === "building" ||
+        !p.visibleSheets ||
+        p.visibleSheets.has(e.sheetId)) &&
+      !(
+        p.mode === "room" &&
+        (e.trade === "ceilings" ||
+          /roof/i.test(e.name) ||
+          (e.origin === "building" && e.shape?.type === "run"))
+      ) &&
+      !(e.shape?.type === "surface" && min > base + 1 && p.mode === "lift");
     const board = (sheetMode: boolean) => {
-      const focus = live.current.focus;
-      const selectedBox = items.find(
-        (item) => item.e.id === live.current.selected,
-      )?.mesh.geometry.boundingBox;
+      const p = live.current;
+      const focus = p.focus;
+      if (!sheetMode && !focus) {
+        const visibleBox = new THREE.Box3();
+        const visibleItems = items.filter((item) =>
+          itemVisible(item.e, item.min, p),
+        );
+        // Unresolved detail axes can sit far outside the registered building.
+        // Frame actual solids first, retaining canopy profiles and drawing-only
+        // solids; symbolic-only views still get a useful whole-view fit.
+        const solids = visibleItems.filter(
+          (item) =>
+            item.e.shape?.type === "run" ||
+            item.e.shape?.type === "point" ||
+            item.e.shape?.type === "surface",
+        );
+        for (const item of solids.length ? solids : visibleItems) {
+          const bounds = item.mesh.geometry.boundingBox?.clone();
+          if (bounds) {
+            bounds.translate(
+              new THREE.Vector3(
+                0,
+                p.mode === "assembly" ? item.layer * 3 : 0,
+                0,
+              ),
+            );
+            visibleBox.union(bounds);
+          }
+        }
+        if (visibleBox.isEmpty()) visibleBox.copy(box);
+        const target = visibleBox.getCenter(new THREE.Vector3()),
+          dir = new THREE.Vector3(0.65, 0.9, 0.8).normalize(),
+          fov = 38;
+        const corners: [number, number, number][] = [];
+        for (const x of [visibleBox.min.x, visibleBox.max.x])
+          for (const y of [visibleBox.min.y, visibleBox.max.y])
+            for (const z of [visibleBox.min.z, visibleBox.max.z])
+              corners.push([x, y, z]);
+        const dist = perspectiveBoundsDistance(
+          corners,
+          target.toArray(),
+          dir.toArray(),
+          fov,
+          aspect(),
+        );
+        return { target, pos: target.clone().addScaledVector(dir, dist), fov };
+      }
+      const selectedItem = items.find((item) => item.e.id === p.selected);
+      const selectedBox = selectedItem?.mesh.geometry.boundingBox?.clone();
+      if (selectedBox && p.mode === "assembly")
+        selectedBox.translate(new THREE.Vector3(0, selectedItem!.layer * 3, 0));
       const target = focus
         ? new THREE.Vector3(
             focus[0],
@@ -357,6 +454,27 @@ export function ExploreScene(props: Props) {
             focus[1],
           )
         : center.clone();
+      if (!sheetMode && selectedBox) {
+        const dir = new THREE.Vector3(0.65, 0.9, 0.8).normalize(),
+          fov = 38;
+        const corners: [number, number, number][] = [];
+        for (const x of [selectedBox.min.x, selectedBox.max.x])
+          for (const y of [selectedBox.min.y, selectedBox.max.y])
+            for (const z of [selectedBox.min.z, selectedBox.max.z])
+              corners.push([x, y, z]);
+        const dist = Math.max(
+          lensDistance(4, fov),
+          perspectiveBoundsDistance(
+            corners,
+            target.toArray(),
+            dir.toArray(),
+            fov,
+            aspect(),
+            1.2,
+          ),
+        );
+        return { target, pos: target.clone().addScaledVector(dir, dist), fov };
+      }
       const height = focus
         ? sheetMode
           ? Math.min(span * 0.6, 12)
@@ -431,9 +549,10 @@ export function ExploreScene(props: Props) {
         line.geometry.dispose();
         (line.material as THREE.Material).dispose();
       }
-      const chosen = [...live.current.model.elements, ...(live.current.model.drawingGeometry ?? [])].find(
-        (e) => e.id === live.current.selected,
-      );
+      const chosen = [
+        ...live.current.model.elements,
+        ...(live.current.model.drawingGeometry ?? []),
+      ].find((e) => e.id === live.current.selected);
       const ref = chosen?.sources.find((s) => s.id === props.sheet.id && s.box);
       if (ref?.box) {
         const [x0, y0, x1, y1] = ref.box,
@@ -672,10 +791,14 @@ export function ExploreScene(props: Props) {
       lastGrids: boolean | undefined,
       lastStructure: boolean | undefined,
       lastAllowances: boolean | undefined,
+      lastDrawingGeometry: boolean | undefined,
       lastFootprints: boolean | undefined;
     const draw = (now: number) => {
       if (disposed) return;
-      if (contextLost) { raf = requestAnimationFrame(draw); return; }
+      if (contextLost) {
+        raf = requestAnimationFrame(draw);
+        return;
+      }
       const dt = Math.min(0.04, (now - clock) / 1000 || 0.016);
       clock = now;
       const p = live.current;
@@ -695,12 +818,14 @@ export function ExploreScene(props: Props) {
         p.showGrids !== lastGrids ||
         p.structureOnly !== lastStructure ||
         p.showAllowances !== lastAllowances ||
+        p.showDrawingGeometry !== lastDrawingGeometry ||
         p.showFootprints !== lastFootprints;
       lastVisible = p.visibleSheets;
       lastBase = p.showBase;
       lastGrids = p.showGrids;
       lastStructure = p.structureOnly;
       lastAllowances = p.showAllowances;
+      lastDrawingGeometry = p.showDrawingGeometry;
       lastFootprints = p.showFootprints;
       if (transition < 1) {
         transition = Math.min(1, transition + dt / 0.95);
@@ -744,28 +869,10 @@ export function ExploreScene(props: Props) {
       ) {
         for (const item of items) {
           const { mesh, min, layer, e } = item;
-          mesh.visible =
-            currentLift > 0.002 &&
-            (e.origin !== "building" || !!p.showAllowances) &&
-            (!p.structureOnly || e.trade === "structure") &&
-            (e.origin === "building" ||
-              !p.visibleSheets ||
-              p.visibleSheets.has(e.sheetId)) &&
-            !(
-              p.mode === "room" &&
-              (e.trade === "ceilings" ||
-                /roof/i.test(e.name) ||
-                (e.origin === "building" && e.shape?.type === "run"))
-            );
+          mesh.visible = currentLift > 0.002 && itemVisible(e, min, p);
           mesh.scale.y = Math.max(0.001, currentLift);
           mesh.position.y =
             base * (1 - currentLift) + layer * currentExplode * 3;
-          if (
-            e.shape?.type === "surface" &&
-            min > base + 1 &&
-            p.mode === "lift"
-          )
-            mesh.visible = false;
           (item.edge.material as THREE.LineBasicMaterial).opacity =
             0.6 + currentExplode * 0.2;
         }
@@ -897,16 +1004,19 @@ export function ExploreScene(props: Props) {
     props.grids,
     scenePins,
   ]);
-  useEffect(() => () => {
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-    renderer.dispose();
-    // dispose releases GPU resources but not the browser's WebGL context slot.
-    // Release that slot explicitly only when this ExploreScene is unmounted.
-    renderer.forceContextLoss();
-    renderer.domElement.remove();
-    rendererRef.current = null;
-  }, []);
+  useEffect(
+    () => () => {
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+      renderer.dispose();
+      // dispose releases GPU resources but not the browser's WebGL context slot.
+      // Release that slot explicitly only when this ExploreScene is unmounted.
+      renderer.forceContextLoss();
+      renderer.domElement.remove();
+      rendererRef.current = null;
+    },
+    [],
+  );
   useEffect(
     () => api.current?.retarget(),
     [props.mode, props.room, props.focus, props.reduced, props.resetView],
@@ -922,7 +1032,11 @@ export function ExploreScene(props: Props) {
             alt={`Original PDF sheet ${props.sheet.name}`}
           />
           <p role="alert">{error}</p>
-          {rendererRef.current && <button onClick={() => rendererRef.current?.forceContextRestore()}>Retry 3D connection</button>}
+          {rendererRef.current && (
+            <button onClick={() => rendererRef.current?.forceContextRestore()}>
+              Retry 3D connection
+            </button>
+          )}
         </div>
       )}
     </div>

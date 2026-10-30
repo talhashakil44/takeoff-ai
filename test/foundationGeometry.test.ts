@@ -911,6 +911,20 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
     size: [5, 1.8, 0.4],
   });
   expect(recoverFoundationGeometry(mp, massOut, ms, ml)).toEqual(massOut);
+  // A fully direct mass datum needs no unrelated adjoining strip or accepted record.
+  const directDrawingModel = { ...m, elements: [run] };
+  const directDrawing = recoverFoundationGeometry(p, directDrawingModel, ms, ml);
+  expect(directDrawing.elements).toHaveLength(1);
+  expect(directDrawing.drawingGeometry).toHaveLength(1);
+  expect(directDrawing.drawingGeometry![0]).toMatchObject({
+    origin: 'drawing', quantity: 0, typeId: '',
+    shape: { type: 'point', z: -1.125, size: [5, 1.8, .4] },
+  });
+  expect(directDrawing.drawingGeometry![0].issues.join(' ')).toContain('direct local top/underside leader');
+  expect(recoverFoundationGeometry(p, directDrawing, ms, ml)).toEqual(directDrawing);
+  expect(recoverFoundationGeometry(p, directDrawing, ms, {
+    'spec:revision:21': mf,
+  }).drawingGeometry).toEqual([]);
   const stripDepth = {
     ...ms,
     'spec:revision:21': ms['spec:revision:21'].map((t) => ({
@@ -1048,6 +1062,88 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
   expect(recoverFoundationGeometry(joinedProject,joinedModel,steppedSource,joinedLines).elements[2].shape?.type).toBe('locator');
   const separatedLines={'spec:revision:21':[...directLines['spec:revision:21'],...massEdges.map(l=>({...l,x1:l.x1+2,x2:l.x2+2}))]};
   expect(recoverFoundationGeometry(joinedProject,joinedModel,joinedSource,separatedLines).elements[2].shape?.type).toBe('locator');
+
+  const padEdge=100+.75/scale,nearTip:[number,number]=[padEdge+10,100-halfStrip];
+  const na=[nearTip,[nearTip[0]-8,nearTip[1]-1.5],[nearTip[0]-8,nearTip[1]+1.5],nearTip];
+  const nearArrow=na.slice(1).map((q,i)=>({x1:na[i][0],y1:na[i][1],x2:q[0],y2:q[1],filled:true,width:0,sub:850}));
+  const bridge=boundaries.map(l=>({...l,x1:padEdge,x2:nearTip[0]+2}));
+  const padBandLines={'spec:revision:21':[...lines['spec:revision:21'].filter(l=>!l.filled),...bridge,...nearArrow,{x1:nearTip[0],y1:nearTip[1],x2:205,y2:55,width:.24,filled:false,sub:851}]};
+  const bandModel={...m,elements:[run,located]};
+  const padThroughBand=recoverFoundationGeometry(p,bandModel,directSource,padBandLines);
+  expect(padThroughBand.elements[1].shape).toMatchObject({type:'point',z:-.55});
+  expect(padThroughBand.elements[1].issues.join(' ')).toContain('source-bounded adjoining strip datum');
+  expect(recoverFoundationGeometry(p,padThroughBand,directSource,padBandLines)).toEqual(padThroughBand);
+  const mixedWeight={'spec:revision:21':padBandLines['spec:revision:21'].map(l=>l===bridge[1]?{...l,width:1.32}:l)};
+  expect(recoverFoundationGeometry(p,bandModel,directSource,mixedWeight).elements[1].shape?.type).toBe('locator');
+  const stepBetween={...directSource,'spec:revision:21':[...directSource['spec:revision:21'],text('S.F.',padEdge+5,100)]};
+  expect(recoverFoundationGeometry(p,bandModel,stepBetween,padBandLines).elements[1].shape?.type).toBe('locator');
+  const displacedStep={...directSource,'spec:revision:21':[...directSource['spec:revision:21'],text('S.F.',nearTip[0]+10,100)]};
+  const stepStroke={x1:padEdge+5,y1:100-halfStrip,x2:padEdge+5,y2:100+halfStrip,width:.6,filled:false,sub:852};
+  expect(recoverFoundationGeometry(p,bandModel,displacedStep,{'spec:revision:21':[...padBandLines['spec:revision:21'],stepStroke]}).elements[1].shape?.type).toBe('locator');
+  expect(recoverFoundationGeometry(p,bandModel,directSource,{'spec:revision:21':[...bridge,...nearArrow,padBandLines['spec:revision:21'].at(-1)!]}).elements[1].shape?.type).toBe('locator');
+
+  const embeddedPad = {
+    ...located, id: 'embedded-pad', measurementId: 'embedded-pad',
+    shape: { type: 'locator' as const, at: [160 * scale, 100 * scale] as [number, number], z: -1.2 },
+  };
+  const embeddedModel = { ...span, elements: [...span.elements, embeddedPad] };
+  const embeddedOutline = outline.map(l => ({ ...l, x1: l.x1 + 60, x2: l.x2 + 60, sub: l.sub + 950 }));
+  const embeddedLines = { 'spec:revision:21': [...sl['spec:revision:21'], ...embeddedOutline] };
+  const embeddedOut = recoverFoundationGeometry(sp, embeddedModel, source, embeddedLines);
+  expect(embeddedOut.elements[3].shape).toMatchObject({ type: 'point', z: -1.8, size: [1.5, 1.5, .3] });
+  expect(embeddedOut.elements[3].issues.join(' ')).toContain('closed pad junction on source-resolved strip (top continuity inferred)');
+  expect(embeddedOut.elements.map(e => e.quantity)).toEqual(embeddedModel.elements.map(e => e.quantity));
+  expect(recoverFoundationGeometry(sp, embeddedOut, source, embeddedLines)).toEqual(embeddedOut);
+  const junctionStep = { ...source, 'spec:revision:21': [...source['spec:revision:21'], text('S.F.', 160, 100)] };
+  expect(recoverFoundationGeometry(sp, embeddedOut, junctionStep, embeddedLines).elements[3].shape?.type).toBe('locator');
+  const disconnected = { 'spec:revision:21': [...lines['spec:revision:21'], boundaries[0], { ...boundaries[1], x2: 124 }, { ...boundaries[1], x1: lo + 60 }, ...embeddedOutline] };
+  expect(recoverFoundationGeometry(sp, embeddedOut, source, disconnected).elements[3].shape?.type).toBe('locator');
+  expect(recoverFoundationGeometry(sp, embeddedOut, source, sl).elements[3].shape?.type).toBe('locator');
+  const noSeedDatum = { ...source, 'spec:revision:21': source['spec:revision:21'].filter(t => !/^T\/O FTG:/.test(t.str)) };
+  expect(recoverFoundationGeometry(sp, embeddedOut, noSeedDatum, embeddedLines).elements[3].shape?.type).toBe('locator');
+
+  const cutSource = {
+    ...source,
+    'spec:revision:19': [...source['spec:revision:19'], text('BASE PLATE SCHEDULE', 650, 200), text('MARK', 530, 220), text('ANCHORS', 700, 220), text('BP3', 530, 250), text('(4) - 16Ø SIMPSON TITEN HD', 700, 250), text('(MIN. 150 EMBEDMENT)', 700, 260), text('BP4', 530, 280)],
+    'spec:revision:21': [...source['spec:revision:21'], text('7', 100, 50), text('S1.1', 100, 63), text('F1', 127, 72), text('BP3', 133, 80)],
+    'spec:revision:22': [
+      text('SECTION - TYPICAL INTERIOR PAD FOOTING', 500, 500),
+      text('7', 350, 500), text('S1.1', 350, 514),
+      text('B', 500, 100), text('ALTERNATE DETAIL', 350, 100),
+      text('DROP T/O FOOTING 250', 600, 250), text('AND POUR SLAB OVER', 600, 260),
+      text('FIN. GROUND FLOOR', 700, 300), text('0', 740, 310),
+      text('MIN. 75mm CONCRETE', 600, 350), text('COVER TO ALL STEEL', 600, 360),
+    ],
+  };
+  const cutStroke = { x1: 100, y1: 75, x2: 100, y2: 130, width: .6, filled: false, sub: 900 };
+  const cutLines = { 'spec:revision:21': [...outline, cutStroke] };
+  const cutModel = recoverFoundationGeometry(p, bandModel, cutSource, cutLines);
+  expect(cutModel.elements[1].shape).toMatchObject({ type: 'point', z: -.55, size: [1.5, 1.5, .3] });
+  expect(cutModel.elements[1].issues.join(' ')).toContain('ALTERNATE DETAIL');
+  expect(cutModel.elements[1].sources.some(s => s.page === 22 && s.quote?.includes('7/S1.1'))).toBe(true);
+  expect(cutModel.elements.map(e => e.quantity)).toEqual(bandModel.elements.map(e => e.quantity));
+  expect(recoverFoundationGeometry(p, cutModel, cutSource, cutLines)).toEqual(cutModel);
+  for (const missing of ['7', 'S1.1', 'BP3', 'F1']) {
+    const without = { ...cutSource, 'spec:revision:21': cutSource['spec:revision:21'].filter(t => t.str !== missing) };
+    expect(recoverFoundationGeometry(p, cutModel, without, cutLines).elements[1].shape?.type).toBe('locator');
+  }
+  for (const missing of ['DROP T/O FOOTING 250', 'FIN. GROUND FLOOR', '0', 'B', 'MIN. 75mm CONCRETE', 'COVER TO ALL STEEL']) {
+    const without = { ...cutSource, 'spec:revision:22': cutSource['spec:revision:22'].filter(t => t.str !== missing) };
+    expect(recoverFoundationGeometry(p, cutModel, without, cutLines).elements[1].shape?.type).toBe('locator');
+  }
+  expect(recoverFoundationGeometry(p, cutModel, cutSource, { 'spec:revision:21': outline }).elements[1].shape?.type).toBe('locator');
+  expect(recoverFoundationGeometry(p, cutModel, cutSource, { 'spec:revision:21': [cutStroke] }).elements[1].shape?.type).toBe('locator');
+  expect(cutModel.elements[1].sources.some(s => s.quote?.includes('75 mm + scheduled minimum embedment 150 mm = 225 mm'))).toBe(true);
+  for (const replacement of ['', '(MIN. 250 EMBEDMENT)']) {
+    const incompatible = { ...cutSource, 'spec:revision:19': cutSource['spec:revision:19'].map(t => t.str === '(MIN. 150 EMBEDMENT)' ? { ...t, str: replacement } : t) };
+    expect(recoverFoundationGeometry(p, cutModel, incompatible, cutLines).elements[1].shape?.type).toBe('locator');
+  }
+  const excessCover = { ...cutSource, 'spec:revision:22': cutSource['spec:revision:22'].map(t => t.str === 'MIN. 75mm CONCRETE' ? { ...t, str: 'MIN. 200mm CONCRETE' } : t) };
+  expect(recoverFoundationGeometry(p, cutModel, excessCover, cutLines).elements[1].shape?.type).toBe('locator');
+  const adjacentPad = { ...located, id: 'adjacent-pad', measurementId: 'adjacent-pad', shape: { type: 'locator' as const, at: [200 * scale, 100 * scale] as [number, number], z: -1.2 } };
+  const adjacentOut = recoverFoundationGeometry(p, { ...bandModel, elements: [...bandModel.elements, adjacentPad] }, cutSource, { 'spec:revision:21': [...outline, ...outline.map(l => ({ ...l, x1: l.x1 + 100, x2: l.x2 + 100 })), cutStroke] });
+  expect(adjacentOut.elements[1].shape?.type).toBe('point');
+  expect(adjacentOut.elements[2].shape?.type).toBe('locator');
 
   p.specs![0].book!.changes!.push({page:3,text:'Question about foundation coordination',label:'Q',y:0,sections:[],sheets:[],action:'clarified'});
   const polluted={...directModel,elements:directModel.elements.map(e=>({...e,sources:[...e.sources,{kind:'spec' as const,id:'revision',page:3,label:'Addendum5',quote:'Newer foundation drawing contains explicit local footing elevations; supersedes generic original-sheet datum.'},{kind:'spec' as const,id:'revision',page:31,label:'Revised foundation detail (stale)',quote:'T/O FOOTING -1200 mm; FIN. GROUND FLOOR 0'}]}))};

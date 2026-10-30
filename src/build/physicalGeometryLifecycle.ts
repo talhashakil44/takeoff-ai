@@ -170,6 +170,11 @@ export function endPhysicalGeometry(model: BuildModel): BuildModel {
       if (qualified) {
         return {
           ...e,
+          // Keep the locator warning in the baseline for evidence withdrawal,
+          // but do not describe a freshly recovered solid as an unplaced tag.
+          issues: solid(e.shape)
+            ? e.issues.filter(i => !i.startsWith('Symbolic 3D location inferred'))
+            : e.issues,
           physicalGeometryBaseline: { ...b, requiresEvidence: true },
         };
       }

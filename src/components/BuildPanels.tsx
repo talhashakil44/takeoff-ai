@@ -246,7 +246,7 @@ export function ElementProperties(props: {
   const sh = e.shape;
   const lenM = sh?.type === 'run' || sh?.type === 'axis' ? sh.points.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - sh.points[i][0], p[1] - sh.points[i][1]), 0) : 0;
   const ft = project.units === 'imperial';
-  const L = (mtrs: number) => (ft ? `${fmtN(mtrs / 0.3048)} ft` : `${fmtN(mtrs)} m`);
+  const L = (mtrs: number) => (ft ? `${(mtrs / 0.3048).toLocaleString(undefined, { maximumFractionDigits: 3 })} ft` : `${mtrs.toFixed(3)} m`);
   const secs = e.specs.map((s) => ({ link: s, sec: sections.find((x) => x.key === s.key) }));
   return (
     <div className="bld-props">
@@ -298,7 +298,7 @@ export function ElementProperties(props: {
       </Group>
 
       <Group title="Dimensions">
-        {sh?.type === 'axis' && <><Prop k="Span in plan">{L(lenM)}</Prop><Prop k="3D display">Diagrammatic axis; framing elevation and member section require verification</Prop></>}
+        {sh?.type === 'axis' && <><Prop k={drawingOnly ? "Plan outline length" : "Span in plan"}>{L(lenM)}</Prop><Prop k="3D display">Plan-only geometry; physical section and elevation require verification</Prop></>}
         {sh?.type === 'run' && (
           <>
             <Prop k="Length">{L(lenM)}</Prop>
