@@ -683,7 +683,7 @@
       "evidence": "codex/build-it-door-hosts@d7d3438"
     },
     {
-      "status": "review",
+      "status": "done",
       "depends": [
         "T34"
       ],
@@ -700,7 +700,9 @@
       "added": "2026-10-30T14:22:56.659Z",
       "by": "claude",
       "branch": "codex/build-it-polyline-door-hosts@a3dfd08",
-      "updated": "2026-10-30T14:37:38.732Z"
+      "updated": "2026-10-30T16:21:31.079Z",
+      "ref": "claude/integration@a3dfd08",
+      "evidence": "codex/build-it-polyline-door-hosts@a3dfd08"
     }
   ]
 }
