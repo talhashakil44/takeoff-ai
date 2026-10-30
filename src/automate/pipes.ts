@@ -177,6 +177,30 @@ export function leaderTip(t: PageText, leaders: Segment[], maxSteps = 14): Pt | 
   return fromBox(at) > Math.max(t.h * 1.5, 6) ? at : null;
 }
 
+/**
+ * One run per pipe: a pipe drawn double (two edges) or with a tone between its edges is read as
+ * more than one band along the same stretch; a run lying within another's width along most of
+ * its length is the same pipe, and the wider one is kept.
+ */
+export function oneRunPerPipe(runs: InkRun[]): InkRun[] {
+  const horiz = (r: InkRun) => Math.abs(r.b[1] - r.a[1]) < Math.abs(r.b[0] - r.a[0]);
+  const span = (r: InkRun) => (horiz(r) ? [Math.min(r.a[0], r.b[0]), Math.max(r.a[0], r.b[0]), r.a[1]] : [Math.min(r.a[1], r.b[1]), Math.max(r.a[1], r.b[1]), r.a[0]]);
+  const order = runs.map((_, i) => i).sort((i, j) => runs[j].width - runs[i].width || near(runs[j].a, runs[j].b) - near(runs[i].a, runs[i].b));
+  const kept: number[] = [];
+  for (const i of order) {
+    const r = runs[i];
+    const [lo, hi, at] = span(r);
+    const dup = kept.some((k) => {
+      const o = runs[k];
+      if (horiz(o) !== horiz(r)) return false;
+      const [olo, ohi, oat] = span(o);
+      return Math.abs(oat - at) <= o.width / 2 + r.width / 2 + 0.5 && Math.min(hi, ohi) - Math.max(lo, olo) >= 0.7 * (hi - lo);
+    });
+    if (!dup) kept.push(i);
+  }
+  return kept.sort((a, b) => a - b).map((i) => runs[i]);
+}
+
 /** Runs drawn on every trade plan of a drawing (the frame, the walls under the trades): left out. */
 export function background(runs: InkRun[], others: InkRun[][], tol = 1.5): boolean[] {
   return runs.map((r) => {
@@ -329,7 +353,7 @@ export async function automatePipes(p: Project, access: SetAccess): Promise<Pipe
       const others: InkRun[][] = [];
       for (const o of siblings) others.push(await read(o));
       const bg = background(mine, others);
-      const runs = mine.filter((_, k) => !bg[k]);
+      const runs = oneRunPerPipe(mine.filter((_, k) => !bg[k]));
       const texts = textsOf.get(s.id)!;
       const leaders = ((await access.segments(s)) ?? []).filter((g) => isLeader(g, 1));
       const tags: { t: PageText; tag: PipeTag }[] = [];

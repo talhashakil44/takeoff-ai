@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { background, leaderTip, pipeTag, spreadLabels } from '../src/automate/pipes';
+import { background, leaderTip, oneRunPerPipe, pipeTag, spreadLabels } from '../src/automate/pipes';
 import type { InkRun } from '../src/fill/inkRuns';
 import type { Segment } from '../src/fill/vectors';
 import type { PageText } from '../src/pageText';
@@ -43,5 +43,10 @@ describe('pipes by label', () => {
     const mine = [run(0, 0, 500, 0), run(10, 50, 90, 50)];
     const bg = background(mine, [[run(0, 0.5, 500, 0.5)]]);
     expect(bg).toEqual([true, false]);
+  });
+
+  it('reads a pipe drawn double as one run', () => {
+    const runs = [run(0, 10, 100, 10, 3), run(0, 9, 100, 9, 1), run(0, 11.2, 98, 11.2, 1), run(0, 30, 100, 30, 1.3)];
+    expect(oneRunPerPipe(runs)).toEqual([runs[0], runs[3]]);
   });
 });

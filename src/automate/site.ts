@@ -95,6 +95,9 @@ export interface SiteResult extends Automation {
   checks: string[];
 }
 
+/** A sheet whose own titles call it existing conditions or removals. */
+const isExistingPlan = (texts: PageText[]) => texts.some((t) => t.h >= 8 && /EXISTING\s+CONDITIONS|REMOVALS?\s+PLAN|AND\s+REMOVALS/i.test(t.str));
+
 const isSiteSheet = (title: string) => /SITE|SERVICING|GRADING|ROAD|PROFILE|UTILIT|STORM|SANITARY|WATERMAIN|DRAINAGE|CIVIL/i.test(title);
 
 /** The mark for a stated run: a short line under its label. */
@@ -107,7 +110,8 @@ export async function automateSite(p: Project, access: SetAccess): Promise<SiteR
   const metric = p.units === 'metric';
   const toProject = (m: number) => (metric ? m : m / 0.3048);
   const checks: string[] = [];
-  const sheets = p.sheets.filter((s) => !s.superseded && (/^C/i.test(s.name ?? '') || isSiteSheet(s.title ?? '')));
+  // Existing conditions and removals plans show what is there, not what is built.
+  const sheets = p.sheets.filter((s) => !s.superseded && (/^C/i.test(s.name ?? '') || isSiteSheet(s.title ?? '')) && !/EXISTING|REMOVAL|DEMOLITION/i.test(s.title ?? ''));
   if (!sheets.length) return { message: 'No civil or site drawings.', checks };
 
   type Hit = { sheetId: string; text: PageText; label: PipeLabel };
@@ -122,6 +126,8 @@ export async function automateSite(p: Project, access: SetAccess): Promise<SiteR
       const tb = titleBlockBox(texts, s.width, s.height);
       const keep = texts.filter((t) => !(tb && t.cx >= tb[0] && t.cx <= tb[2] && t.cy >= tb[1] && t.cy <= tb[3]));
       section ??= roadSection(keep);
+      // A plan titled as existing conditions or removals (in its own big text) shows what is there.
+      if (isExistingPlan(keep)) return;
       for (const t of keep) {
         const l = pipeLabel(t.str);
         if (l?.existing) existing++;

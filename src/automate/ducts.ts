@@ -5,6 +5,7 @@ import { tradeOfNumber } from '../sheetKind';
 import { titleBlockBox } from '../titleBlock';
 import { toLength } from '../units';
 import { replaceRun, type Automation } from './result';
+import { pipeTag } from './pipes';
 import { tradeGroups } from './runs';
 import { pause, perSheet, type SetAccess } from './set';
 
@@ -74,7 +75,8 @@ export async function automateDucts(p: Project, access: SetAccess): Promise<Duct
       const layers = (await access.layers?.(s)) ?? new Map<string, string>();
       if (layers.size && tradeGroups((await access.segments(s)) ?? [], layers, null).length) return;
       const texts = await access.texts(s);
-      const sizes = ductSizes(texts);
+      // A pipe label ("75Ø SAN") is not a round duct size.
+      const sizes = ductSizes(texts.filter((t) => !pipeTag(t.str)));
       if (sizes.length < 3) return;
       const page = await access.page(s);
       if (!page) return;

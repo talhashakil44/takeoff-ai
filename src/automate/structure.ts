@@ -278,6 +278,19 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
     });
   }
 
+  // One beam per span: tags along a line whose supports weren't found all give the same span.
+  const seen = new Set<string>();
+  let repeats = 0;
+  for (let k = added.length - 1; k >= 0; k--) {
+    const m = added[k];
+    if (m.points.length !== 2 || (m.points[0][0] === m.points[1][0] && m.points[0][1] === m.points[1][1])) continue;
+    const key = `${m.sheetId}|${m.typeId}|${m.points.flat().map((v) => v.toFixed(1)).join(',')}`;
+    if (seen.has(key)) {
+      added.splice(k, 1);
+      repeats++;
+    } else seen.add(key);
+  }
+  if (repeats) checks.push(`${repeats} beam tag${repeats === 1 ? '' : 's'} named a span already taken from another tag on the same line: counted once. The supports along that line weren't found, so check its spans.`);
   if (!added.length) return { message: 'No scheduled members tagged on the structural plans.', checks };
   const notFound = counted.filter((m) => !tally.has(m.mark)).map((m) => m.mark);
   if (notFound.length) checks.push(`Structural schedule marks not tagged on any framing plan: ${notFound.join(', ')}. Count them by hand if they are used.`);
