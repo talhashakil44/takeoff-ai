@@ -1,4 +1,5 @@
-import { newId, type AssemblyItem, type Measurement, type Project, type Sheet, type TakeoffType } from '../model';
+import type { Segment } from '../fill/vectors';
+import { newId, type AssemblyItem, type Measurement, type Project, type Pt, type Sheet, type TakeoffType } from '../model';
 import type { PageText } from '../pageText';
 import { tradeOfNumber } from '../sheetKind';
 import { readSchedules, type Schedule } from '../smart/schedules';
@@ -12,8 +13,9 @@ import { automateWalls } from './walls';
  * beams, columns, lintels, braces, posts and base plates counted where the plans tag them (B1,
  * C2, L3, BR1, BP4), each named and sized from its schedule ("B2 – Beam 265 x 608 GLULAM"), and
  * structural walls (WT-1, SW-1 shear walls) taken along their tagged runs. Wood members go to
- * Division 06, steel to 05, concrete to 03. Member lengths are not measured: the count and the
- * schedule size are what the plans give; a check says so.
+ * Division 06, steel to 05, concrete to 03. Beams are measured between their supports: the
+ * heavy line the tag is written along, from the column (or the line's end) before the tag to the
+ * one after it; other members are counted.
  */
 
 export type MemberKind = 'beam' | 'column' | 'lintel' | 'brace' | 'joist' | 'post' | 'plate' | 'wall';
@@ -84,6 +86,78 @@ export interface StructureResult extends Automation {
   checks: string[];
 }
 
+/**
+ * The span of the beam a tag names: the beam's line is the heavy straight line drawn along the
+ * tag (a vertical tag, a vertical beam) nearest it; the span runs from the support before the tag
+ * to the one after, a support being a column drawn on the line (a small shape drawn across
+ * it) or, failing one, the end of the line (gaps of a column's width bridged). Null when no line
+ * runs along the tag.
+ */
+export function beamSpan(t: PageText, segs: Segment[], maxSpan: number): [Pt, Pt] | null {
+  const vertical = Math.abs(Math.sin(t.angle ?? 0)) > 0.7;
+  const across = (x: number, y: number) => (vertical ? x : y);
+  const along = (x: number, y: number) => (vertical ? y : x);
+  const at = along(t.cx, t.cy);
+  const reach = Math.max(t.h * 3, 12);
+  type Line = { off: number; lo: number; hi: number; w: number };
+  const lines: Line[] = [];
+  for (const s of segs) {
+    if (s.filled || s.curve) continue;
+    const d = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+    if (d < 6 || Math.abs(across(s.x2, s.y2) - across(s.x1, s.y1)) > 0.3) continue;
+    lines.push({ off: (across(s.x1, s.y1) + across(s.x2, s.y2)) / 2, lo: Math.min(along(s.x1, s.y1), along(s.x2, s.y2)), hi: Math.max(along(s.x1, s.y1), along(s.x2, s.y2)), w: s.width });
+  }
+  // The beam's line: beside the tag and running past it; the heavier the likelier.
+  let best: Line | null = null;
+  let score = Infinity;
+  for (const l of lines) {
+    const d = Math.abs(l.off - across(t.cx, t.cy));
+    if (d > reach || l.w < 0.4 || l.hi - l.lo < 20 || at < l.lo - 5 || at > l.hi + 5) continue;
+    const sc = d - 4 * l.w;
+    if (sc < score) {
+      score = sc;
+      best = l;
+    }
+  }
+  if (!best) return null;
+  const on = lines.filter((l) => Math.abs(l.off - best!.off) <= 0.6 && Math.abs(l.w - best!.w) <= 0.2).sort((a, b) => a.lo - b.lo);
+  // The pieces, joined across gaps a column or a tag wide.
+  const pieces: [number, number][] = [];
+  for (const l of on) {
+    const last = pieces[pieces.length - 1];
+    if (last && l.lo <= last[1] + 25) last[1] = Math.max(last[1], l.hi);
+    else pieces.push([l.lo, l.hi]);
+  }
+  const piece = pieces.reduce((a, b) => (Math.max(b[0] - at, at - b[1], 0) < Math.max(a[0] - at, at - a[1], 0) ? b : a));
+  // Columns on the line: a small shape drawn across it (the short sides of a column's square or
+  // the chords of its circle cross the beam's line), clustered.
+  const crossing: number[] = [];
+  for (const g of segs) {
+    if (g.filled) continue;
+    const d = Math.hypot(g.x2 - g.x1, g.y2 - g.y1);
+    if (d < 3 || d > 25) continue;
+    const c1 = across(g.x1, g.y1);
+    const c2 = across(g.x2, g.y2);
+    if (Math.min(c1, c2) > best.off - 1.5 || Math.max(c1, c2) < best.off + 1.5) continue;
+    const a = (along(g.x1, g.y1) + along(g.x2, g.y2)) / 2;
+    if (a >= piece[0] - 15 && a <= piece[1] + 15) crossing.push(a);
+  }
+  crossing.sort((p, q) => p - q);
+  const supports: number[] = [];
+  for (let i = 0; i < crossing.length; ) {
+    let j = i;
+    while (j + 1 < crossing.length && crossing[j + 1] - crossing[i] <= 25) j++;
+    // A column is two or more crossings (its two sides); a lone tick is not.
+    if (j > i) supports.push((crossing[i] + crossing[j]) / 2);
+    i = j + 1;
+  }
+  const before = Math.max(piece[0], ...supports.filter((a) => a < at - 2));
+  const after = Math.min(piece[1], ...supports.filter((a) => a > at + 2));
+  if (!(after - before >= 10 && after - before <= maxSpan)) return null;
+  const pt = (a: number): Pt => (vertical ? [best!.off, a] : [a, best!.off]);
+  return [pt(before), pt(after)];
+}
+
 /** Framing plans: structural plans that are not foundation plans, details, sections or schedules. */
 export function isFramingPlan(sheet: Pick<Sheet, 'name' | 'title'>, texts: PageText[]): boolean {
   if (tradeOfNumber(sheet.name ?? '') !== 'S') return false;
@@ -118,6 +192,7 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
   const added: Measurement[] = [];
   const typeOf = new Map<string, TakeoffType>();
   const tally = new Map<string, number>();
+  let unspanned = 0;
   const counted = members.filter((m) => m.kind !== 'wall');
   const walls = new Map(members.filter((m) => m.kind === 'wall').map((m) => [norm(m.mark), m]));
 
@@ -130,6 +205,7 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
     if (!framing && !foundation) continue;
     await perSheet(access, s, async () => {
       const tags = tagTexts(texts, s, boxes.get(s.id) ?? []);
+      const segs = framing ? ((await access.segments(s)) ?? []) : [];
       const these = counted.filter((m) => (foundation && !framing ? m.kind === 'plate' : true));
       const places = markPlaces(
         tags,
@@ -143,17 +219,29 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
             id: newId(),
             name: `${m.mark} – ${NAMES[m.kind]}${m.size ? ` ${m.size.replace(/\s+/g, ' ').slice(0, 60)}` : ''}`,
             color: m.kind === 'column' || m.kind === 'post' ? '#c0a060' : m.kind === 'beam' || m.kind === 'lintel' ? '#b08850' : '#9a8f80',
-            kind: 'count',
+            kind: m.kind === 'beam' ? 'linear' : 'count',
             height: 0,
             division: divisionOf(m.size),
             package: divisionOf(m.size).startsWith('06') ? 'Framing sub' : divisionOf(m.size).startsWith('05') ? 'Steel sub' : 'Concrete sub',
-            description: `${m.schedule}: ${m.mark} ${m.size}. Counted where the framing plans tag it; lengths are not measured.`,
-            items: [item(NAMES[m.kind] + 's', 'ea', 'N')],
+            description:
+              m.kind === 'beam'
+                ? `${m.schedule}: ${m.mark} ${m.size}. One per tag on the framing plans, measured between the supports either side of the tag.`
+                : `${m.schedule}: ${m.mark} ${m.size}. Counted where the framing plans tag it.`,
+            items: m.kind === 'beam' ? [item('Beams', 'ea', 'N'), item('Beam length', metric ? 'm' : 'ft', 'L')] : [item(NAMES[m.kind] + 's', 'ea', 'N')],
           };
           typeOf.set(norm(mark), t);
           types.push(t);
         }
-        for (const pt of at) added.push({ id: newId(), sheetId: s.id, typeId: t.id, points: [pt], holes: [], source: 'structure', label: m.mark });
+        for (const pt of at) {
+          if (m.kind !== 'beam') {
+            added.push({ id: newId(), sheetId: s.id, typeId: t.id, points: [pt], holes: [], source: 'structure', label: m.mark });
+            continue;
+          }
+          const tag = tags.find((x) => x.cx === pt[0] && x.cy === pt[1]);
+          const span = tag && segs.length ? beamSpan(tag, segs, s.metersPerPoint ? 20 / s.metersPerPoint : 600) : null;
+          if (!span) unspanned++;
+          added.push({ id: newId(), sheetId: s.id, typeId: t.id, points: span ?? [pt, pt], holes: [], source: 'structure', label: m.mark });
+        }
         tally.set(m.mark, (tally.get(m.mark) ?? 0) + at.length);
       }
 
@@ -193,7 +281,8 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
   if (!added.length) return { message: 'No scheduled members tagged on the structural plans.', checks };
   const notFound = counted.filter((m) => !tally.has(m.mark)).map((m) => m.mark);
   if (notFound.length) checks.push(`Structural schedule marks not tagged on any framing plan: ${notFound.join(', ')}. Count them by hand if they are used.`);
-  checks.push('Structure: beams, columns, lintels and braces are counted from their tags with the schedule size; their lengths are not measured. Take the lengths off the framing plans for pricing by the metre.');
+  checks.push('Structure: columns, lintels and braces are counted from their tags with the schedule size. Beams are measured between the supports either side of each tag: check spans that run past a column drawn without a symbol.');
+  if (unspanned) checks.push(`${unspanned} beam tag${unspanned === 1 ? '' : 's'} had no beam line along ${unspanned === 1 ? 'it' : 'them'}: counted with no length. Measure ${unspanned === 1 ? 'it' : 'them'} on the framing plans.`);
   return {
     message: [...tally].map(([m, n]) => `${n} ${m}`).join(', '),
     checks,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { enclosedOutline, foundationMarks, lengthOf, markPlaces, sizesOf, slabThickness } from '../src/automate/foundations';
-import { divisionOf, structuralMembers } from '../src/automate/structure';
+import { beamSpan, divisionOf, structuralMembers } from '../src/automate/structure';
+import type { Segment } from '../src/fill/vectors';
 import type { PageText } from '../src/pageText';
 import type { Schedule } from '../src/smart/schedules';
 
@@ -93,5 +94,23 @@ describe('structure', () => {
     expect(divisionOf('265 x 608 GLULAM')).toMatch(/^06/);
     expect(divisionOf('HSS 127 x 127 x 9.5')).toMatch(/^05/);
     expect(divisionOf('W 200 x 27')).toMatch(/^05/);
+  });
+});
+
+describe('beam spans', () => {
+  const line = (x1: number, y1: number, x2: number, y2: number, width = 0.96): Segment => ({ x1, y1, x2, y2, width, filled: false }) as Segment;
+  // A vertical beam line broken at three columns (squares across it at y 100, 200, 300), tag beside it.
+  const segs = [line(50, 0, 50, 95), line(50, 105, 50, 195), line(50, 205, 50, 295), line(50, 305, 50, 400), line(0, 150, 400, 150, 0.36)];
+  for (const y of [100, 200, 300]) segs.push(line(46, y - 5, 54, y - 5, 0.48), line(54, y - 5, 54, y + 5, 0.48), line(54, y + 5, 46, y + 5, 0.48), line(46, y + 5, 46, y - 5, 0.48));
+  it('runs from the column before the tag to the one after', () => {
+    const t = { str: 'B3', cx: 44, cy: 160, w: 6, h: 5, angle: -Math.PI / 2 } as PageText;
+    expect(beamSpan(t, segs, 600)).toEqual([[50, 100], [50, 200]]);
+  });
+  it('to the end of the line where no column is drawn', () => {
+    const t = { str: 'B3', cx: 44, cy: 350, w: 6, h: 5, angle: -Math.PI / 2 } as PageText;
+    expect(beamSpan(t, segs, 600)).toEqual([[50, 300], [50, 400]]);
+  });
+  it('none when no line runs along the tag', () => {
+    expect(beamSpan({ str: 'B3', cx: 300, cy: 300, w: 6, h: 5, angle: -Math.PI / 2 } as PageText, segs, 600)).toBeNull();
   });
 });
