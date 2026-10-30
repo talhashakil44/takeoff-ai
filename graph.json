@@ -661,7 +661,7 @@
       "evidence": "codex/build-it-frederick-reqa@e13725f"
     },
     {
-      "status": "doing",
+      "status": "done",
       "depends": [
         "T33"
       ],
@@ -678,7 +678,9 @@
       "added": "2026-10-30T13:58:06.665Z",
       "by": "claude",
       "branch": "codex/build-it-door-hosts",
-      "updated": "2026-10-30T14:04:10.841Z"
+      "updated": "2026-10-30T14:18:14.150Z",
+      "ref": "claude/integration@d7d3438",
+      "evidence": "codex/build-it-door-hosts@d7d3438"
     }
   ]
 }
