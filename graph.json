@@ -256,7 +256,7 @@
       "by": "claude"
     },
     {
-      "status": "todo",
+      "status": "done",
       "depends": [
         "T7"
       ],
@@ -271,7 +271,10 @@
       "stream": "gpt-build",
       "title": "Beam spans (linear structure, T7) as beams in 3D/IFC: centerlines until section and framing elevation are documented, not full-height walls",
       "added": "2026-10-30T04:22:24.520Z",
-      "by": "claude"
+      "by": "claude",
+      "branch": "claude/integration@e8391a0",
+      "evidence": "claude/integration@e8391a0",
+      "updated": "2026-10-30T04:26:32.312Z"
     }
   ]
 }
