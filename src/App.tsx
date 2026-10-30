@@ -35,6 +35,7 @@ import { checkScale, type ScaleCheck } from './scaleCheck';
 import { sheetImage } from './sheetImage';
 import { compareSheets } from './compareSheets';
 import { pageTexts, type PageText } from './pageText';
+import type { RevisionAccess } from './build/sources';
 import { readTitleBlock, titleBlockBox } from './titleBlock';
 import { middleOf } from './locate';
 import { buildingOfDoc, buildingsOf, fileLabel, onBuilding, quantitySections, type QtyGrouping } from './buildings';
@@ -383,6 +384,29 @@ export function App() {
     if (!sh || !pdf) return [];
     return segmentsOf(await pdf.getPage(sh.page));
   }, []);
+  // Addendum files kept with the specifications re-issue drawing sheets (Kelso's Addendum 5
+  // carries the structural set re-issued): Build It reads those pages too.
+  const buildRevisions = useMemo<RevisionAccess>(
+    () => ({
+      pages: async (docId) => (await specPdfOf(docId))?.numPages ?? 0,
+      size: async (docId, page) => {
+        const pdf = await specPdfOf(docId);
+        if (!pdf) return null;
+        const vp = (await pdf.getPage(page)).getViewport({ scale: 1 });
+        return { width: vp.width, height: vp.height };
+      },
+      text: async (docId, page) => {
+        const pdf = await specPdfOf(docId);
+        return pdf ? pageTexts(await pdf.getPage(page)).catch(() => []) : [];
+      },
+      lines: async (docId, page) => {
+        const pdf = await specPdfOf(docId);
+        return pdf ? segmentsOf(await pdf.getPage(page)) : [];
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   const sheetTextOf = useCallback(async (sheetId: string) => {
     const sh = projectRef.current?.sheets.find((x) => x.id === sheetId);
     const pdf = sh ? pdfsRef.current.get(sh.docId) : undefined;
@@ -3569,6 +3593,7 @@ export function App() {
               specText={specTextOf}
               sheetText={sheetTextOf}
               sheetLines={buildSheetLines}
+              revisions={buildRevisions}
               onEdits={(build) => commit((p) => ({ ...p, build }), 'Build It setup', 'build-edits')}
               onOpenSpec={(docId, page, key) => {
                 setSpecTarget({ docId, page, key, n: Date.now() });

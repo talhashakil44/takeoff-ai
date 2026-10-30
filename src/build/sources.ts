@@ -1,5 +1,9 @@
 import { get, set } from 'idb-keyval';
-import type { Project, Sheet } from '../model';
+import type { Project, Sheet, SpecDoc } from '../model';
+import { isRevisionFile, issueOrder } from '../reissue';
+import { mainDrawingScale, scaleHintsOf } from '../sheetScale';
+import { parseScale } from '../units';
+import type { PageText } from '../pageText';
 import type { Segment } from '../fill/vectors';
 import type { DrawingText, DrawingTexts } from './building';
 import type { DrawingLines } from './roof';
@@ -170,6 +174,86 @@ export interface DrawingSources {
   lines: DrawingLines;
   /** Title-block words of each sheet read, for sheets whose title doesn't name the level. */
   hints: Record<string, string>;
+  /** Drawing sheets re-issued inside addendum files (texts, lines and hints keyed by their id). */
+  revisions: RevisionSheet[];
+}
+
+/**
+ * A drawing sheet re-issued inside an addendum or revision file kept with the specifications
+ * (Kelso's Addendum 5 attaches Structural Addendum 1: S0.2 to S6.0 on pages 19 to 34). It
+ * supersedes the live sheet it `revises` for Build It's geometry and levels; the takeoffs stay
+ * on that sheet (moving them is the user's call).
+ */
+export interface RevisionSheet {
+  /** `spec:<docId>:<page>`, the page one-based. */
+  id: string;
+  docId: string;
+  page: number;
+  /** Its number, read from its title block. */
+  name: string;
+  title?: string;
+  width: number;
+  height: number;
+  /** The live project sheet with that number and size. */
+  revises?: string;
+  /** The file it was issued in. */
+  issue: string;
+  /** The date in its title block, as written. */
+  dated?: string;
+  metersPerPoint: number | null;
+  scaleLabel: string | null;
+  /** Re-issued again by a later addendum. */
+  superseded?: boolean;
+}
+
+/** Access to the pages of the addendum files kept with the specifications. */
+export interface RevisionAccess {
+  pages: (docId: string) => Promise<number>;
+  size: (docId: string, page: number) => Promise<{ width: number; height: number } | null>;
+  text: (docId: string, page: number) => Promise<DrawingText[]>;
+  lines?: (docId: string, page: number) => Promise<Segment[]>;
+}
+
+/** Addendum and revision files kept with the specifications, in issue order: where re-issued drawing sheets can be. */
+export function revisionDocs(project: { specs?: SpecDoc[] }): SpecDoc[] {
+  const docs = (project.specs ?? []).filter((d) => isRevisionFile(d.name));
+  const order = issueOrder(docs.map((d) => d.name));
+  return docs.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+}
+
+const DATE = /^(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?\s+\d{1,2},\s*\d{4}$/i;
+
+/**
+ * Which live sheet a drawing-size page of an addendum re-issues: the number in its title block
+ * (bottom right) that names a live sheet of the same size. Null for a letter page or a sheet the
+ * set doesn't have.
+ */
+export function reissuedSheetOf(
+  texts: DrawingText[],
+  width: number,
+  height: number,
+  sheets: Pick<Sheet, 'id' | 'name' | 'width' | 'height' | 'superseded'>[],
+): { sheet: Pick<Sheet, 'id' | 'name'>; dated?: string } | null {
+  if (Math.max(width, height) < 1000) return null;
+  const live = sheets.filter((s) => !s.superseded && Math.abs(s.width - width) < 1 && Math.abs(s.height - height) < 1);
+  const corner = texts.filter((t) => t.cx > width * 0.85 && t.cy > height * 0.8);
+  const hit = corner
+    .map((t) => ({ t, s: live.find((s) => s.name.trim().toUpperCase() === t.str.trim().toUpperCase()) }))
+    .filter((x) => x.s)
+    .sort((a, b) => b.t.cx + b.t.cy - (a.t.cx + a.t.cy))[0];
+  if (!hit) return null;
+  const dated = texts.filter((t) => t.cx > width * 0.75 && t.cy > height * 0.6 && DATE.test(t.str.trim()))[0]?.str.trim();
+  return { sheet: hit.s!, dated };
+}
+
+/** A re-issued sheet's scale: its own notes, else the sheet it revises where that scale is among its notes. */
+function revisionScale(texts: DrawingText[], lines: Segment[] | null, old: Sheet | undefined, units: Project['units']): { metersPerPoint: number | null; scaleLabel: string | null } {
+  const full = texts.filter((t): t is PageText => Number.isFinite(t.w) && Number.isFinite(t.h));
+  const hints = full.length ? scaleHintsOf(full) : [];
+  const pick = hints.length ? mainDrawingScale(hints, full, lines, units, old?.title) : null;
+  const label = pick?.label ?? (old?.scaleLabel && hints.includes(old.scaleLabel) ? old.scaleLabel : null);
+  const mpp = label ? (label === old?.scaleLabel && old.metersPerPoint ? old.metersPerPoint : parseScale(label)) : null;
+  return { metersPerPoint: mpp, scaleLabel: mpp ? label : null };
 }
 
 /**
@@ -177,9 +261,11 @@ export interface DrawingSources {
  * computer's cache where it was read before. A sheet that can't be read is left out.
  */
 export async function loadDrawingSources(opts: {
-  project: Pick<Project, 'sheets' | 'measurements'> & { types?: Project['types'] };
+  project: Pick<Project, 'sheets' | 'measurements'> & Partial<Pick<Project, 'types' | 'specs' | 'units'>>;
   sheetText: (sheetId: string) => Promise<DrawingText[]>;
   sheetLines?: (sheetId: string) => Promise<Segment[]>;
+  /** The pages of addendum files kept with the specifications, for sheets they re-issue. */
+  revisions?: RevisionAccess;
   titleWords: (texts: DrawingText[], width: number, height: number) => string;
   progress?: (done: number, of: number) => void;
   cancelled?: () => boolean;
@@ -190,7 +276,7 @@ export async function loadDrawingSources(opts: {
   const measured = new Set(project.measurements.map((m) => m.sheetId));
   const plans = linePlans(project);
   const todo = project.sheets.filter((s) => !s.superseded && needsText(s, measured));
-  const out: DrawingSources = { texts: {}, lines: {}, hints: {} };
+  const out: DrawingSources = { texts: {}, lines: {}, hints: {}, revisions: [] };
   let done = 0;
   const one = async (s: Sheet) => {
     let texts = useCache ? await get<DrawingText[] | undefined>(textKey(s)).catch(() => undefined) : undefined;
@@ -222,7 +308,69 @@ export async function loadDrawingSources(opts: {
       for (let s = queue.shift(); s && !cancelled?.(); s = queue.shift()) await one(s);
     }),
   );
+  if (opts.revisions) await loadRevisions(project, opts.revisions, plans, titleWords, out, useCache, cancelled);
   return out;
+}
+
+/** Reads the drawing sheets addendum files re-issue (see `RevisionSheet`) into `out`, keyed `spec:<docId>:<page>`. */
+async function loadRevisions(
+  project: Pick<Project, 'sheets' | 'measurements'> & Partial<Pick<Project, 'specs' | 'units'>>,
+  access: RevisionAccess,
+  plans: Set<string>,
+  titleWords: (texts: DrawingText[], width: number, height: number) => string,
+  out: DrawingSources,
+  useCache: boolean,
+  cancelled?: () => boolean,
+): Promise<void> {
+  for (const doc of revisionDocs(project)) {
+    const pages = await access.pages(doc.id).catch(() => 0);
+    for (let page = 1; page <= pages && !cancelled?.(); page++) {
+      const size = await access.size(doc.id, page).catch(() => null);
+      if (!size || Math.max(size.width, size.height) < 1000) continue;
+      const at = { docId: doc.id, page };
+      let texts = useCache ? await get<DrawingText[] | undefined>(textKey(at)).catch(() => undefined) : undefined;
+      if (!texts) {
+        const read = await access.text(doc.id, page).catch(() => null);
+        if (!read) continue;
+        texts = read.map(slimText);
+        if (useCache && read.length) void set(textKey(at), texts).catch(() => undefined);
+      }
+      const found = reissuedSheetOf(texts, size.width, size.height, project.sheets);
+      if (!found) continue;
+      const old = project.sheets.find((s) => s.id === found.sheet.id)!;
+      const id = `spec:${doc.id}:${page}`;
+      out.texts[id] = texts;
+      out.hints[id] = titleWords(texts, size.width, size.height);
+      let lines: Segment[] | null = null;
+      if (access.lines && (needsLines(old, plans) || /^S[-\d.]/i.test(old.name))) {
+        const packed = useCache ? await get<PackedLines | undefined>(lineKey(at)).catch(() => undefined) : undefined;
+        if (packed?.v === CACHE_VERSION) lines = unpackLines(packed);
+        else {
+          const read = await access.lines(doc.id, page).catch(() => null);
+          if (read) {
+            lines = slimLines(read);
+            if (useCache && read.length) void set(lineKey(at), packLines(lines)).catch(() => undefined);
+          }
+        }
+        if (lines) out.lines[id] = lines;
+      }
+      // A later addendum re-issuing the same sheet supersedes this one's predecessors.
+      for (const r of out.revisions) if (r.revises === old.id) r.superseded = true;
+      out.revisions.push({
+        id,
+        docId: doc.id,
+        page,
+        name: old.name,
+        title: old.title,
+        width: size.width,
+        height: size.height,
+        revises: old.id,
+        issue: doc.name.replace(/\.pdf$/i, ''),
+        dated: found.dated,
+        ...revisionScale(texts, lines, old, project.units ?? 'metric'),
+      });
+    }
+  }
 }
 
 /**
