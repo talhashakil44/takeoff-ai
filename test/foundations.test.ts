@@ -113,4 +113,16 @@ describe('beam spans', () => {
   it('none when no line runs along the tag', () => {
     expect(beamSpan({ str: 'B3', cx: 300, cy: 300, w: 6, h: 5, angle: -Math.PI / 2 } as PageText, segs, 600)).toBeNull();
   });
+  it('stops at a column hung off the line where its grid tick crosses and a column is tagged beside it (Kelso S2.1 B1)', () => {
+    // A horizontal beam line at y 216.6, columns drawn below it (crossing nothing), one grid dash
+    // crossing the line at each column, the column tags 15 pt along from them.
+    const beam = [line(1085, 216.6, 1840, 216.6, 1.32)];
+    const ticks = [1160.6, 1310.8, 1460.9, 1611, 1761.1].map((x) => line(x, 213.8, x, 218.3, 0.36));
+    const t = { str: 'B1', cx: 1385.7, cy: 216.5, w: 8, h: 5, angle: 0 } as PageText;
+    expect(beamSpan(t, [...beam, ...ticks], 900)).toEqual([[1085, 216.6], [1840, 216.6]]);
+    const tags: [number, number][] = [1175.7, 1325.8, 1475.9, 1626.1, 1776.2].map((x) => [x, 212.1]);
+    expect(beamSpan(t, [...beam, ...ticks], 900, tags)).toEqual([[1310.8, 216.6], [1460.9, 216.6]]);
+    // A lone dash with no column tagged near it is still not a support.
+    expect(beamSpan(t, [...beam, ...ticks], 900, [[1475.9, 212.1]])).toEqual([[1085, 216.6], [1460.9, 216.6]]);
+  });
 });
