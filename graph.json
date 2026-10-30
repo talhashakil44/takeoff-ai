@@ -460,8 +460,8 @@
       "notes": [
         "2026-10-30T05:44 claude: footing XY moved to T25 (Build It, grid intersections); misses remain"
       ],
-      "updated": "2026-10-30T08:06:51.684Z",
-      "branch": "claude/integration@1f3b60d",
+      "updated": "2026-10-30T08:09:12.194Z",
+      "branch": "claude/integration@7a761af",
       "evidence": "claude/integration@1f3b60d"
     },
     {
