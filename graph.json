@@ -438,6 +438,22 @@
       "title": "Electrical rough-in from measured device counts (etags): per-device rough-in rate, basis assumed, per level",
       "added": "2026-10-30T05:29:56.427Z",
       "by": "claude"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T22"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ],
+      "id": "T24",
+      "owner": "claude",
+      "title": "QA follow-ups: missed M1-01 75 SAN vertical and M1-03 auditorium 400x300 branches; S1.0 pad/pier count points on the symbol centre, not the tag",
+      "added": "2026-10-30T05:29:58.375Z",
+      "by": "claude"
     }
   ]
 }
