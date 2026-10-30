@@ -218,6 +218,20 @@
       "title": "Envelope takeoff: roof area off the roof plans (by roof type), exterior wall area by wall type",
       "added": "2026-10-30T04:21:36.667Z",
       "by": "claude"
+    },
+    {
+      "status": "todo",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ],
+      "id": "T14",
+      "owner": "claude",
+      "title": "Electrical: why Kelso E plans give no device counts; count devices and fixtures on raster/pasted E plans",
+      "added": "2026-10-30T04:21:38.859Z",
+      "by": "claude"
     }
   ]
 }
