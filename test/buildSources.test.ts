@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { doorSheets, drawingFingerprint, linePlans, slimText, structuralSheets, markPolylineArcs, needsLines, needsText, packLines, slimLines, unpackLines } from '../src/build/sources';
+import { doorSheets, drawingFingerprint, linePlans, loadDrawingSources, reissuedSheetOf, revisionDocs, slimText, structuralSheets, markPolylineArcs, needsLines, needsText, packLines, slimLines, unpackLines } from '../src/build/sources';
 import { sourceHashOf } from '../src/build/extract';
 import { writtenDate } from '../src/build/facts';
 import type { Segment } from '../src/fill/vectors';
@@ -97,5 +97,63 @@ describe('written dates', () => {
     expect(writtenDate('February 29, 2028')).toBe('2028-02-29');
     expect(writtenDate('February 30, 2026')).toBeNull();
     expect(writtenDate('Smarch 3, 2026')).toBeNull();
+  });
+
+  describe('drawing sheets re-issued inside addendum files', () => {
+    const sheet = (id: string, name: string, extra: Partial<Project['sheets'][number]> = {}) =>
+      ({ id, docId: 'struct', page: 1, name, title: 'FOUNDATION PLAN', width: 2592, height: 1728, metersPerPoint: 0.035277777777777776, scaleLabel: '1:100', scaleSource: 'detected', scaleHints: ['1:100'], ...extra }) as Project['sheets'][number];
+    const sheets = [sheet('s10', 'S1.0'), sheet('s11', 'S1.1', { title: 'SECTIONS' }), sheet('a20', 'A2.0', { docId: 'arch' })];
+    const block = (name: string, date = 'Sep. 16, 2026') => [
+      { str: name, cx: 2480, cy: 1640, w: 30, h: 9, angle: 0 },
+      { str: date, cx: 2400, cy: 1600, w: 40, h: 5, angle: 0 },
+      { str: 'S1.1', cx: 900, cy: 400, w: 12, h: 4, angle: 0 },
+      { str: 'SCALE: 1 : 100', cx: 600, cy: 1500, w: 50, h: 5, angle: 0 },
+    ];
+
+    it('names the live sheet of the same number and size from the title block, not a reference on the drawing', () => {
+      expect(reissuedSheetOf(block('S1.0'), 2592, 1728, sheets)).toEqual({ sheet: sheets[0], dated: 'Sep. 16, 2026' });
+      expect(reissuedSheetOf(block('S1.0'), 612, 792, sheets)).toBeNull();
+      expect(reissuedSheetOf(block('S1.0'), 3024, 2160, sheets)).toBeNull();
+      expect(reissuedSheetOf(block('S9.9'), 2592, 1728, sheets)).toBeNull();
+    });
+
+    it('takes addendum and revision files only, in issue order', () => {
+      const specs = [
+        { id: 'a5', name: 'Addendum 5 - RFP.pdf' },
+        { id: 'sp', name: '02 - Specifications.pdf' },
+        { id: 'a2', name: 'RFT - Addendum 2.pdf' },
+      ];
+      expect(revisionDocs({ specs }).map((d) => d.id)).toEqual(['a2', 'a5']);
+    });
+
+    it('reads the re-issued pages under their own ids, and a later addendum supersedes an earlier one', async () => {
+      const pages: Record<string, { width: number; height: number; texts: ReturnType<typeof block> }[]> = {
+        a2: [{ width: 612, height: 792, texts: [] }, { width: 2592, height: 1728, texts: block('S1.0', 'Aug. 30, 2026') }],
+        a5: [{ width: 612, height: 792, texts: [] }, { width: 2592, height: 1728, texts: block('S1.0') }, { width: 2592, height: 1728, texts: block('S1.1') }],
+      };
+      const read: string[] = [];
+      const src = await loadDrawingSources({
+        project: { sheets, measurements: [{ id: 'm', sheetId: 's10', typeId: 't', points: [], holes: [] }], specs: [{ id: 'a5', name: 'Addendum 5.pdf' }, { id: 'a2', name: 'Addendum 2.pdf' }], units: 'metric' },
+        sheetText: async () => [],
+        titleWords: () => '',
+        cache: false,
+        revisions: {
+          pages: async (d) => pages[d].length,
+          size: async (d, p) => pages[d][p - 1],
+          text: async (d, p) => (read.push(`${d}:${p}`), pages[d][p - 1].texts),
+          lines: async () => [{ x1: 0, y1: 0, x2: 10, y2: 0, width: 1, filled: false }],
+        },
+      });
+      // Letter pages are not read for text.
+      expect(read).toEqual(['a2:2', 'a5:2', 'a5:3']);
+      expect(src.revisions.map((r) => [r.id, r.name, r.revises, r.issue, r.dated, r.superseded ?? false])).toEqual([
+        ['spec:a2:2', 'S1.0', 's10', 'Addendum 2', 'Aug. 30, 2026', true],
+        ['spec:a5:2', 'S1.0', 's10', 'Addendum 5', 'Sep. 16, 2026', false],
+        ['spec:a5:3', 'S1.1', 's11', 'Addendum 5', 'Sep. 16, 2026', false],
+      ]);
+      expect(src.revisions[1].metersPerPoint).toBeCloseTo(0.035277777777777776);
+      expect(src.texts['spec:a5:2']?.[0].str).toBe('S1.0');
+      expect(src.lines['spec:a5:3']).toHaveLength(1);
+    });
   });
 });

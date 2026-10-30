@@ -6,7 +6,7 @@ import { loadBuild, runBuild, runReplan, saveBuild } from '../build/client';
 import { Calendar } from '../build/cpm';
 import { isPlan, sourceHashOf, titleBlockWords, TRADES, tradeByKey } from '../build/extract';
 import { readSpecFacts } from '../build/facts';
-import { loadDrawingSources } from '../build/sources';
+import { loadDrawingSources, type RevisionAccess, type RevisionSheet } from '../build/sources';
 import { type BuildOutput } from '../build/run';
 import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Feasibility, Issue, PlanSetup, ScopeAllowance, ScopeSuggestion, SourceRef, SpecFact } from '../build/types';
 import type { Project } from '../model';
@@ -31,6 +31,8 @@ interface Props {
   /** A sheet's text, for the level its title block names. */
   sheetText: (sheetId: string) => Promise<{ str: string; cx: number; cy: number; w?: number; h?: number; angle?: number }[]>;
   sheetLines?: (sheetId: string) => Promise<DrawingLines[string]>;
+  /** Pages of the addendum files kept with the specifications, for drawing sheets they re-issue. */
+  revisions?: RevisionAccess;
   onEdits: (edits: BuildEdits) => void;
   onOpenSpec: (docId: string, page: number, key: string) => void;
   onOpenDrawing: (places: Place[], label: string) => void;
@@ -53,7 +55,7 @@ function Badge({ basis }: { basis: Basis }) {
   return <span className={`bld-badge ${basis}`}>{BASIS_LABEL[basis]}</span>;
 }
 
-export default function BuildView({ project, sections, specText, sheetText, sheetLines, onEdits, onOpenSpec, onOpenDrawing, onSave, renderSheet, onClose }: Props) {
+export default function BuildView({ project, sections, specText, sheetText, sheetLines, revisions, onEdits, onOpenSpec, onOpenDrawing, onSave, renderSheet, onClose }: Props) {
   const edits = useMemo(() => project.build ?? {}, [project.build]);
   const [out, setOut] = useState<BuildOutput | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const [facts, setFacts] = useState<SpecFact[] | null>(null);
   const [drawingTexts, setDrawingTexts] = useState<DrawingTexts>({});
   const [drawingLines, setDrawingLines] = useState<DrawingLines>({});
+  const [revisionSheets, setRevisionSheets] = useState<RevisionSheet[]>([]);
   const [hints, setHints] = useState<Record<string, string> | null>(null);
   const [setupOpen, setSetupOpen] = useState(true);
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -133,6 +136,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         project,
         sheetText,
         sheetLines,
+        revisions,
         titleWords: titleBlockWords,
         progress: (done, of) => !gone && setReading(done < of ? { done, of } : null),
         cancelled: () => gone,
@@ -141,6 +145,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         setHints(src.hints);
         setDrawingTexts(src.texts);
         setDrawingLines(src.lines);
+        setRevisionSheets(src.revisions);
         setReading(null);
       }
     })();
@@ -355,6 +360,16 @@ export default function BuildView({ project, sections, specText, sheetText, shee
     <div className={`bld bld-workspace bld-mode-${workspace}`} role="region" aria-label="Build It">
       <header className="bld-bar">
         {(busy || reading) && <div className="bld-live-status" role="status">{busy ?? `Reading the drawings… ${reading!.done} of ${reading!.of} sheets`}</div>}
+        {!busy && !reading && revisionSheets.some((r) => !r.superseded) && (
+          <div className="bld-live-status" role="note">
+            {(() => {
+              const live = revisionSheets.filter((r) => !r.superseded);
+              const issues = [...new Set(live.map((r) => r.issue))];
+              const moved = live.filter((r) => r.revises && project.measurements.some((m) => m.sheetId === r.revises));
+              return `${issues.join(', ')} re-issued ${live.map((r) => r.name).join(', ')}.${moved.length ? ` Takeoffs on ${moved.map((r) => r.name).join(', ')} are on the earlier issue.` : ''}`;
+            })()}
+          </div>
+        )}
         {error && <div className="bld-live-error" role="alert">{error}</div>}
         <div className="bld-title">
           <Icon name="walls" size={16} />
