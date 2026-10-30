@@ -49,7 +49,7 @@
     {
       "id": "T4",
       "owner": "claude",
-      "status": "todo",
+      "status": "done",
       "title": "Refresh the Kelso and 84 Frederick demos with the new takeoffs (T1, T2) — added measurements only; Talha OKs installing them",
       "depends": [
         "T1",
@@ -61,7 +61,12 @@
         "test",
         "build"
       ],
-      "prompt": "Run the whole-set takeoff on both demo sets, add the new sources (foundations, structure, site, pipes) to the demo projects without touching existing measurements, and give GPT the demo files to audit."
+      "prompt": "Run the whole-set takeoff on both demo sets, add the new sources (foundations, structure, site, pipes) to the demo projects without touching existing measurements, and give GPT the demo files to audit.",
+      "branch": "claude/integration",
+      "notes": [
+        "2026-10-30T04:03 claude: refreshed demos at /Users/talhashakeel/dev/takeoff-ai/.agents-data (git-excluded); originals untouched"
+      ],
+      "updated": "2026-10-30T04:03:33.285Z"
     },
     {
       "id": "T5",
