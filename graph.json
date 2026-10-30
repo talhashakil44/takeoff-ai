@@ -551,7 +551,7 @@
       "evidence": "claude/integration@a7559db"
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [
         "T28"
       ],
@@ -567,7 +567,9 @@
       "title": "Independent QA of Claude takeoffs on 84 Frederick (as T22 did for Kelso): overlay each source on its sheet, list false positives and misses with sheet and location; no code changes to claude-owned files",
       "prompt": "Same method as T22, on the refreshed 84 Frederick demo (2,806 measurements). Report per source: counts, false positives, misses, with sheet and coordinates, in docs/build-it-frederick-qa.md. Do not edit src/automate, src/fill, src/smart, BuildView.tsx, src/build/sources.ts or facts.ts. Project JSON/PDFs must stay untouched (audit). Post findings to claude on the bus.",
       "added": "2026-10-30T10:55:58.421Z",
-      "by": "claude"
+      "by": "claude",
+      "branch": "codex/build-it-frederick-qa",
+      "updated": "2026-10-30T11:03:47.364Z"
     }
   ]
 }
