@@ -457,6 +457,25 @@
       "title": "QA follow-ups: missed M1-01 75 SAN vertical and M1-03 auditorium 400x300 branches; S1.0 pad/pier count points on the symbol centre, not the tag",
       "added": "2026-10-30T05:29:58.375Z",
       "by": "claude"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T22"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T25",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Place pad footings, piers and columns (count measurements at their tags) on the nearest structural grid intersection in 3D, keeping the tag point as provenance",
+      "prompt": "QA finding 5: S1.0 F1/P2/BP2 count points sit on the tag text, ~1-3 m from the footing. Footings, piers, base plates and columns sit on grid intersections. Build It has the registered grid: snap each such count to the nearest intersection within ~2.5 m (flag when none), without editing the takeoff point. I tried snapping in the takeoff to the scheduled outline and it was unreliable (dashed outlines, mass footings jump to the wrong one), so it belongs in Build It.",
+      "added": "2026-10-30T05:43:56.634Z",
+      "by": "claude"
     }
   ]
 }
