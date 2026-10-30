@@ -17,7 +17,7 @@ export function suggestScopeAllowances(model: BuildModel, setup: PlanSetup): Sco
     .filter((e) => e.origin === 'takeoff' && e.trade === 'structure' && e.level === 'fdn' && /slab on grade/i.test(e.typeName))
     .reduce((sum, e) => sum + (e.unit === 'm²' ? e.quantity : e.unit === 'SF' ? e.quantity * 0.09290304 : 0), 0);
   return AREA_PROXY_TRADES.flatMap((key): ScopeSuggestion[] => {
-    const measured = model.elements.some((e) => e.origin === 'takeoff' && e.status !== 'existing' && (
+    const measured = model.elements.some((e) => e.origin === 'takeoff' && e.status !== 'existing' && !e.planningExcluded && (
       (e.trade === key && (key !== 'envelope' || (/roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF')))) ||
       (key === 'elec-rough' && e.trade === 'elec-trim' && e.measurementSource === 'etags' && e.unit === 'ea' && e.quantity > 0)
     ));
@@ -60,6 +60,25 @@ export function activeAllowances(setup: PlanSetup): [string, ScopeAllowance][] {
 /** Missing scope stays a review item; only user-entered allowances create extra work. */
 export function planningScopeIssues(model: BuildModel, facts: SpecFact[], setup: PlanSetup): Issue[] {
   const issues: Issue[] = [];
+  const excluded = model.elements.filter((e) => e.origin === 'takeoff' && e.planningExcluded);
+  const explanations: Record<string, string> = {
+    'egress-demolition': 'Egress-diagram traces do not establish demolition work. Check the actual removals plan before adding them.',
+    'unverified-demo-type': 'Demo 0 joins unrelated legend text. Re-read the numbered demolition notes before assigning a removal type.',
+    'room-context': 'Generic room polygons are floor-area context; no ceiling or floor-finish installation is inferred from them.',
+    'elevation-window': 'Elevation glazing marks may repeat plan window assemblies and do not establish a building level. Reconcile opening IDs and the assembly/lite count basis.',
+    'open-ceiling': 'An open or unshown ceiling area is not new ceiling installation.',
+    'unverified-ceiling-type': 'A ceiling area typed from concatenated general notes needs its actual ceiling mark confirmed.',
+    'duplicate-roof-view': 'Coincident generic equipment marks on two sheet views count once on the roof plan. Verify the equipment service and symbol legend.',
+  };
+  for (const [reason, text] of Object.entries(explanations)) {
+    const matches = excluded.filter((e) => e.planningExcluded === reason);
+    if (!matches.length) continue;
+    issues.push({
+      id: `takeoff-review:${reason}`, severity: 'warning',
+      text: `${matches.length} saved takeoff${matches.length === 1 ? '' : 's'} excluded from new-work planning. ${text}`,
+      refs: matches.map((e) => e.id), sources: matches.map((e) => e.sources[0]),
+    });
+  }
   const entries = setup.allowances?.value;
   if (entries && typeof entries === 'object' && !Array.isArray(entries))
     for (const [key, value] of Object.entries(entries)) {
