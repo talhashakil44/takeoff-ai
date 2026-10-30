@@ -3,6 +3,7 @@ import { automateCeilings } from './ceilings';
 import { automateKeynotes } from './keynotes';
 import { automateDucts } from './ducts';
 import { automateRoof } from './envelope';
+import { automateElectricalTags } from './electrical';
 import { automatePipes } from './pipes';
 import { automateRuns } from './runs';
 import { automateTrades } from './trades';
@@ -431,6 +432,16 @@ export async function takeOffWholeSet(
     await pause();
     const r = await automateTrades(project, access);
     apply('trades', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('electrical tags', async () => {
+    say('Whole set: electrical circuit tags…');
+    await pause();
+    const r = await automateElectricalTags(project, access);
+    apply('etags', r);
     await hold();
     for (const c of r.checks) review.push({ kind: 'check', text: c });
     return r.message;
