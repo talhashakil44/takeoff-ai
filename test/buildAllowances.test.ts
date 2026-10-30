@@ -101,6 +101,31 @@ describe('Build It unmeasured scope allowances', () => {
     m.floorAreas = {};
     expect(suggestScopeAllowances(m, setup).map((s) => s.key)).toEqual(['envelope']);
   });
+  it('uses a registered roof-plan area for covering, with measured work and saved allowances taking precedence', () => {
+    const m = model();
+    m.levels.push({ id: 'roof', name: 'Roof', elevation: 7.2, basis: 'inferred', sheets: [] });
+    m.elements.push(element('wall', 'envelope', 'L1', '07 Envelope', 'm', 30));
+    m.roofPlan = {
+      areaM2: 984.35, basis: 'inferred',
+      source: { kind: 'sheet', id: 'roof-sheet', page: 11, label: 'A2.3' },
+      why: 'Outer roof grids; roof edge unverified.',
+    };
+    const setup = defaultSetup(m, [], '2026-11-02');
+    const acts = planActivities(m, setup, [], []);
+    const covering = acts.find((a) => a.id === 'work:envelope:roof-covering')!;
+    expect(covering).toMatchObject({ level: 'roof', quantities: { 'm²': 984.35 }, duration: 14, durationBasis: 'inferred', elements: [] });
+    expect(covering.sources[0].label).toBe('A2.3');
+    expect(acts.find((a) => a.id === 'ms:dry-in')?.deps.some((d) => d.from === covering.id)).toBe(true);
+    expect(suggestScopeAllowances(m, setup).some((s) => s.key === 'envelope')).toBe(false);
+    const slower = applySetupEdits(setup, { setup: { trades: { envelope: { rates: { 'm²': 50 } } } } });
+    expect(planActivities(m, slower, [], []).find((a) => a.id === covering.id)?.duration).toBe(20);
+    const accepted = applySetupEdits(setup, { setup: { allowances: { envelope: allowance(900, 'm²', 60) } } });
+    expect(planActivities(m, accepted, [], []).some((a) => a.id === covering.id)).toBe(false);
+    expect(planActivities(m, accepted, [], []).some((a) => a.id === 'allowance:envelope')).toBe(true);
+    m.elements.push({ ...element('measured-roof', 'envelope', 'roof', '07 Envelope', 'm²', 800), typeName: 'Roof membrane' });
+    expect(planActivities(m, setup, [], []).some((a) => a.id === covering.id)).toBe(false);
+    expect(planActivities(m, setup, [], []).find((a) => a.id === 'work:envelope:roof')?.quantities?.['m²']).toBe(800);
+  });
   it('splits accepted GFA proxies by floor and gates finishes on an assumed dry-in milestone', () => {
     const m = model();
     m.levels.push({ id: 'L2', name: 'Level 2', elevation: 3.6, basis: 'inferred', sheets: [] }, { id: 'roof', name: 'Roof', elevation: 7.2, basis: 'inferred', sheets: [] });

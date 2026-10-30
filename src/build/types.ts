@@ -95,6 +95,8 @@ export interface BuildModel {
   version: number;
   projectType?: "new" | "renovation";
   floorAreas?: Record<string, number>;
+  /** Roof-plan grid extent, a planning quantity rather than a measured roof covering. */
+  roofPlan?: { areaM2: number; basis: 'inferred'; source: SourceRef; why: string };
   /** Hash of the project data it was made from (sheets, takeoffs, specs, settings). */
   sourceHash: string;
   units: 'metric' | 'imperial';

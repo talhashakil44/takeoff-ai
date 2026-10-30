@@ -55,6 +55,14 @@ it.skipIf(!root)(
       writeFileSync(`${output}/${key === 'Kelso' ? 'kelso' : 'frederick'}-lines.json`, JSON.stringify(drawingLines));
       const out = buildAll(input);
       if (key === 'Kelso') {
+        expect(out.model.roofPlan?.areaM2).toBeGreaterThan(950);
+        expect(out.model.roofPlan?.areaM2).toBeLessThan(1050);
+        expect(out.model.roofPlan?.source.label).toBe('A2.3');
+        expect(out.schedule.activities.find((a) => a.id === 'work:envelope:roof-covering')).toMatchObject({ duration: 14, durationBasis: 'inferred' });
+        expect(out.scopeSuggestions.some((s) => s.key === 'envelope')).toBe(false);
+        const withoutDerivedRoof = replan({ ...out.model, roofPlan: undefined }, out.setup, input).schedule;
+        expect(withoutDerivedRoof.feasibility.earliestFinish).toBe('2027-08-05');
+        expect(out.schedule.feasibility.earliestFinish).toBe('2027-08-25');
         const slabs = out.model.elements
           .filter((e) => e.origin === 'building' && e.id.endsWith(':slab'))
           .map((e) => e.shape)

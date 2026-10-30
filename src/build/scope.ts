@@ -21,7 +21,7 @@ export function suggestScopeAllowances(model: BuildModel, setup: PlanSetup): Sco
       (e.trade === key && (key !== 'envelope' || (/roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF')))) ||
       (key === 'elec-rough' && e.trade === 'elec-trim' && e.measurementSource === 'etags' && e.unit === 'ea' && e.quantity > 0)
     ));
-    if (measured || key in (setup.allowances?.value ?? {})) return [];
+    if (measured || (key === 'envelope' && model.roofPlan) || key in (setup.allowances?.value ?? {})) return [];
     const referenceAreaM2 = key === 'envelope' ? slabM2 : areaM2;
     if (referenceAreaM2 <= 0) return [];
     const quantity = Math.round((model.units === 'metric' ? referenceAreaM2 : referenceAreaM2 / 0.09290304) * 10) / 10;

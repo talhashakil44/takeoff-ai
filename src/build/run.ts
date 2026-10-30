@@ -47,6 +47,13 @@ export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInp
   const acts = planActivities(model, setup, input.sections, input.facts, input.edits);
   const schedule = planToTarget(acts, setup);
   schedule.issues.push(...planningScopeIssues(model, input.facts, setup));
+  if (model.roofPlan && acts.some((a) => a.id === 'work:envelope:roof-covering'))
+    schedule.issues.push({
+      id: 'roof-plan-area-derived',
+      severity: 'warning',
+      text: `${Math.round(model.roofPlan.areaM2)} m² of roof covering is inferred from registered roof-plan grids. Confirm the actual roof edges, roof-type areas and slope before relying on its duration.`,
+      sources: [model.roofPlan.source],
+    });
   const tagIds = new Set(model.elements.filter((e) => e.measurementSource === 'etags').map((e) => e.id));
   const tagRough = acts.filter((a) => a.id.startsWith('work:elec-rough:') && a.elements.length > 0 && a.elements.every((id) => tagIds.has(id)));
   if (tagRough.length) {

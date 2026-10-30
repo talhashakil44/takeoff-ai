@@ -244,6 +244,28 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
         prevLevel = l;
       }
     }
+    if (t.key === 'envelope' && model.projectType !== 'renovation' && model.roofPlan &&
+        !Object.hasOwn(setup.allowances?.value ?? {}, 'envelope') &&
+        !model.elements.some((e) => e.origin === 'takeoff' && e.status !== 'existing' && e.trade === 'envelope' &&
+          /roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF'))) {
+      const unit = model.units === 'metric' ? 'm²' : 'SF';
+      const quantity = model.units === 'metric' ? model.roofPlan.areaM2 : model.roofPlan.areaM2 / 0.09290304;
+      const rate = setupT.rates[unit];
+      const crews = Math.max(1, setupT.crews);
+      const prior = acts.find((x) => x.id === 'work:envelope:roof')?.id ?? before;
+      const structure = acts.find((x) => x.id === 'work:structure:roof')?.id;
+      add({
+        id: 'work:envelope:roof-covering',
+        name: 'Roof covering — derived plan area',
+        kind: 'work', trade: 'envelope', level: 'roof', elements: [],
+        quantities: { [unit]: quantity }, rates: { [unit]: rate }, crews,
+        duration: Math.max(1, Math.ceil(quantity / (rate > 0 ? rate : quantity) / crews)),
+        durationBasis: 'inferred',
+        durationWhy: `${Math.round(quantity * 10) / 10} ${unit} from registered roof-plan outer grids at ${rate ?? '?'} ${unit} per crew-day, ${crews} crew${crews === 1 ? '' : 's'} · ${model.roofPlan.why}`,
+        deps: [dep(prior, 'Roof covering after envelope preparation'), ...(structure ? [dep(structure, 'Roof structure before covering')] : [])],
+        specs: specKeys, sources: [model.roofPlan.source],
+      });
+    }
   }
   // The usual order of trades on a level: a trade waits for the ones before it (skipping trades with no work there).
   const has = new Set(acts.map((x) => x.id));
@@ -351,7 +373,7 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
 
   if (setup.dryInBeforeFinishes?.value) {
     const envelope = acts.filter((x) => x.kind === 'work' && x.trade === 'envelope');
-    const roofEvidence = model.elements.some((e) => e.trade === 'envelope' && /roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF')) || allowanceIds.has('allowance:envelope');
+    const roofEvidence = model.roofPlan || model.elements.some((e) => e.trade === 'envelope' && /roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF')) || allowanceIds.has('allowance:envelope');
     const wallEvidence = model.elements.some((e) => e.trade === 'envelope' && e.level !== 'roof');
     if (envelope.length && roofEvidence && wallEvidence) {
       const dryIn = add({ id: 'ms:dry-in', name: 'Weather-tight / dry-in (assumed)', kind: 'milestone', trade: null, level: null, elements: [], duration: 0, durationBasis: setup.dryInBeforeFinishes.basis, durationWhy: setup.dryInBeforeFinishes.why, deps: envelope.map((x) => dep(x.id, 'Envelope work before dry-in', 'assumed')), specs: [], sources: [] });
