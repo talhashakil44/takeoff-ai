@@ -22,7 +22,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 8;
+export const MODEL_VERSION = 9;
 
 export interface Trade {
   key: string;
@@ -71,7 +71,7 @@ export function tradeOf(type: TakeoffType): string {
   if (d >= 26 && d <= 28) return type.kind === 'count' ? 'elec-trim' : 'elec-rough';
   if (d >= 31 && d <= 33) return 'site';
   if (d === 10 || d === 11 || d === 12) return 'specialties';
-  if (!d && type.kind === 'linear' && !/duct|pipe|conduit|cable|tray|sprinkler/.test(name)) return /\bfw|foundation|footing|grade beam/.test(name) ? 'structure' : 'partitions';
+  if (!d && type.kind === 'linear' && !/duct|pipe|conduit|cable|tray|sprinkler/.test(name)) return /foundation|footing|grade beam|structural wall|bearing wall/.test(name) ? 'structure' : 'partitions';
   if (d === 6 || d === 9 || !d) {
     if (/ceil|\bact\b|t-bar|bulkhead|acoustic(al)? (tile|panel)/.test(name)) return 'ceilings';
     if (/paint|coating|stain/.test(name)) return 'painting';
@@ -299,6 +299,7 @@ export function extractModel(input: ExtractInput): BuildModel {
 
   const specCache = new Map<string, { key: string; basis: Basis }[]>();
   const missingSec = new Map(sections.filter((s) => s.missing).map((s) => [s.key, `${s.number} ${s.title}`]));
+  const codedStatusNoted = new Set<string>();
   const elements: BuildElement[] = [];
   let minX = Infinity;
   let minY = Infinity;
@@ -380,9 +381,9 @@ export function extractModel(input: ExtractInput): BuildModel {
         maxY = Math.max(maxY, p[1]);
       }
     }
-    if (trade === 'structure' && type.kind === 'count' && /\bPLY\b|DENOTES SPAN|\bWT-?\d/i.test(type.name)) {
+    if (trade === 'structure' && type.kind === 'count') {
       shape=null;placement='unknown';
-      elIssues.push('Structural tag quantity retained; member span, direction and section must be established before generating physical geometry.');
+      elIssues.push('Counted structural item retained; member position, span and section must be established before generating physical geometry.');
     }
     if (shape?.type === 'surface' && (!simpleRing(shape.ring) || shape.holes.some(h => !simpleRing(h)))) {
       shape = null; placement = 'unknown';
@@ -393,10 +394,16 @@ export function extractModel(input: ExtractInput): BuildModel {
     const specs = specCache.get(type.id)!;
     if (!specs.length) elIssues.push(`No spec section found for ${type.name}.`);
     for (const sp of specs) if (missingSec.has(sp.key)) elIssues.push(`Spec section ${missingSec.get(sp.key)} is listed in the table of contents but not issued.`);
+    const explicitExisting = /\b(?:EXISTING|EXST|EXIST|TO REMAIN)\b/i.test(type.name);
+    const codedExisting = /\b[A-Z]{1,4}X\d/i.test(type.name);
+    if (codedExisting && !explicitExisting && !/\bNEW\b/i.test(type.name) && !codedStatusNoted.has(type.id)) {
+      codedStatusNoted.add(type.id);
+      issues.push({ id: `status:${type.id}`, severity: 'warning', text: `${type.name}: existing status inferred from an X-coded type mark; confirm against the drawing legend.`, sources: [src] });
+    }
     elements.push({
       id: m.id,
       origin: "takeoff",
-      status: trade === 'demolition' ? 'demolished' : /(?:^|\s[–-]\s)Existing\b|\b(?:frx|fwx|px|wx|cx)\d/i.test(type.name) ? 'existing' : 'new',
+      status: trade === 'demolition' ? 'demolished' : (explicitExisting || codedExisting) && !/\bNEW\b/i.test(type.name) ? 'existing' : 'new',
       name: m.label ? `${type.name} · ${m.label}` : type.name,
       trade,
       level: level?.id ?? null,

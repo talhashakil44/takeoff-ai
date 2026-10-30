@@ -1,14 +1,11 @@
 import type { SpecSection } from '../spec/parse';
-import { completeScope } from './scope';
 import { TRADES, tradeByKey } from './extract';
 import type { Activity, Assumption, Basis, BuildEdits, BuildModel, Dependency, PlanSetup, SourceRef, SpecFact, TradeSetup } from './types';
 
 /**
- * The plan: activities for everything the project needs, not only what has a shape —
- * submittals and their review, procurement, the work level by level, testing, commissioning
- * and closeout — each tied to the elements, quantities and spec sections it covers, with
- * explicit links between them. Durations come from quantities and production rates, from the
- * specification, or from stated assumptions; nothing is shortened to meet a target.
+ * The plan: activities for measured work, including items that cannot be placed in 3D,
+ * with linked submittals, procurement, testing and closeout. Missing trades and phase zones
+ * are review issues; a floor outline alone does not authorize work or a vendor lead time.
  */
 
 // Production per crew per day (imperial units; metric converted), lead times in working days.
@@ -216,7 +213,6 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     }
   }
   // The usual order of trades on a level: a trade waits for the ones before it (skipping trades with no work there).
-  completeScope(model, acts, setup, facts);
   const has = new Set(acts.map((x) => x.id));
   const waitsFor = (t: string, l: string | null, seen = new Set<string>()): string[] =>
     (AFTER[t] ?? []).flatMap((p) => {

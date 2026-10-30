@@ -137,11 +137,14 @@ function hull(points: Pt[]): Pt[] {
   return [...half(ps), ...half([...ps].reverse())];
 }
 /** Recover a closed exterior chain where possible; otherwise explicitly flag a hull allowance. */
-function outline(els: BuildElement[]): { ring: Pt[]; exact: boolean; reconstructed?: boolean } | null {
-  const runs = els.filter(
-    (e) => e.shape?.type === 'run' && /\bEW\d|\bWX\d|\bFWX\d|EXTERIOR WALL|EXTERNAL WALL/i.test(`${e.typeName} ${e.name}`),
-  );
+function outline(els: BuildElement[]): { ring: Pt[]; exact: boolean; reconstructed?: boolean; unnamed?: boolean; sources: BuildElement['sources'] } | null {
+  const walls = els.filter((e) => e.shape?.type === 'run' && ['partitions', 'structure', 'envelope'].includes(e.trade));
+  const named = walls.filter((e) => /\b(?:EXTERIOR|EXTERNAL|OUTSIDE|PERIMETER|FA[CÇ]ADE)\b|\b(?:EW|WX|FWX)\d/i.test(`${e.typeName} ${e.name}`));
+  // A closed outer wall chain is usable even when the project calls its walls W-A or Type 1.
+  // Unlabelled open wall fragments do not justify a convex gross-area allowance.
+  const runs = named.length ? named : walls;
   if (!runs.length) return null;
+  const sources = [...new Map(runs.flatMap((e) => e.sources).map((s) => [`${s.id}:${s.page}:${s.label}`, s])).values()];
   const chains = runs.map((e) => (e.shape!.type === 'run' ? [...e.shape!.points] : []));
   const near = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.35;
   let closed: Pt[] | null = null;
@@ -168,11 +171,16 @@ function outline(els: BuildElement[]): { ring: Pt[]; exact: boolean; reconstruct
     }
     if (ring.length > 3 && near(ring[0], ring.at(-1)!) && polygonArea(ring) > Math.max(30, closed ? polygonArea(closed) : 0)) closed = ring.slice(0, -1);
   }
-  const traced = wallFootprint(runs);
-  if (traced && (!closed || polygonArea(traced) > polygonArea(closed) * 1.05)) return {ring:traced,exact:true,reconstructed:true};
-  if (closed) return {ring:closed,exact:true};
+  const traced = named.length ? wallFootprint(runs) : null;
+  if (traced && (!closed || polygonArea(traced) > polygonArea(closed) * 1.05)) return {ring:traced,exact:true,reconstructed:true,sources};
+  if (closed) {
+    // A small closed room inside a larger wall network is not a building outline.
+    if (!named.length && polygonArea(closed) < polygonArea(hull(walls.flatMap((e) => e.shape?.type === 'run' ? e.shape.points : []))) * 0.85) return null;
+    return {ring:closed,exact:true,sources,...(!named.length ? {unnamed:true} : {})};
+  }
+  if (!named.length) return null;
   const ring = hull(runs.flatMap((e) => (e.shape!.type === 'run' ? e.shape!.points : [])));
-  return polygonArea(ring) > 30 ? { ring, exact: false } : null;
+  return polygonArea(ring) > 30 ? { ring, exact: false, sources } : null;
 }
 export function addBuilding(model: BuildModel, project: Project, ftf: number) {
   model.projectType = /renovat|renewal|removals/i.test(
@@ -193,12 +201,13 @@ export function addBuilding(model: BuildModel, project: Project, ftf: number) {
       });
       continue;
     }
-    const { ring, exact, reconstructed } = boundary,
+    const { ring, exact, reconstructed, unnamed, sources: source } = boundary,
       area = polygonArea(ring);
     model.floorAreas[l.id] = area;
+    if (unnamed)
+      model.issues.push({ id: `outline-unnamed:${l.id}`, severity: 'warning', text: `${l.name}: closed wall chain used as a likely exterior boundary without an exterior label. Confirm against the drawing before relying on its gross area.`, sources: source });
     const height =
       (floors[i + 1]?.elevation ?? model.levels.find((level) => level.id === 'roof')?.elevation ?? l.elevation + ftf) - l.elevation;
-    const source = els.filter((e) => e.shape?.type === 'run' && /EW\d|WX\d|EXTERIOR/i.test(e.name)).flatMap((e) => e.sources);
     const create = (
       suffix: string,
       name: string,

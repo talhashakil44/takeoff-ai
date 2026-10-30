@@ -5,6 +5,7 @@ import type { SpecSection } from '../spec/parse';
 import { planToTarget } from "./replanTarget";
 import { extractModel, type ExtractInput } from './extract';
 import { applySetupEdits, defaultSetup, planActivities } from './plan';
+import { planningScopeIssues } from './scope';
 import type { BuildEdits, BuildModel, PlanSetup, Schedule, SpecFact } from './types';
 
 export interface BuildInput {
@@ -41,7 +42,18 @@ export function buildAll(input: BuildInput): BuildOutput {
 }
 
 /** Just the plan and schedule again (setup or activity edits; the model unchanged). */
-export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInput, 'sections' | 'facts' | 'edits'>): { schedule: Schedule } {
+export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInput, 'sections' | 'facts' | 'edits'> & { today?: string }): { schedule: Schedule } {
   const acts = planActivities(model, setup, input.sections, input.facts, input.edits);
-  return { schedule: planToTarget(acts, setup) };
+  const schedule = planToTarget(acts, setup);
+  schedule.issues.push(...planningScopeIssues(model, input.facts));
+  const now = new Date();
+  const today = input.today ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if (setup.start.value < today)
+    schedule.issues.push({
+      id: 'historical-start',
+      severity: 'warning',
+      text: `The plan starts on ${setup.start.value}, before today's ${today}. This may be the documented contract start, but the schedule is historical; set the actual remaining-work start to forecast from today.`,
+      sources: setup.start.source ? [setup.start.source] : [],
+    });
+  return { schedule };
 }

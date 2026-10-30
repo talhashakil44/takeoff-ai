@@ -228,6 +228,8 @@ export interface Scheduled {
 export interface Feasibility {
   changes?: string[];
   earliestFinish: string;
+  /** Unaccelerated finish for the same target milestone and setup, before recovery changes. */
+  baselineFinish?: string;
   target: string | null;
   /** Working days past the target (0 when it fits). */
   overBy: number;

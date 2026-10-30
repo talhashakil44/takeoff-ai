@@ -94,10 +94,15 @@ it.skipIf(!root)(
       expect(JSON.stringify(project)).toBe(original);
       expect(readFileSync(file).equals(before)).toBe(true);
       expect(out.model.elements.filter((e) => e.origin === 'takeoff')).toHaveLength(project.measurements.length);
+      expect(out.schedule.activities.some((a) => a.id.startsWith('longlead:') || a.id.startsWith('scope:'))).toBe(false);
+      if (key === '84 Frederick') {
+        expect(out.schedule.activities.some((a) => a.id === 'ms:phase-one')).toBe(false);
+        expect(out.schedule.issues.map((i) => i.id)).toEqual(expect.arrayContaining(['phase-scope-unmapped', 'historical-start']));
+      }
       expect(later.activities.map((a) => [a.id, a.duration, a.crews, a.deps])).toEqual(
         lean.activities.map((a) => [a.id, a.duration, a.crews, a.deps]),
       );
-      expect(earlier.feasibility.changes?.length).toBeGreaterThan(0);
+      expect(earlier.feasibility.baselineFinish).toBe(lean.feasibility.earliestFinish);
       expect(out.schedule.issues.some((i) => i.id === 'loop')).toBe(false);
       const slug = key === 'Kelso' ? 'kelso' : 'frederick';
       writeFileSync(`${output}/${slug}.ifc`, toIfc({ ...out, project, sections }));

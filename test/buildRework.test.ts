@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildAll, replan } from '../src/build/run';
 import { applySetupEdits } from '../src/build/plan';
+import { planToTarget } from '../src/build/replanTarget';
 import { gridAxes, registerSheets, levelDatums } from '../src/build/building';
 import { runSolids } from '../src/build/solids';
 import { sourceHashOf } from '../src/build/extract';
@@ -8,6 +9,7 @@ import { readSpecFacts } from '../src/build/facts';
 import { toIfc } from '../src/build/ifc';
 import type { Project } from '../src/model';
 import type { SpecSection } from '../src/spec/parse';
+import type { Activity, SpecFact } from '../src/build/types';
 
 const make = (): Project =>
   ({
@@ -75,7 +77,7 @@ const make = (): Project =>
 const input = () => ({
   project: make(),
   sections: [],
-  facts: [],
+  facts: [] as SpecFact[],
   today: '2026-11-02',
 });
 const labels = (dx = 0, dy = 0) => [
@@ -119,7 +121,7 @@ describe('building and full-scope rework', () => {
     texts.section.push({ str: 'FIN. SECOND FLOOR', cx: 200, cy: 300 }, { str: '4500', cx: 130, cy: 300 });
     expect(levelDatums(p, texts).L2).toBeUndefined();
   });
-  it('adds shell context and full scope without changing or duplicating a measurement', () => {
+  it('adds shell context without inventing floor trades or procurement', () => {
     const i = input(),
       before = JSON.stringify(i.project),
       b = buildAll(i);
@@ -133,21 +135,12 @@ describe('building and full-scope rework', () => {
     expect(b.model.floorAreas).toEqual({ L1: 800, L2: 800 });
     expect(b.model.elements.some((e) => e.origin === 'building' && e.typeName.includes('slab'))).toBe(true);
     const ids = b.schedule.activities.map((a) => a.id);
-    for (const id of [
-      'scope:excavation',
-      'scope:foundations',
-      'scope:underground',
-      'scope:roof',
-      'scope:envelope',
-      'ms:weather-tight',
-      'work:structure:L2',
-      'work:mech-rough:L1',
-      'scope:inspection:L1',
-      'cx:mech',
-      'closeout',
-      'longlead:switchgear',
-    ])
-      expect(ids).toContain(id);
+    expect(ids).toContain('work:partitions:L1');
+    expect(ids).toContain('work:doors:L1');
+    expect(ids).toContain('closeout');
+    expect(ids).not.toContain('work:mech-rough:L1');
+    expect(ids).not.toContain('longlead:switchgear');
+    expect(ids.some((id) => id.startsWith('scope:'))).toBe(false);
     expect(b.schedule.issues.some((i) => i.id === 'loop')).toBe(false);
     const ifc = toIfc({ ...b, project: i.project, sections: [] });
     expect(ifc).toContain('Qto_BuildingAllowance');
@@ -162,15 +155,16 @@ describe('building and full-scope rework', () => {
     expect(volume).toBeCloseTo(gross - 0.95 * 2.1 * 0.25);
     expect(wall.quantity).toBe(120);
   });
-  it('moves targets by changing resources, retains fixed lead times, and relaxes back to baseline', {timeout:15000}, () => {
+  it('exposes the baseline and restores it without changing fixed procurement', {timeout:15000}, () => {
     const i = input(),
       b = buildAll(i),
-      setup = applySetupEdits(b.setup, { setup: { target: '2027-07-01' } });
+      setup = applySetupEdits(b.setup, { setup: { target: '2026-11-10' } });
     const fast = replan(b.model, setup, i).schedule;
-    expect(fast.feasibility.changes!.length).toBeGreaterThan(0);
-    expect(fast.feasibility.earliestFinish < b.schedule.feasibility.earliestFinish).toBe(true);
-    expect(fast.activities.find((a) => a.id === 'longlead:switchgear')!.duration).toBe(
-      b.schedule.activities.find((a) => a.id === 'longlead:switchgear')!.duration,
+    expect(fast.feasibility.changes).toEqual([]);
+    expect(fast.feasibility.earliestFinish).toBe(b.schedule.feasibility.earliestFinish);
+    expect(fast.feasibility.baselineFinish).toBe(b.schedule.feasibility.earliestFinish);
+    expect(fast.activities.find((a) => a.id === 'proc:partitions')!.duration).toBe(
+      b.schedule.activities.find((a) => a.id === 'proc:partitions')!.duration,
     );
     const relaxed = replan(b.model, applySetupEdits(b.setup, { setup: { target: '2030-01-01' } }), i).schedule;
     expect(relaxed.activities.map((a) => [a.id, a.crews, a.duration, a.deps])).toEqual(
@@ -178,9 +172,66 @@ describe('building and full-scope rework', () => {
     );
     const edited = replan(b.model, setup, {
       ...i,
-      edits: { activities: { 'work:mech-rough:L1': { duration: 100 } } },
+      edits: { activities: { 'work:partitions:L1': { duration: 100 } } },
     }).schedule;
-    expect(edited.activities.find((a) => a.id === 'work:mech-rough:L1')!.duration).toBe(100);
+    expect(edited.activities.find((a) => a.id === 'work:partitions:L1')!.duration).toBe(100);
+  });
+  it('counts recovery changes when measured work can actually be compressed', () => {
+    const setup = applySetupEdits(buildAll(input()).setup, { setup: { target: '2026-11-20' } });
+    const base = (id: string, kind: Activity['kind'], duration: number, from?: string): Activity => ({
+      id, name: id, kind, trade: kind === 'work' ? 'partitions' : null, level: kind === 'work' ? 'L1' : null,
+      elements: [], duration, durationBasis: 'assumed', durationWhy: 'Test quantity and rate',
+      deps: from ? [{ from, type: 'FS', lag: 0, basis: 'assumed', why: 'Physical prerequisite' }] : [],
+      specs: [], sources: [],
+    });
+    const work = base('work:partitions:L1', 'work', 20, 'ms:start');
+    work.quantities = { 'm²': 200 };
+    work.rates = { 'm²': 10 };
+    work.crews = 1;
+    const baseline = [base('ms:start', 'milestone', 0), work, base('ms:finish', 'milestone', 0, work.id)];
+    const result = planToTarget(baseline, setup);
+    expect(result.feasibility.baselineFinish).toBe('2026-11-27');
+    expect(result.feasibility.changes?.length).toBeGreaterThan(0);
+    expect(result.feasibility.earliestFinish < result.feasibility.baselineFinish!).toBe(true);
+    expect(baseline[1].crews).toBe(1);
+  });
+  it('does not map a phase milestone to unnamed floors and warns on historical starts', () => {
+    const i = input();
+    i.facts = [
+      { key: 'startDate', value: '2025-02-24', source: { kind: 'spec', id: 'spec', page: 44, label: '01 30 20' } },
+      { key: 'phaseDate', value: '2025-07-28', source: { kind: 'spec', id: 'spec', page: 44, label: '01 30 20', quote: 'Phase 1 work in construction sequencing drawings' } },
+    ];
+    const b = buildAll(i);
+    expect(b.schedule.activities.some((a) => a.id === 'ms:phase-one')).toBe(false);
+    expect(b.schedule.issues.map((issue) => issue.id)).toEqual(expect.arrayContaining(['phase-scope-unmapped', 'historical-start']));
+    expect(b.setup.start.value).toBe('2025-02-24');
+  });
+  it('recovers a generic closed exterior wall and flags an unbounded floor', () => {
+    const i = input();
+    i.project.types[0].name = 'Wall Type A';
+    let b = buildAll(i);
+    expect(b.model.floorAreas).toEqual({ L1: 800, L2: 800 });
+    expect(b.model.issues.some((issue) => issue.id === 'outline-unnamed:L1')).toBe(true);
+    i.project.measurements[1].points.pop();
+    b = buildAll(i);
+    expect(b.model.floorAreas?.L2).toBeUndefined();
+    expect(b.schedule.issues.some((issue) => issue.id === 'scope-floor-evidence:L2')).toBe(true);
+  });
+  it('uses generic existing marks and leaves counted structural tags unplaced', () => {
+    const i = input();
+    i.project.types.push(
+      { id: 'old', name: 'ABX2', kind: 'linear', height: 3, color: '#aaa', items: [] },
+      { id: 'new', name: 'ABX2 – NEW', kind: 'linear', height: 3, color: '#aaa', items: [] },
+      { id: 'column', name: 'Column C1', kind: 'count', height: 3, color: '#aaa', items: [], division: '05 Metals' },
+    );
+    for (const [typeId, n] of [['old', 0], ['new', 1], ['column', 2]] as const)
+      i.project.measurements.push({ id: typeId, typeId, sheetId: 's0', points: [[100 + n * 20, 100], [110 + n * 20, 100]], holes: [] });
+    const model = buildAll(i).model;
+    expect(model.elements.find((e) => e.id === 'old')?.status).toBe('existing');
+    expect(model.issues.some((issue) => issue.id === 'status:old')).toBe(true);
+    expect(model.elements.find((e) => e.id === 'new')?.status).toBe('new');
+    expect(model.elements.find((e) => e.id === 'column')?.shape).toBeNull();
+    expect(model.elements.find((e) => e.id === 'column')?.quantity).toBeGreaterThan(0);
   });
   it('keeps services above their storey and new finishes on existing substrates new', () => {
     const i=input();
