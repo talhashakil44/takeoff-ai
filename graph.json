@@ -683,7 +683,7 @@
       "evidence": "codex/build-it-door-hosts@d7d3438"
     },
     {
-      "status": "doing",
+      "status": "review",
       "depends": [
         "T34"
       ],
@@ -699,8 +699,8 @@
       "prompt": "Kelso A2.1/A2.2 lines from loadDrawingSources now carry curve=true on chord-drawn arcs: 36 swings each from doorSwings (was 0). Frederick swing counts unchanged (53/49/72/60). Update docs/build-it-door-hosts.md with before/after.",
       "added": "2026-10-30T14:22:56.659Z",
       "by": "claude",
-      "branch": "codex/build-it-polyline-door-hosts",
-      "updated": "2026-10-30T14:35:40.292Z"
+      "branch": "codex/build-it-polyline-door-hosts@a3dfd08",
+      "updated": "2026-10-30T14:37:38.732Z"
     }
   ]
 }
