@@ -991,6 +991,7 @@ interface RevisedPlan {
   sheetId: string;
   texts: DrawingText[];
   lines: DrawingLines[string];
+  branchMassSections?: ReturnType<typeof revisedMassSections>;
 }
 export function revisedPlan(
   project: Project,
@@ -1068,6 +1069,207 @@ export function revisedPlan(
   }
   return candidates.length === 1 ? candidates[0] : null;
 }
+/** A pair of short ticks is not a footing branch. Follow its dashed edges to
+ * a drawn closure, a paired bend, or the same closed mass-footing boundary. */
+function supportedBranchPair(
+  plan: RevisedPlan,
+  along: number,
+  edge: number,
+  a: number,
+  b: number,
+  outward: number,
+  weight: number,
+  strips: { width: number; depth: number; source: SourceRef }[],
+  depth: number,
+  nesting = 0,
+): boolean {
+  const normal = 1 - along;
+  const scale = Math.hypot(plan.frame.a, plan.frame.b);
+  const strokes = plan.lines.filter(
+    (l) =>
+      !l.filled &&
+      !l.curve &&
+      (!l.color || l.color === '#000000') &&
+      Math.abs(l.width - weight) < 0.05,
+  );
+  const trace = (
+    axis: number,
+    fixed: number,
+    from: number,
+    direction: number,
+  ) => {
+    const spans = strokes
+      .flatMap((l) => {
+        const p = [l.x1, l.y1],
+          q = [l.x2, l.y2];
+        if (
+          Math.abs(p[1 - axis] - fixed) > 0.15 ||
+          Math.abs(q[1 - axis] - fixed) > 0.15
+        )
+          return [];
+        const x = (p[axis] - from) * direction,
+          y = (q[axis] - from) * direction;
+        return [[Math.min(x, y), Math.max(x, y)]];
+      })
+      .filter((s) => s[1] > 0)
+      .sort((x, y) => x[0] - y[0]);
+    let reach = 0;
+    for (const [lo, hi] of spans) {
+      if (lo > reach + (reach ? 0.25 / scale : 0.15)) {
+        const first = from + reach * direction,
+          second = from + lo * direction;
+        const scheduled = strips.some(
+          (s) =>
+            Math.abs(s.depth - depth) < 0.002 &&
+            Math.abs(s.width - (lo - reach) * scale) < 0.015,
+        );
+        if (
+          !reach ||
+          nesting ||
+          !scheduled ||
+          ![-1, 1].some((side) =>
+            supportedBranchPair(
+              plan,
+              axis,
+              fixed,
+              Math.min(first, second),
+              Math.max(first, second),
+              side,
+              weight,
+              strips,
+              depth,
+              nesting + 1,
+            ),
+          )
+        )
+          break;
+      }
+      reach = Math.max(reach, hi);
+    }
+    return from + reach * direction;
+  };
+  const x = trace(normal, a, edge, outward),
+    y = trace(normal, b, edge, outward);
+
+  if (Math.min(Math.abs(x - edge), Math.abs(y - edge)) * scale < 0.1)
+    return false;
+  const endpoints = [
+    [a, edge],
+    [b, edge],
+    [a, x],
+    [b, y],
+  ].map((p) => (along === 0 ? p : [p[1], p[0]]));
+  const annotation = plan.lines.some((l) => {
+    if (l.curve || (l.color && l.color !== '#000000')) return false;
+    const dx = l.x2 - l.x1,
+      dy = l.y2 - l.y1,
+      len = Math.hypot(dx, dy);
+    if (
+      Math.min(Math.abs(dx), Math.abs(dy)) < 0.15 ||
+      len * scale > 0.3 ||
+      !len
+    )
+      return false;
+    return endpoints.some((p) => {
+      const t = ((p[0] - l.x1) * dx + (p[1] - l.y1) * dy) / (len * len);
+      return (
+        t >= -0.05 &&
+        t <= 1.05 &&
+        Math.abs((p[0] - l.x1) * dy - (p[1] - l.y1) * dx) / len < 0.15
+      );
+    });
+  });
+  if (annotation) return false;
+  // A drawn end cap must join both actual traced ends.
+  if (Math.abs(x - y) < 0.15 && trace(along, x, a, 1) >= b - 0.15) return true;
+  // Inner and outer corners turn together, retaining the scheduled width.
+  if (Math.abs(Math.abs(x - y) - (b - a)) * scale < 0.015) {
+    for (const direction of [-1, 1]) {
+      const u = trace(along, x, a, direction),
+        v = trace(along, y, b, direction);
+      if (
+        Math.min(Math.abs(u - a), Math.abs(v - b)) * scale >= (b - a) * scale &&
+        Math.min(Math.max(a, u), Math.max(b, v)) -
+          Math.max(Math.min(a, u), Math.min(b, v)) >
+          0.15
+      )
+        return true;
+    }
+  }
+  // A filled closed source rectangle is a physical junction, not a dimension
+  // bracket. This proves attachment only; it never transfers its elevation.
+  const groups = new Map<number, typeof plan.lines>();
+  for (const l of plan.lines)
+    if (
+      l.filled &&
+      !l.curve &&
+      l.sub !== undefined &&
+      (!l.color || l.color === '#000000' || l.color === '#c0c0c0')
+    )
+      groups.set(l.sub, [...(groups.get(l.sub) || []), l]);
+  return [...groups.values()].some((ls) => {
+    if (ls.length !== 4) return false;
+    const xs = ls.flatMap((l) => [l.x1, l.x2]),
+      ys = ls.flatMap((l) => [l.y1, l.y2]);
+    const box = [
+      Math.min(...xs),
+      Math.min(...ys),
+      Math.max(...xs),
+      Math.max(...ys),
+    ];
+    if (
+      !ls.every(
+        (l) => Math.abs(l.x1 - l.x2) < 0.05 || Math.abs(l.y1 - l.y2) < 0.05,
+      )
+    )
+      return false;
+    const corners = [
+      [box[0], box[1]],
+      [box[2], box[1]],
+      [box[2], box[3]],
+      [box[0], box[3]],
+    ];
+    if (
+      !corners.every((p, i) =>
+        ls.some((l) => {
+          const q = corners[(i + 1) % 4];
+          return (
+            (Math.hypot(l.x1 - p[0], l.y1 - p[1]) < 0.1 &&
+              Math.hypot(l.x2 - q[0], l.y2 - q[1]) < 0.1) ||
+            (Math.hypot(l.x2 - p[0], l.y2 - p[1]) < 0.1 &&
+              Math.hypot(l.x1 - q[0], l.y1 - q[1]) < 0.1)
+          );
+        }),
+      )
+    )
+      return false;
+    const w = (box[2] - box[0]) * scale,
+      h = (box[3] - box[1]) * scale;
+    const qualified = plan.texts.some((t) => {
+      const rows = plan.branchMassSections?.get(normalized(t.str));
+      const dx = Math.max(box[0] - t.cx, 0, t.cx - box[2]),
+        dy = Math.max(box[1] - t.cy, 0, t.cy - box[3]);
+      return (
+        /^MF-?\d+$/.test(t.str.trim()) &&
+        Math.hypot(dx, dy) * scale < 0.6 &&
+        rows?.length &&
+        rows.every(
+          (r) =>
+            (Math.abs(w - r.width) < 0.015 && Math.abs(h - r.length) < 0.015) ||
+            (Math.abs(h - r.width) < 0.015 && Math.abs(w - r.length) < 0.015),
+        )
+      );
+    });
+    if (!qualified) return false;
+    return (
+      Math.abs(x - y) < 0.15 &&
+      [box[normal], box[normal + 2]].some((c) => Math.abs(c - x) < 0.15) &&
+      a >= box[along] - 0.15 &&
+      b <= box[along + 2] + 0.15
+    );
+  });
+}
+
 /** Only source-drawn, schedule-sized branches may explain a strip-edge opening. */
 function stripBranchIntervals(
   plan: RevisedPlan,
@@ -1118,6 +1320,17 @@ function stripBranchIntervals(
             (s) =>
               Math.abs(s.depth - depth) < 0.002 &&
               Math.abs(s.width - (b - a) * scale) < 0.015,
+          ) &&
+          supportedBranchPair(
+            plan,
+            along,
+            edge,
+            a,
+            b,
+            outward,
+            penWeight,
+            strips,
+            depth,
           ),
       )
       .map((b) => [Math.max(start, a), Math.min(end, b)]),
@@ -1870,7 +2083,7 @@ export function padJunctionPerimeter(
             Math.abs(s.depth - depth) < 0.002 &&
             Math.abs(s.width - (b.at - a.at) * scale) < 0.015,
         );
-        if (!matches.length) continue;
+        if (!matches.length || !supportedBranchPair(plan, cross, edge, a.at, b.at, outward, a.weight, strips, depth)) continue;
         supported.push([Math.max(start, a.at), Math.min(end, b.at)]);
         openings.push({
           side,
@@ -1909,6 +2122,7 @@ function recoverRevisedPads(
 ): BuildModel {
   const plan = revisedPlan(project, original, texts, lines, pages);
   if (!plan) return held;
+  plan.branchMassSections = revisedMassSections(texts, pages);
   const stripSections: { width: number; depth: number; source: SourceRef }[] =
     [];
   const localLeaders = localFootingLeaders(plan);
@@ -2605,36 +2819,7 @@ function recoverRevisedPiers(
   };
 }
 
-function recoverRevisedMassFootings(
-  project: Project,
-  original: BuildModel,
-  current: BuildModel,
-  texts: DrawingTexts,
-  lines: DrawingLines,
-  pages: { docId: string; page: number }[],
-): BuildModel {
-  const plan = revisedPlan(project, original, texts, lines, pages);
-  if (!plan) return current;
-  const originalSheet = project.sheets.find((s) => s.id === plan.sheetId),
-    oldFrame =
-      originalSheet &&
-      sheetFrame(
-        project,
-        {
-          ...original,
-          elements: original.elements.filter(
-            (e) =>
-              !(
-                e.shape?.type === 'run' &&
-                e.issues.some((i) =>
-                  i.startsWith('Foundation revision applied:'),
-                )
-              ),
-          ),
-        },
-        originalSheet,
-      );
-  if (!oldFrame) return current;
+function revisedMassSections(texts: DrawingTexts, pages: { docId: string; page: number }[]) {
   const sections = new Map<
     string,
     { width: number; length: number; depth: number; source: SourceRef }[]
@@ -2701,6 +2886,40 @@ function recoverRevisedMassFootings(
       }
     }
   }
+  return sections;
+}
+
+function recoverRevisedMassFootings(
+  project: Project,
+  original: BuildModel,
+  current: BuildModel,
+  texts: DrawingTexts,
+  lines: DrawingLines,
+  pages: { docId: string; page: number }[],
+): BuildModel {
+  const plan = revisedPlan(project, original, texts, lines, pages);
+  if (!plan) return current;
+  const originalSheet = project.sheets.find((s) => s.id === plan.sheetId),
+    oldFrame =
+      originalSheet &&
+      sheetFrame(
+        project,
+        {
+          ...original,
+          elements: original.elements.filter(
+            (e) =>
+              !(
+                e.shape?.type === 'run' &&
+                e.issues.some((i) =>
+                  i.startsWith('Foundation revision applied:'),
+                )
+              ),
+          ),
+        },
+        originalSheet,
+      );
+  if (!oldFrame) return current;
+  const sections = revisedMassSections(texts, pages);
   const groups = new Map<number, DrawingLines[string]>();
   for (const l of plan.lines)
     if (l.filled && l.sub !== undefined)

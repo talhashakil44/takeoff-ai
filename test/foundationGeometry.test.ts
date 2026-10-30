@@ -1090,7 +1090,7 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
   const branchLines = {'spec:revision:21':[
     ...lines['spec:revision:21'].filter(l => !l.filled),
     {...boundaries[0],x1:padEdge,x2:branchStart}, {...boundaries[0],x1:branchEnd,x2:branchTip+2},
-    {...boundaries[1],x1:padEdge,x2:branchTip+2}, ...returnEdges,...branchArrow,
+    {...boundaries[1],x1:padEdge,x2:branchTip+2}, ...returnEdges,{x1:branchStart,y1:100-halfStrip-10,x2:branchEnd,y2:100-halfStrip-10,width:.6,filled:false,sub:863},...branchArrow,
     {x1:branchTip,y1:100-halfStrip,x2:205,y2:55,width:.24,filled:false,sub:863},
   ]};
   const branchPad = recoverFoundationGeometry(p,bandModel,directSource,branchLines);
@@ -1179,11 +1179,24 @@ it('accounts for every large pad-perimeter gap using actual scheduled strip retu
   const segment = (x1: number, y1: number, x2: number, y2: number, sub: number) => ({ x1, y1, x2, y2, width: .6, filled: false, color: '#000000', sub });
   const exposed = [segment(0,0,0,20,1),segment(0,80,0,100,2),segment(100,0,100,20,3),segment(100,80,100,100,4),segment(0,0,20,0,5),segment(80,0,100,0,6),segment(0,100,100,100,7)];
   const returns = [segment(-20,20,0,20,8),segment(-20,80,0,80,9),segment(100,20,120,20,10),segment(100,80,120,80,11),segment(20,-20,20,0,12),segment(80,-20,80,0,13)];
-  const plan = { docId: 'revision', page: 21, key: 'spec:revision:21', sheetId: 'plan', frame: { a: .01, b: 0, tx: 0, ty: 0, residual: 0 }, texts: [], lines: [...exposed, ...returns] };
+  const plan = { docId: 'revision', page: 21, key: 'spec:revision:21', sheetId: 'plan', frame: { a: .01, b: 0, tx: 0, ty: 0, residual: 0 }, texts: [], lines: [...exposed, ...returns, segment(-20,20,-20,80,14),segment(120,20,120,80,15),segment(20,-20,80,-20,16)] };
   const strips = [{ width: .6, depth: .3, source: { kind: 'spec' as const, id: 'revision', page: 19, label: 'Strip schedule' } }];
   const result = padJunctionPerimeter(plan, [0,0,100,100], .3, strips);
   expect(result?.openings).toHaveLength(3);
+  expect(padJunctionPerimeter({...plan,lines:[...exposed,...returns]},[0,0,100,100],.3,strips)).toBeNull();
+  expect(padJunctionPerimeter({...plan,lines:[...plan.lines,segment(-23,17,-17,23,17)]},[0,0,100,100],.3,strips)).toBeNull();
+  const arrow = [segment(-20,20,-15,18,18),segment(-15,18,-15,22,18),segment(-15,22,-20,20,18)].map(l=>({...l,filled:true}));
+  expect(padJunctionPerimeter({...plan,lines:[...plan.lines,...arrow]},[0,0,100,100],.3,strips)).toBeNull();
+
   expect(result?.coverage).toEqual([1,1,1,1]);
+  // A real corner has unequal inner/outer reaches, separated by strip width.
+  const bend = plan.lines.filter(l => ![8,9,14].includes(l.sub)).concat([
+    segment(-100,20,0,20,20),segment(-40,80,0,80,21),
+    segment(-100,20,-100,180,22),segment(-40,80,-40,180,23),
+  ]);
+  expect(padJunctionPerimeter({...plan,lines:bend},[0,0,100,100],.3,strips)?.openings).toHaveLength(3);
+  expect(padJunctionPerimeter({...plan,lines:bend.filter(l=>l.sub!==23)},[0,0,100,100],.3,strips)).toBeNull();
+
   expect(padJunctionPerimeter({ ...plan, lines: plan.lines.filter(l => l.sub !== 8) }, [0,0,100,100], .3, strips)).toBeNull();
   expect(padJunctionPerimeter({ ...plan, lines: plan.lines.map(l => l.sub === 8 ? { ...l, width: 1.32 } : l) }, [0,0,100,100], .3, strips)).toBeNull();
   expect(padJunctionPerimeter({ ...plan, lines: plan.lines.map(l => l.sub === 9 ? { ...l, y1: 75, y2: 75 } : l) }, [0,0,100,100], .3, strips)).toBeNull();

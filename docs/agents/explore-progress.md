@@ -75,7 +75,7 @@ credible zero lengths. Source-derived spans remain separate.
   separately in `model.drawingGeometry`: no quantities, materials or schedule
   assignments. The first and southeast top -0.250 m are direct; the middle top -0.250 m is inferred through
   the adjoining unstepped strip. All bottoms are -0.650 m. Explore and Build
-  expose their drawing references and acceptance status. Model version 30 forces
+  expose their drawing references and acceptance status. Model version 31 forces
   older geometry to rebuild; imported accepted takeoffs remain unchanged.
 - Three WT-1 wall defaults are axes, not unsupported four-metre-high solids.
   Their complete footprints, opening cuts and vertical sections are unresolved.
@@ -281,3 +281,51 @@ Final v30 gates: 578 tests in 85 files, TypeScript, production build and
 Kelso/Frederick audit pass. Post-guard actual-source replay confirms all 134
 physical shapes exactly unchanged in each project from the independently
 validated IFC snapshots. No original project or PDF was edited.
+
+## Review follow-up — branch qualification and southeast datum chain
+
+Claude's review of `2474910` identified a generalization risk: two unrelated
+return strokes at scheduled spacing could masquerade as a strip branch. Actual
+southwest returns are dashed polylines; their immediate segment lengths differ
+(4.68 versus 9.72 PDF points). Equal immediate lengths alone are not a valid gate.
+The next qualification pass must use actual continued branch geometry and reject
+dimension arrow/tick endings, with decoy and source-withdrawal checks.
+
+Independent original-PDF review of the southeast corner establishes a direct
+SF2 top/bottom of -0.250/-0.550 m and a separate MF2 top/bottom of
+-0.250/-0.650 m. The mass body occupies PDF box
+[2013.24, 1132.08, 2154.84, 1183.08]. These prove matching tops but different
+300/400 mm depths. No direct corner-F2 leader or uniquely applicable section was
+found. The southeast pad remains withheld. A future top-continuity resolver must
+qualify both actual mass/strip junctions, reject intervening steps, retain each
+member's own scheduled depth and label the inferred continuity. It cannot copy
+MF2's bottom into a 300 mm pad or relax the existing equal-depth strip gate.
+Private original source crop: `/tmp/se-datum-investigation.png`. Findings and
+review request were sent to Claude through T11's existing bus.
+
+Claude subsequently agreed to inferred TOP continuity only when both independent
+SF2/MF2 leaders agree, both junctions have continuous qualified outlines, and no
+step symbol/crossbar/note intervenes. Both leader references must be retained;
+withdrawing either, changing a level or inserting a step must withdraw F2. Its
+bottom remains top minus its own scheduled depth. This is the next implementation
+contract, not a statement that southeast F2 has already been recovered.
+
+The version-31 branch gate now traces same-pen dashed edges to an actual cap,
+paired schedule-width bend, or closed mass rectangle corroborated by its local MF
+tag and revised schedule. At most one nested branch is followed. Endpoint
+dimension ticks and arrow edges reject decoys. Mass attachment proves topology
+only; it does not transfer an elevation. Synthetic missing-return, unmatched bend,
+uncapped-return, tick and arrow tests exercise the gate; the raw original-PDF
+fixture still recovers the southwest component and rejects missing branch/step
+evidence. Final integration and visual gates follow below.
+
+Version-31 independent production rebuilds preserve all 134 source-backed
+physical shapes exactly in both projects (the comparison additionally covers two
+building-context shapes). Accepted tuples are unchanged; replay changes nothing
+and source withdrawal removes all derived solids/candidates. Fresh legacy IFC
+validation creates 134 manifold solids with maximum relative volume discrepancy
+0.00345%; its three drawing-only footings have no quantity sets. Engine geometry
+is exactly identical to its validated IFC snapshot. The compiled app rebuilds
+through the normal loader and retains 29/154 foundation shapes and the southwest
+component's dimensions, datums and inference labels. Private final visual proof:
+`diag/explore/proofs/sw-f2-foundation-v31.png`.
