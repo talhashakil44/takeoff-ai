@@ -59,6 +59,23 @@ export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInp
       text: 'Structural member counts and foundation concrete use provisional crew-day rates. Confirm erection complexity, forming, reinforcement and concrete placing rates with the trade before relying on the finish date.',
       refs: structureRateRefs,
     });
+  const excavationRefs = model.elements.filter((e) => e.trade === 'site' && /^\s*31\b/.test(e.division)).map((e) => e.id);
+  const missingExcavationVolume = model.elements.filter((e) => e.trade === 'site' && /^\s*31\b/.test(e.division) && !e.production).map((e) => e.id);
+  const excavationRate = setup.trades.site?.value.rates[model.units === 'metric' ? 'm³' : 'CY'];
+  if (excavationRefs.length && excavationRate === (model.units === 'metric' ? 50 : 65))
+    schedule.issues.push({
+      id: 'excavation-production-review',
+      severity: 'warning',
+      text: 'Excavation uses a provisional bank-volume production rate. Confirm excavation depth, access, hauling and crew output before relying on the foundation start or finish date.',
+      refs: excavationRefs,
+    });
+  if (missingExcavationVolume.length)
+    schedule.issues.push({
+      id: 'excavation-volume-missing',
+      severity: 'warning',
+      text: 'Some Division 31 work has no usable bank volume. Its activity duration is a placeholder until an excavation quantity and rate are set.',
+      refs: missingExcavationVolume,
+    });
   const now = new Date();
   const today = input.today ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   if (setup.start.value < today)

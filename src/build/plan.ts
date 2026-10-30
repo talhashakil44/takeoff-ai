@@ -69,6 +69,7 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
     const d = DEFAULTS[t.key] ?? DEFAULTS.other;
     const rates: Record<string, number> = metric ? { m: Math.round(d.LF * 0.3048), 'm²': Math.round(d.SF * 0.0929), ea: d.ea } : { ft: d.LF, SF: d.SF, ea: d.ea };
     if (t.key === 'structure') rates[metric ? 'm³' : 'CY'] = metric ? 8 : 10;
+    if (t.key === 'site') rates[metric ? 'm³' : 'CY'] = metric ? 50 : 65;
     trades[t.key] = a({ rates, crews: d.crews, leadDays: d.lead }, 'assumed', t.key === 'structure'
       ? 'Planning allowances: 10 members or 8 m³ of foundation concrete per metric crew-day (10 CY imperial); confirm member complexity, forming, reinforcement and crew size with the trade'
       : 'Typical production and lead time: confirm with the trade');
@@ -175,47 +176,59 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     // Work on each level.
     let prevLevel: string | null = null;
     for (const l of levelOrder) {
-      const els = byTL.get(`${t.key}|${l ?? ''}`);
-      if (!els?.length) continue;
-      const quantities: Record<string, number> = {};
-      for (const e of els) {
-        const q = e.production ?? e;
-        quantities[q.unit] = (quantities[q.unit] ?? 0) + q.quantity;
+      const all = byTL.get(`${t.key}|${l ?? ''}`) ?? [];
+      const groups = t.key === 'site' && l === null ? [
+        { id: 'work:site:earthwork', name: 'Site work — Excavation', els: all.filter((e) => /^\s*31\b/.test(e.division)) },
+        { id: workId(t.key, l), name: t.name, els: all.filter((e) => !/^\s*31\b/.test(e.division)) },
+      ] : [{ id: workId(t.key, l), name: `${t.name} — ${levelName(l)}`, els: all }];
+      for (const { id, name, els } of groups) {
+        if (!els.length) continue;
+        const quantities: Record<string, number> = {};
+        for (const e of els) {
+          const q = e.production ?? e;
+          quantities[q.unit] = (quantities[q.unit] ?? 0) + q.quantity;
+        }
+        const crews = Math.max(1, setupT.crews);
+        const rates = id === 'work:site:earthwork'
+          ? Object.fromEntries(Object.entries(setupT.rates).filter(([unit]) => unit === 'm³' || unit === 'CY'))
+          : setupT.rates;
+        let crewDays = 0;
+        const missing: string[] = [];
+        for (const [u, q] of Object.entries(quantities)) {
+          const r = rates[u];
+          if (r && r > 0) crewDays += q / r;
+          else if (q > 0) missing.push(u);
+        }
+        const duration = Math.max(1, Math.ceil(crewDays / crews));
+        const qty = Object.entries(quantities).map(([u, q]) => `${Math.round(q).toLocaleString()} ${u}`).join(' + ');
+        const earthwork = id === 'work:site:earthwork';
+        const deps: Dependency[] = earthwork
+          ? [dep('mobilize', 'Excavation after mobilization')]
+          : [dep(before, before === 'mobilize' ? 'After mobilization' : 'Material approved and on site', before === 'mobilize' ? 'assumed' : 'documented')];
+        if (!earthwork && before !== 'mobilize') deps.push(dep('mobilize', 'Site set up first'));
+        if (prevLevel && !setup.levelsInParallel.value) deps.push(dep(workId(t.key, prevLevel), `Same crew, level after level (${setup.levelsInParallel.why})`));
+        add({
+          id,
+          name,
+          kind: 'work',
+          trade: t.key,
+          level: l,
+          elements: els.map((e) => e.id),
+          quantities,
+          rates,
+          crews,
+          duration,
+          durationBasis: 'inferred',
+          durationWhy: `${qty} at ${Object.entries(rates)
+            .filter(([u]) => quantities[u])
+            .map(([u, r]) => `${r} ${u}`)
+            .join(' / ')} per crew-day, ${crews} crew${crews === 1 ? '' : 's'}${missing.length ? ` · no rate for ${missing.join(', ')}` : ''}`,
+          deps,
+          specs: specKeys,
+          sources: [],
+        });
+        prevLevel = l;
       }
-      const crews = Math.max(1, setupT.crews);
-      let crewDays = 0;
-      const missing: string[] = [];
-      for (const [u, q] of Object.entries(quantities)) {
-        const r = setupT.rates[u];
-        if (r && r > 0) crewDays += q / r;
-        else if (q > 0) missing.push(u);
-      }
-      const duration = Math.max(1, Math.ceil(crewDays / crews));
-      const qty = Object.entries(quantities).map(([u, q]) => `${Math.round(q).toLocaleString()} ${u}`).join(' + ');
-      const deps: Dependency[] = [dep(before, before === 'mobilize' ? 'After mobilization' : 'Material approved and on site', before === 'mobilize' ? 'assumed' : 'documented')];
-      if (before !== 'mobilize') deps.push(dep('mobilize', 'Site set up first'));
-      if (prevLevel && !setup.levelsInParallel.value) deps.push(dep(workId(t.key, prevLevel), `Same crew, level after level (${setup.levelsInParallel.why})`));
-      add({
-        id: workId(t.key, l),
-        name: t.key === 'site' && l === null ? t.name : `${t.name} — ${levelName(l)}`,
-        kind: 'work',
-        trade: t.key,
-        level: l,
-        elements: els.map((e) => e.id),
-        quantities,
-        rates: setupT.rates,
-        crews,
-        duration,
-        durationBasis: 'inferred',
-        durationWhy: `${qty} at ${Object.entries(setupT.rates)
-          .filter(([u]) => quantities[u])
-          .map(([u, r]) => `${r} ${u}`)
-          .join(' / ')} per crew-day, ${crews} crew${crews === 1 ? '' : 's'}${missing.length ? ` · no rate for ${missing.join(', ')}` : ''}`,
-        deps,
-        specs: specKeys,
-        sources: [],
-      });
-      prevLevel = l;
     }
   }
   // The usual order of trades on a level: a trade waits for the ones before it (skipping trades with no work there).
@@ -228,6 +241,8 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     });
   for (const x of acts.filter((x) => x.kind === 'work')) {
     for (const p of waitsFor(x.trade!, x.level)) if (!x.deps.some((d) => d.from === p)) x.deps.push(dep(p, `${tradeByKey.get(p.split(':')[1])?.name ?? p} first on this level (usual order of work)`));
+    if (x.trade === 'structure' && x.level === 'fdn' && has.has('work:site:earthwork'))
+      x.deps.push(dep('work:site:earthwork', 'Excavation before foundation construction'));
   }
 
   // Testing and inspection where a trade's sections call for it.
