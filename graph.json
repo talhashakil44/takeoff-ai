@@ -279,6 +279,20 @@
       "branch": "claude/integration@e8391a0",
       "evidence": "claude/integration@e8391a0",
       "updated": "2026-10-30T04:26:32.312Z"
+    },
+    {
+      "status": "todo",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ],
+      "id": "T17",
+      "owner": "claude",
+      "title": "Raster symbol counting: legend symbols matched on plans pasted in as pictures (Kelso E2/E3 devices, fixtures)",
+      "added": "2026-10-30T04:28:19.354Z",
+      "by": "claude"
     }
   ]
 }
