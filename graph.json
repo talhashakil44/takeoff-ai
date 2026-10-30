@@ -572,6 +572,25 @@
       "updated": "2026-10-30T11:14:58.988Z",
       "ref": "claude/integration@2fc17ca",
       "evidence": "codex/build-it-frederick-qa@2fc17ca"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T29"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T30",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Build It handling of T29 Frederick findings on the saved takeoff (data stays untouched): rooms not routed to ceilings; window plan vs elevation counts reconciled and levelled; M104/M305 roof marks de-duplicated and on Roof; A011 egress demolition, 'Demo 0' and corrupt/open ceiling types flagged and kept out of new work",
+      "prompt": "The 2,803 original Frederick measurements are the user's saved takeoff and must not be edited. Handle T29 findings 1-4, 6, 7 in Build It interpretation only: (3) generic Rooms areas are floor area, not ceiling work; (4) elevation window marks do not add to plan counts and never get a level from an elevation title; (7) coincident marks across sheet views of the same level count once, roof-plan items go to Roof, 'as exist' marks are not new; (1, 2, 6) A011 egress-diagram demolition, types whose label is concatenated legend text (Demo 0, '0 – See A000…') and 'Ceiling – open / none shown' are excluded from new work with a schedule issue listing them for user review. Report Frederick finish before/after and per-trade quantity changes. Claude will fix the engine side (T31) separately.",
+      "added": "2026-10-30T11:15:01.332Z",
+      "by": "claude"
     }
   ]
 }
