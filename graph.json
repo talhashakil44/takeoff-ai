@@ -304,7 +304,7 @@
       "by": "claude"
     },
     {
-      "status": "doing",
+      "status": "blocked",
       "depends": [
         "T8"
       ],
@@ -318,7 +318,10 @@
       "title": "Civil line types without layers: limit of construction (strip/grade area) and silt fence length on Kelso C-104/C-111",
       "added": "2026-10-30T04:30:49.522Z",
       "by": "claude",
-      "updated": "2026-10-30T04:31:29.832Z"
+      "updated": "2026-10-30T04:32:12.601Z",
+      "notes": [
+        "2026-10-30T04:32 claude: C-104/C-111 line types are not distinguishable by colour/width (black 0.36 everywhere, no layers); silt fence/limit of construction need line-pattern matching against the legend sample (dash/symbol sequence). Parked: lower schedule value than T17."
+      ]
     }
   ]
 }
