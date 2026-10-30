@@ -8,6 +8,10 @@ import { classifySheet } from '../sheetKind';
 import { mainDrawingScale, scaleHintsOf, scaleNotes, viewTitle } from '../sheetScale';
 import { readTitleBlock } from '../titleBlock';
 import { parseScale } from '../units';
+import { sheetViews } from '../sheetViews';
+import type { Project } from '../model';
+import { perSheet, type SetAccess } from './set';
+import type { Automation } from './result';
 
 /**
  * A page of a newly added drawing as a sheet: named from its title block (its sheet number,
@@ -30,6 +34,8 @@ export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, 
   // Several noted (a plan with its details): the main drawing's.
   const several = inUnits.length > 1 ? inUnits : hints;
   if (!detected && several.length > 1) detected = mainDrawingScale(several, texts, await segmentsOnce(pg), units ?? 'metric', title ?? undefined)?.label ?? null;
+  // Still none: each drawing on the sheet at the scale under its title.
+  const views = !detected && several.length > 1 && texts.length ? sheetViews(texts, (await segmentsOnce(pg)) ?? [], info.width, info.height) : [];
   // No scale printed (a plan whose title gives none): the one its dimensions agree on.
   if (!detected && !hints.length && info.textRuns >= 20) {
     const read = checkScale(texts, await segmentsOnce(pg), units ?? 'metric');
@@ -52,7 +58,32 @@ export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, 
       scaleLabel: detected,
       scaleSource: detected ? 'detected' : null,
       scaleHints: hints,
+      ...(views.length ? { views } : {}),
     },
+  };
+}
+
+/**
+ * Sheets holding drawings at different scales with no sheet scale set (Kelso S2.1: two roof
+ * framing plans at 1:100, the canopy's at 1:50): each drawing's extent and scale, so takeoffs in
+ * them are measured. Sheets with a scale, or with their views read, are left as they are.
+ */
+export async function automateSheetViews(p: Project, access: SetAccess): Promise<Automation> {
+  const found = new Map<string, NonNullable<Sheet['views']>>();
+  for (const s of p.sheets) {
+    if (s.superseded || s.metersPerPoint || s.views || s.scaleHints.length < 2) continue;
+    await perSheet(access, s, async () => {
+      const texts = await access.texts(s);
+      const segs = texts.length ? await access.segments(s) : null;
+      const views = segs ? sheetViews(texts, segs, s.width, s.height) : [];
+      if (views.length) found.set(s.id, views);
+    });
+  }
+  if (!found.size) return { message: 'No unscaled sheets with drawings at their own scales.' };
+  const names = p.sheets.filter((s) => found.has(s.id)).map((s) => `${s.name} (${found.get(s.id)!.map((v) => v.scaleLabel).join(', ')})`);
+  return {
+    message: `Drawings at their own scales read on ${names.join('; ')}`,
+    apply: (q) => ({ ...q, sheets: q.sheets.map((s) => (found.has(s.id) && !s.metersPerPoint && !s.views ? { ...s, views: found.get(s.id) } : s)) }),
   };
 }
 

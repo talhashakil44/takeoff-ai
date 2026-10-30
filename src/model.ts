@@ -1,5 +1,6 @@
 import type { ExtractedAssembly } from './ai/schema';
 import type { SpecBook } from './spec/parse';
+import type { SheetView } from './sheetViews';
 
 export type Units = 'metric' | 'imperial';
 export type Kind = 'area' | 'linear' | 'count';
@@ -44,6 +45,12 @@ export interface Sheet {
   scaleSource: ScaleSource | null;
   /** Scale notations found on the sheet, offered as one-click choices. */
   scaleHints: string[];
+  /**
+   * With no sheet scale set on a sheet holding drawings at different scales: each drawing's
+   * extent and the scale noted under its title. A takeoff lying in one drawing is measured at
+   * its scale; the sheet scale, once set, wins.
+   */
+  views?: SheetView[];
   /** An older revision kept for reference after its takeoffs moved to a newer sheet. */
   superseded?: boolean;
   /** Its number was read from its title block by OCR (so a better reading of the set may change it). */

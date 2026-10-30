@@ -5,6 +5,7 @@ import { tradeOfNumber } from '../sheetKind';
 import { readSchedules, type Schedule } from '../smart/schedules';
 import { markPlaces, tagTexts, type FoundationMark } from './foundations';
 import { replaceRun, type Automation } from './result';
+import { viewScaleAt } from '../sheetViews';
 import { perSheet, type SetAccess } from './set';
 import { automateWalls } from './walls';
 
@@ -244,7 +245,9 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
             continue;
           }
           const tag = tags.find((x) => x.cx === pt[0] && x.cy === pt[1]);
-          const span = tag && segs.length ? beamSpan(tag, segs, s.metersPerPoint ? 20 / s.metersPerPoint : 600, columnsAt) : null;
+          // 20 m at the sheet's scale, or at the scale of the drawing on it the tag is in.
+          const mpp = s.metersPerPoint ?? viewScaleAt(s.views, [pt])?.metersPerPoint;
+          const span = tag && segs.length ? beamSpan(tag, segs, mpp ? 20 / mpp : 600, columnsAt) : null;
           if (!span) unspanned++;
           const beam: Measurement = { id: newId(), sheetId: s.id, typeId: t.id, points: span ?? [pt, pt], holes: [], source: 'structure', label: m.mark };
           tagOf.set(beam, pt);

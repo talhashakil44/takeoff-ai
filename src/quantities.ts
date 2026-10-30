@@ -2,6 +2,7 @@ import { evaluate } from './formula';
 import { polylineLength, ringArea, ringLength } from './geometry';
 import { FINISH_ROLES, doorHeight, type FinishRole, type Measurement, type Project, type Sheet, type TakeoffType, type Units } from './model';
 import { areaUnit, lengthUnit, toArea, toLength } from './units';
+import { viewScaleAt } from './sheetViews';
 
 /** Formula variables in project units. */
 export interface Vars {
@@ -59,7 +60,8 @@ export function measurementVars(m: Measurement, type: TakeoffType, sheet: Sheet,
     const L = toLength(m.statedLength, units);
     return { L, H, A: L * H, P: 0, N: 1, I: 0 };
   }
-  const mpp = sheet.metersPerPoint;
+  // The sheet's scale; with none set, that of the one drawing on it the takeoff lies in.
+  const mpp = sheet.metersPerPoint ?? viewScaleAt(sheet.views, m.points as [number, number][])?.metersPerPoint ?? null;
   if (mpp === null) return null;
   if (type.kind === 'linear') {
     const L = toLength(polylineLength(m.points) * mpp, units);
