@@ -681,6 +681,24 @@
       "updated": "2026-10-30T14:18:23.120Z",
       "ref": "claude/integration@d7d3438",
       "evidence": "codex/build-it-door-hosts@d7d3438"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T34"
+      ],
+      "accept": [
+        "Kelso swing-verified > 0",
+        "Frederick host counts not worse",
+        "harness PASS"
+      ],
+      "id": "T35",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Re-measure door hosting on Kelso (and Frederick) now that polyline swings are curves (claude/integration@ec059dd): host rate, swing-verified count, remaining unhosted ids; tune doorSwings only if the new Kelso arcs (polyline chords, tag ovals as 16+ chord loops) need it",
+      "prompt": "Kelso A2.1/A2.2 lines from loadDrawingSources now carry curve=true on chord-drawn arcs: 36 swings each from doorSwings (was 0). Frederick swing counts unchanged (53/49/72/60). Update docs/build-it-door-hosts.md with before/after.",
+      "added": "2026-10-30T14:22:56.659Z",
+      "by": "claude"
     }
   ]
 }
