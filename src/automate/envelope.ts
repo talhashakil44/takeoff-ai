@@ -27,8 +27,10 @@ export function automateRoof(p: Project): EnvelopeResult {
   const exterior = new Set(p.types.filter(isExteriorWall).map((t) => t.id));
   if (!exterior.size) return { message: 'No exterior wall types taken off to find the building outline from.', checks };
   let best: { sheetId: string; ring: Pt[]; m2: number } | null = null;
-  for (const s of p.sheets) {
-    if (s.superseded || !s.metersPerPoint) continue;
+  // Floor plans only: a foundation plan's walls are below grade (its outline is the slab's).
+  const plans = p.sheets.filter((s) => !s.superseded && s.metersPerPoint && !/FOUNDATION|FOOTING|BASEMENT|SITE/i.test(s.title ?? ''));
+  for (const s of plans) {
+    if (!s.metersPerPoint) continue;
     const runs = p.measurements.filter((m) => m.sheetId === s.id && exterior.has(m.typeId) && m.points.length >= 2).map((m) => m.points);
     if (runs.length < 2) continue;
     const ring = enclosedOutline(runs, s.metersPerPoint, EAVES);
@@ -47,7 +49,7 @@ export function automateRoof(p: Project): EnvelopeResult {
     height: 0,
     division: '07 Thermal & Moisture Protection',
     package: 'Roofing sub',
-    description: `The building's outline from its exterior walls on ${sheet.name}, the largest footprint over the plans, with ${EAVES * 1000} mm eaves. Plan area: add for slope; split by roof system from the roof plan.`,
+    description: `An area proxy for the roof, not the roof plan's geometry: the building's outline from its exterior walls on ${sheet.name} (the largest floor plan footprint), with ${EAVES * 1000} mm eaves. Plan area: add for slope; split by roof system from the roof plan.`,
     items: [{ id: newId(), name: 'Roof area (plan)', unit: metric ? 'm²' : 'SF', formula: 'A' }],
   };
   const added: Measurement[] = [{ id: newId(), sheetId: best.sheetId, typeId: type.id, points: best.ring, holes: [], source: 'envelope', label: 'Roof' }];
