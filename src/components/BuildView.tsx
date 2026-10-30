@@ -8,7 +8,7 @@ import { isPlan, sourceHashOf, titleBlockWords, TRADES, tradeByKey } from '../bu
 import { readSpecFacts } from '../build/facts';
 import { loadDrawingSources } from '../build/sources';
 import { type BuildOutput } from '../build/run';
-import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Feasibility, Issue, PlanSetup, ScopeAllowance, SourceRef, SpecFact } from '../build/types';
+import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Feasibility, Issue, PlanSetup, ScopeAllowance, ScopeSuggestion, SourceRef, SpecFact } from '../build/types';
 import type { Project } from '../model';
 import type { Place } from '../graph/graph';
 import type { SpecSection } from '../spec/parse';
@@ -440,6 +440,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
             onEdit={edit}
             onSource={openSource}
             tradeKeys={tradesUsed.map((t) => t.key)}
+            suggestions={out?.scopeSuggestions ?? []}
             unplacedSheets={model ? [...new Set(model.elements.filter((e) => !e.level && e.issues.some((x) => /level/.test(x))).map((e) => e.sheetId))] : []}
           />
         )}
@@ -866,6 +867,7 @@ function SetupPanel(props: {
   built: boolean;
   unplacedSheets: string[];
   tradeKeys: string[];
+  suggestions: ScopeSuggestion[];
   onBuild: () => void;
   onEdit: (e: BuildEdits, rebuild?: boolean) => void;
   onSource: (s: SourceRef) => void;
@@ -990,7 +992,7 @@ function SetupPanel(props: {
               })}
         </div>
       )}
-      {tab === 'scope' && <AllowancesForm allowances={val<Record<string, ScopeAllowance>>('allowances', {})} measured={props.tradeKeys} metric={metric} onChange={(next) => set('allowances', next)} />}
+      {tab === 'scope' && <AllowancesForm allowances={val<Record<string, ScopeAllowance>>('allowances', {})} measured={props.tradeKeys} metric={metric} suggestions={props.suggestions} onChange={(next) => set('allowances', next)} />}
       {tab === 'levels' && (
         <div className="bld-form">
           <p className="dim small">Each measured plan sheet’s level, from its title or title block. Set the ones that aren’t known, or fix any that are wrong.</p>
