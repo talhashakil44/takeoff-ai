@@ -4,7 +4,7 @@ import { quarantineDetachedSheets } from './placementQuality';
 import { recoverRoof, type DrawingLines } from './roof';
 import { simpleRing } from './surface';
 import { drawingFingerprint } from './sources';
-import { viewportLevels, type ViewportLevel } from './viewports';
+import { registerViewportMeasurements, viewportLevels, type ViewportLevel } from './viewports';
 import {
   addBuilding,
   cutOpenings,
@@ -316,6 +316,7 @@ export function extractModel(input: ExtractInput): BuildModel {
   }
   const mainScale = [...scales].sort((a, b) => b[1] - a[1])[0]?.[0];
   const registration = registerSheets(project, input.drawingTexts ?? {});
+  const viewportRegistration = registerViewportMeasurements(project, input.drawingTexts ?? {}, viewportOfMeasurement);
   const placeable = (s: Sheet) => !!s.metersPerPoint && isPlan(s) && !isEnlarged(s) && (Math.round(s.metersPerPoint * 1e5) === mainScale || !!registration[s.id]) && levelOfSheet.has(s.id);
   const unplaced = new Map<string, string>();
 
@@ -351,7 +352,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     } else if (!s.metersPerPoint) {
       elIssues.push(`${s.name} has no scale: its quantity and place are unknown.`);
       unplaced.set(s.id, 'no scale');
-    } else if (viewport) {
+    } else if (viewport && !viewportRegistration.has(m.id)) {
       elIssues.push(`${s.name}: level ${viewport.id} inferred from “${viewport.title}” and the gap between side-by-side plans; this viewport has no verified building XY registration, so its quantity is scheduled on ${viewport.id} but not drawn in 3D.`);
       unplaced.set(s.id, 'viewport alignment');
     } else if (!isPlan(s)) {
@@ -363,13 +364,15 @@ export function extractModel(input: ExtractInput): BuildModel {
     } else if (!level) {
       elIssues.push(`The level of ${s.name} (${s.title ?? ''}) isn't known: set it in Build setup.`);
       unplaced.set(s.id, 'level unknown');
-    } else if (!placeable(s)) {
+    } else if (!placeable(s) && !viewportRegistration.has(m.id)) {
       elIssues.push(`${s.name} is at another scale than the main plans: not placed with them.`);
       unplaced.set(s.id, 'other scale');
     } else {
       placement = 'inferred';
       const k = s.metersPerPoint;
-      const reg = registration[s.id];
+      const reg = viewportRegistration.get(m.id) ?? registration[s.id];
+      if (viewport && reg)
+        elIssues.push(`${s.name}: ${viewport.title} located in building plan by ${reg.grids.length} matching letter/number grid bubbles in its own viewport; service elevation and cross-section remain assumed.`);
       const transform = (p: [number, number]): [number, number] => [
         (p[0] * Math.cos(reg?.rotation ?? 0) - p[1] * Math.sin(reg?.rotation ?? 0)) * k - (reg?.x ?? 0),
         (p[0] * Math.sin(reg?.rotation ?? 0) + p[1] * Math.cos(reg?.rotation ?? 0)) * k - (reg?.y ?? 0),
@@ -502,6 +505,8 @@ export function extractModel(input: ExtractInput): BuildModel {
   };
   for (const [reason, sids] of why)
     issues.push({ id: `unplaced:${reason}`, severity: reason === 'level unknown' ? 'warning' : 'info', text: `${sids.length} sheet${sids.length === 1 ? '' : 's'} (${sids.map(label).join(', ')}) ${say[reason]}.`, refs: sids });
+  if (viewportRegistration.size)
+    issues.push({ id: 'viewport-registration', severity: 'info', text: `${viewportRegistration.size} takeoffs placed from separate level viewports using matching letter and number grid bubbles; service elevation and cross-section remain assumed.`, refs: [...viewportRegistration.keys()] });
   if (levels.length > 1)
     issues.push({
       id: 'placement',
@@ -524,7 +529,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     extent: Number.isFinite(minX) ? [minX, minY, maxX, maxY] : [0, 0, 0, 0],
   };
   addBuilding(model, project, input.floorToFloor);
-  quarantineDetachedSheets(model, new Set(Object.keys(registration)));
+  quarantineDetachedSheets(model, new Set([...Object.keys(registration), ...[...viewportRegistration.keys()].map((id) => project.measurements.find((m) => m.id === id)!.sheetId)]));
   recoverRoof(model, project, input.drawingTexts ?? {}, input.drawingLines ?? {}, modelOrigin);
   if (model.elements.some((e) => e.origin === "building"))
     model.issues.push({

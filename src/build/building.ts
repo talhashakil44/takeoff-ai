@@ -65,6 +65,39 @@ export function gridAxes(texts: DrawingText[], width: number, height: number, fo
   if (!Object.keys(axes).some((k) => /^[A-Z]$/.test(k))) return {};
   return axes;
 }
+/** Fit two labelled grid families to the same metre coordinate system. */
+export function matchGridAxes(axes: ReturnType<typeof gridAxes>, scale: number, reference: ReturnType<typeof gridAxes>, referenceScale: number): Registration | null {
+  const candidates: { rotation: number; x: number; y: number; grids: string[]; score: number }[] = [];
+  for (const quarter of [0, 1, 2, 3]) {
+    const rotation = (quarter * Math.PI) / 2,
+      c = Math.round(Math.cos(rotation)),
+      sn = Math.round(Math.sin(rotation));
+    const offsets: { axis: 'x' | 'y'; value: number; key: string }[] = [];
+    for (const [key, axis] of Object.entries(axes)) {
+      const target = reference[key];
+      if (!target) continue;
+      const mapped = quarter % 2 ? (axis.axis === 'x' ? 'y' : 'x') : axis.axis;
+      if (mapped !== target.axis) continue;
+      const sign = axis.axis === 'x' ? (mapped === 'x' ? c : sn) : mapped === 'x' ? -sn : c;
+      offsets.push({ axis: mapped, value: sign * axis.at * scale - target.at * referenceScale, key });
+    }
+    const inliers = (axis: 'x' | 'y') => {
+      const vs = offsets.filter((v) => v.axis === axis).sort((a, b) => a.value - b.value);
+      if (!vs.length) return [];
+      const median = vs[Math.floor(vs.length / 2)].value;
+      return vs.filter((v) => Math.abs(v.value - median) < 0.15);
+    };
+    const xx = inliers('x'),
+      yy = inliers('y');
+    if (xx.length >= 2 && yy.length >= 2 && xx.length + yy.length >= offsets.length * 0.6) {
+      const mean = (v: typeof xx) => v.reduce((n, p) => n + p.value, 0) / v.length;
+      candidates.push({ rotation, x: mean(xx), y: mean(yy), grids: [...xx, ...yy].map((v) => v.key), score: xx.length + yy.length });
+    }
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  const best = candidates[0];
+  return best ? { x: best.x, y: best.y, grids: best.grids, ...(best.rotation ? { rotation: best.rotation } : {}) } : null;
+}
 export function registerSheets(project: Project, texts: DrawingTexts): Record<string, Registration> {
   const found = project.sheets
     .filter((s) => s.metersPerPoint && !s.superseded && /PLAN/i.test(s.title ?? '') && !/DETAIL|ENLARG|SITE/i.test(s.title ?? ''))
@@ -79,36 +112,8 @@ export function registerSheets(project: Project, texts: DrawingTexts): Record<st
   if (!ref) return {};
   const out: Record<string, Registration> = {};
   for (const { s, axes } of found) {
-    const candidates: { rotation: number; x: number; y: number; grids: string[]; score: number }[] = [];
-    for (const quarter of [0, 1, 2, 3]) {
-      const rotation = (quarter * Math.PI) / 2,
-        c = Math.round(Math.cos(rotation)),
-        sn = Math.round(Math.sin(rotation));
-      const offsets: { axis: 'x' | 'y'; value: number; key: string }[] = [];
-      for (const [key, axis] of Object.entries(axes)) {
-        const target = ref.axes[key];
-        if (!target) continue;
-        const mapped = quarter % 2 ? (axis.axis === 'x' ? 'y' : 'x') : axis.axis;
-        if (mapped !== target.axis) continue;
-        const sign = axis.axis === 'x' ? (mapped === 'x' ? c : sn) : mapped === 'x' ? -sn : c;
-        offsets.push({ axis: mapped, value: sign * axis.at * s.metersPerPoint! - target.at * ref.s.metersPerPoint!, key });
-      }
-      const inliers = (axis: 'x' | 'y') => {
-        const vs = offsets.filter((v) => v.axis === axis).sort((a, b) => a.value - b.value);
-        if (!vs.length) return [];
-        const median = vs[Math.floor(vs.length / 2)].value;
-        return vs.filter((v) => Math.abs(v.value - median) < 0.15);
-      };
-      const xx = inliers('x'),
-        yy = inliers('y');
-      if (xx.length >= 2 && yy.length >= 2 && xx.length + yy.length >= offsets.length * 0.6) {
-        const mean = (v: typeof xx) => v.reduce((n, p) => n + p.value, 0) / v.length;
-        candidates.push({ rotation, x: mean(xx), y: mean(yy), grids: [...xx, ...yy].map((v) => v.key), score: xx.length + yy.length });
-      }
-    }
-    candidates.sort((a, b) => b.score - a.score);
-    const best = candidates[0];
-    if (best) out[s.id] = { x: best.x, y: best.y, grids: best.grids, ...(best.rotation ? { rotation: best.rotation } : {}) };
+    const matched = matchGridAxes(axes, s.metersPerPoint!, ref.axes, ref.s.metersPerPoint!);
+    if (matched) out[s.id] = matched;
   }
   return out;
 }

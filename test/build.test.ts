@@ -6,7 +6,7 @@ import { readSpecFacts } from '../src/build/facts';
 import { toIfc } from '../src/build/ifc';
 import { ifcClassLabel, ifcGuid } from '../src/build/ifcClass';
 import { geometryOf } from '../src/build/sceneGeometry';
-import { viewportLevels } from '../src/build/viewports';
+import { registerViewportMeasurements, viewportLevels } from '../src/build/viewports';
 import { replan } from '../src/build/run';
 import type { Project, TakeoffType } from '../src/model';
 import type { SpecSection } from '../src/spec/parse';
@@ -95,6 +95,44 @@ describe('build it', () => {
     expect(model.issues.some((i) => i.id === 'unplaced:viewport alignment')).toBe(true);
     const acts = planActivities(model, defaultSetup(model, [], '2026-11-02'), [], []);
     expect(acts.find((a) => a.id === 'work:mech-rough:L2')?.deps.map((d) => d.from)).toContain('work:mech-rough:L1');
+  });
+
+  it('registers each labelled viewport to both architectural grid families before drawing services', () => {
+    const p = project();
+    p.units = 'metric';
+    p.sheets = [sheet('arch', 'A2.1', 'GROUND FLOOR PLAN', 1), { ...sheet('mechanical', 'M1-02', '', 2), title: undefined }];
+    p.types = [type('pipe', 'Pipe 50 mm SAN', 'linear', '22 Plumbing')];
+    p.measurements = [400, 500, 1400, 1500].map((x, i) => ({ id: `pipe${i}`, sheetId: 'mechanical', typeId: 'pipe', source: 'pipes' as const, points: [[x, 600], [x + 20, 600]] as [number, number][], holes: [] }));
+    const at = (str: string, cx: number, cy: number) => ({ str, cx, cy });
+    const arch = [
+      ...['A', 'B', 'C'].flatMap((key, i) => [at(key, 100 + 300 * i, 100), at(key, 100 + 300 * i, 1700)]),
+      ...['1', '2', '3'].flatMap((key, i) => [at(key, 100, 300 + 400 * i), at(key, 900, 300 + 400 * i)]),
+    ];
+    const mechanical = [at('L1-Plumbing', 300, 1600), at('L2-Plumbing', 1300, 1600),
+      ...[0, 1000].flatMap((shift) => [
+        ...['A', 'B', 'C'].map((key, i) => at(key, 100 + 300 * i + shift, 100)),
+        ...['1', '2', '3'].map((key, i) => at(key, 800 + shift, 300 + 400 * i)),
+      ])];
+    const texts = { arch, mechanical };
+    const levels = viewportLevels(p.sheets[1], mechanical, p.measurements);
+    expect(levels.size).toBe(4);
+    const registered = registerViewportMeasurements(p, texts, levels);
+    expect(registered.size).toBe(4);
+    expect(registered.get('pipe0')?.grids).toEqual(expect.arrayContaining(['A', 'B', 'C', '1', '2', '3']));
+    expect(Math.abs(registered.get('pipe2')!.x - registered.get('pipe0')!.x)).toBeGreaterThan(30);
+    const model = extractModel({ project: p, sections: [], drawingTexts: texts, floorToFloor: 3.6 });
+    const left = model.elements.find((e) => e.id === 'pipe0')?.shape;
+    const right = model.elements.find((e) => e.id === 'pipe2')?.shape;
+    expect(left?.type).toBe('run');
+    expect(right?.type).toBe('run');
+    if (left?.type === 'run' && right?.type === 'run')
+      expect(Math.hypot(left.points[0][0] - right.points[0][0], left.points[0][1] - right.points[0][1])).toBeLessThan(0.1);
+    expect(model.elements.find((e) => e.id === 'pipe2')?.level).toBe('L2');
+
+    const missingGrid = { ...texts, mechanical: mechanical.filter((t) => !(t.str === 'C' && t.cx > 1000)) };
+    const partial = registerViewportMeasurements(p, missingGrid, levels);
+    expect(partial.has('pipe0')).toBe(true);
+    expect(partial.has('pipe2')).toBe(false);
   });
 
   it('shows located beam spans as plan axes without exporting invented solids', () => {
