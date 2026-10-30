@@ -634,6 +634,24 @@
       "prompt": "Doors on A211 are uncounted; all 105 source-less Doors counts come from A212–A214. Find why the door detector misses A211 and fix in the engine; refreshed demo must only add measurements.",
       "added": "2026-10-30T13:29:37.635Z",
       "by": "claude"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T32"
+      ],
+      "accept": [
+        "doc with per-finding status vs T29",
+        "harness PASS",
+        "original data untouched"
+      ],
+      "id": "T33",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Re-QA 84 Frederick after T31/T32 on the rebuilt demo: confirm A011 egress demolition gone, keynote/removal labels readable, list remaining false positives and misses by sheet; no code changes to claude-owned files",
+      "prompt": "Same method as T29 (overlays per sheet). Use the refreshed Frederick demo produced after T32. Report deltas vs T29 findings 1-8 and any new issues, with sheet, PDF coords and measurement ids. Build It may adapt interpretation if needed (own files only).",
+      "added": "2026-10-30T13:29:39.965Z",
+      "by": "claude"
     }
   ]
 }
