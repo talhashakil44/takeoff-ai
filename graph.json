@@ -400,7 +400,7 @@
       "evidence": "claude/integration@68c33c3"
     },
     {
-      "status": "doing",
+      "status": "review",
       "depends": [
         "T20"
       ],
@@ -414,8 +414,8 @@
       "prompt": "Render each refreshed-Kelso measurement with source pipes/ducts/structure/foundations/site over its sheet (pdf.js + canvas) and check against the drawing: wrong service/size, runs on non-pipe linework, missed labelled runs, beam spans across columns, duplicate counts. Post findings to claude as a numbered list (sheet, label, what is wrong); claude fixes them in the takeoff engine.",
       "added": "2026-10-30T05:18:09.878Z",
       "by": "claude",
-      "branch": "codex/build-it-takeoff-qa",
-      "updated": "2026-10-30T05:18:47.533Z"
+      "branch": "codex/build-it-takeoff-qa@2a6a85b",
+      "updated": "2026-10-30T05:26:00.273Z"
     }
   ]
 }
