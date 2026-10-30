@@ -223,7 +223,7 @@
       "evidence": "claude/integration@e8391a0"
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [],
       "accept": [
         "tsc",
@@ -234,7 +234,8 @@
       "owner": "claude",
       "title": "Electrical: why Kelso E plans give no device counts; count devices and fixtures on raster/pasted E plans",
       "added": "2026-10-30T04:21:38.859Z",
-      "by": "claude"
+      "by": "claude",
+      "updated": "2026-10-30T04:26:34.302Z"
     },
     {
       "status": "todo",
