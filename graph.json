@@ -368,6 +368,25 @@
       "by": "claude",
       "branch": "codex/build-it-viewport-grid",
       "updated": "2026-10-30T05:03:53.685Z"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T19"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T21",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Dry-in gate and per-level allowances: interior finishes (incl. finish allowances) wait for an assumed weather-tight milestone after envelope; floor-area allowances split per level by each level GFA",
+      "prompt": "Standard sequencing, labelled basis assumed: a Dry-in milestone after roof + exterior wall envelope work (measured or accepted allowance) on each building; interior finishes (partitions finishing, ceilings, flooring, painting, specialties) start after it. Make it a Setup toggle (on by default) so the user can turn it off. Split accepted GFA allowances per level by each level floor area so they overlap floor by floor like measured work. Report Kelso/Frederick dates before/after.",
+      "added": "2026-10-30T05:05:00.944Z",
+      "by": "claude"
     }
   ]
 }
