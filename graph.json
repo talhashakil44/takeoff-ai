@@ -50,7 +50,7 @@
       "id": "T4",
       "owner": "claude",
       "status": "done",
-      "title": "Refresh the Kelso and 84 Frederick demos with the new takeoffs (T1, T2) — added measurements only; Talha OKs installing them",
+      "title": "Refresh the Kelso and 84 Frederick demos with the new takeoffs (T1, T2) \u2014 added measurements only; Talha OKs installing them",
       "depends": [
         "T1",
         "T2",
@@ -79,7 +79,8 @@
       "accept": [
         "audit"
       ],
-      "prompt": "Audit the refreshed demos (BUILD_PROJECTS_ROOT) on claude/integration. Report finish, duration, the critical path and anything that looks unrealistic (Kelso should come out near two years). Fix routing/rates in src/build on a codex/* branch if needed."
+      "prompt": "Audit the refreshed demos (BUILD_PROJECTS_ROOT=/Users/talhashakeel/dev/takeoff-ai/.agents-data) on claude/integration. Report finish, duration and the critical path, with the evidence for each driving duration (measured quantity, rate, basis). Flag durations that rest on assumed rates. No target duration is forced: the evidence decides.",
+      "stream": "gpt-build"
     },
     {
       "id": "T6",
@@ -138,7 +139,8 @@
       ],
       "prompt": "Define the setup.allowances shape Build It reads (per trade: quantity, unit, rate, provisional flag), apply it in scope/plan, and post the exact type to claude so the Setup tab can edit it.",
       "branch": "codex/build-it-allowances",
-      "updated": "2026-10-30T04:03:30.307Z"
+      "updated": "2026-10-30T04:03:30.307Z",
+      "stream": "gpt-build"
     },
     {
       "id": "T10",
@@ -165,7 +167,9 @@
         "tsc",
         "test",
         "build"
-      ]
+      ],
+      "prompt": "Explore Drawing (src/explore, worktree /Users/talhashakeel/.codex/worktrees/explore-drawing). Beyond the gates: source-to-model alignment checks, dimension/placement provenance, and a live visual review before review status.",
+      "stream": "gpt-explore"
     }
   ]
 }

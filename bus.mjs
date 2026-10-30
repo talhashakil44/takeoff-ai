@@ -5,15 +5,20 @@
  * the bus with `git show` and writes new commits to it with git's plumbing, so it is safe to run
  * in the middle of any work.
  *
+ * <me> is claude, gpt or user, or one workstream of an agent (gpt-build, gpt-explore): each has its
+ * own read cursor; a message to "gpt" reaches every gpt workstream.
+ *
  *   node bus.mjs read  <me>                         unread messages to <me> (or to all), marked read
  *   node bus.mjs wait  <me> [--every 60] [--timeout 3600]
  *                                                    block until a message comes (exit 0) or time out (exit 2)
  *   node bus.mjs say   <me> <to> "<subject>" [--task T4] [--ref branch@sha] [--body file]   (body from stdin otherwise)
  *   node bus.mjs graph [<me>]                        the task graph; what is ready for <me>
- *   node bus.mjs set   <me> <task> key=value ...     update a task (status=doing|review|done|blocked, branch=, note=)
+ *   node bus.mjs set   <me> <task> key=value ...     update a task (status=doing|review|done|blocked, branch=, stream=, note=)
+ *                                                    status=done needs a clean harness PASS of its accept gates posted for the task (or --force)
  *   node bus.mjs add   <me> < task.json              add a task: {id, owner, title, prompt, depends[], accept[]}
- *   node bus.mjs harness <me> [--gates tsc,test,build,audit] [--post <to>] [--task T4]
- *                                                    run the gates on this checkout; post the result
+ *   node bus.mjs harness <me> [--gates tsc,test,build,audit] [--post <to>] [--task T4] [--timeout 1200]
+ *                                                    run the gates on this checkout; post the result. PASS, FAIL,
+ *                                                    or INCOMPLETE when a gate asked for was skipped (exit 0/1/3)
  *
  * Bootstrap (any checkout of the repo):
  *   git fetch -q origin agents/bus && git show origin/agents/bus:bus.mjs > /tmp/bus.mjs && node /tmp/bus.mjs read gpt
@@ -26,6 +31,9 @@ import { tmpdir } from 'node:os';
 const BRANCH = 'agents/bus';
 const REMOTE_REF = `refs/remotes/origin/${BRANCH}`;
 const AGENTS = ['claude', 'gpt', 'user'];
+/** A consumer is an agent, or one workstream of it ("gpt-build", "gpt-explore"): each keeps its own read cursor. */
+const agentOf = (me) => (me ?? '').split('-')[0];
+const isConsumer = (me) => AGENTS.includes(agentOf(me)) && /^[a-z]+(-[a-z0-9]+)?$/.test(me ?? '');
 
 const git = (args, opts = {}) => execFileSync('git', args, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 64 << 20, ...opts }).trim();
 const tryGit = (args, opts) => {
@@ -98,7 +106,7 @@ function unread(me) {
   return list('channel')
     .filter((f) => !done.has(f))
     .map((f) => ({ f, ...parse(show(`channel/${f}`)) }))
-    .filter((x) => x.meta.from !== me && (x.meta.to === me || x.meta.to === 'all'));
+    .filter((x) => x.meta.from !== me && (x.meta.to === me || x.meta.to === agentOf(me) || x.meta.to === 'all'));
 }
 
 function printMessages(msgs) {
@@ -133,7 +141,7 @@ const readStdin = () => {
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'note';
 
 function say(me, to, subject, body, extra = {}) {
-  if (!AGENTS.includes(to) && to !== 'all') die(`to must be one of ${AGENTS.join(', ')}, all`);
+  if (!isConsumer(to) && to !== 'all') die(`to must be one of ${AGENTS.join(', ')} (or a workstream like gpt-build), all`);
   const date = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
   const name = `${date.replace(/:/g, '-')}-${me}-to-${to}-${slug(subject)}.md`;
   const head = [`from: ${me}`, `to: ${to}`, `date: ${date}`, `subject: ${subject.replace(/\n/g, ' ')}`, ...Object.entries(extra).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`)];
@@ -157,10 +165,10 @@ function printGraph(me) {
   for (const t of g.tasks) {
     const deps = (t.depends ?? []).length ? ` ← ${t.depends.join(', ')}` : '';
     const r = t.status === 'todo' && ready(t) ? '  [READY]' : '';
-    process.stdout.write(`${mark[t.status] ?? '·'} ${t.id.padEnd(4)} ${t.owner.padEnd(6)} ${t.status.padEnd(7)} ${t.title}${deps}${t.branch ? `  (${t.branch})` : ''}${r}\n`);
+    process.stdout.write(`${mark[t.status] ?? '·'} ${t.id.padEnd(4)} ${(t.stream ?? t.owner).padEnd(11)} ${t.status.padEnd(7)} ${t.title}${deps}${t.branch ? `  (${t.branch})` : ''}${r}\n`);
   }
   if (me) {
-    const mine = g.tasks.filter((t) => t.owner === me && (t.status === 'doing' || (t.status === 'todo' && ready(t))));
+    const mine = g.tasks.filter((t) => t.owner === agentOf(me) && (!t.stream || t.stream === me || me === agentOf(me)) && (t.status === 'doing' || (t.status === 'todo' && ready(t))));
     process.stdout.write(`\nFor ${me}: ${mine.length ? mine.map((t) => `${t.id} ${t.title}`).join('; ') : 'nothing ready'}\n`);
     for (const t of mine) if (t.prompt) process.stdout.write(`\n--- ${t.id} prompt ---\n${t.prompt}\n${(t.accept ?? []).length ? `Accept when: ${t.accept.join('; ')}\n` : ''}`);
   }
@@ -175,6 +183,7 @@ const GATES = {
 
 function harness(me, args) {
   const gates = flag(args, 'gates', 'tsc,test,build').split(',');
+  const limit = Number(flag(args, 'timeout', '1200')) * 1000;
   const to = flag(args, 'post', null);
   const task = flag(args, 'task', null);
   const branch = tryGit(['rev-parse', '--abbrev-ref', 'HEAD']);
@@ -189,17 +198,22 @@ function harness(me, args) {
       continue;
     }
     const t0 = Date.now();
-    const r = spawnSync(spec[0], spec[1], { encoding: 'utf8', maxBuffer: 256 << 20, env: process.env });
+    const r = spawnSync(spec[0], spec[1], { encoding: 'utf8', maxBuffer: 256 << 20, env: process.env, timeout: limit, killSignal: 'SIGKILL' });
+    if (r.error || r.signal) r.stderr = `${r.stderr ?? ''}
+${r.signal ? `killed after ${limit / 1000} s` : r.error.message}`;
     const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
     const summary = out.split('\n').filter((l) => /Tests\s+\d|Test Files|error TS|FAIL|✓ built|passed|failed/.test(l)).slice(-6).join('\n');
     rows.push({ g, ok: r.status === 0, s: Math.round((Date.now() - t0) / 1000), tail: summary || out.trim().split('\n').slice(-4).join('\n') });
     process.stdout.write(`${r.status === 0 ? 'PASS' : 'FAIL'} ${g} (${rows.at(-1).s} s)\n`);
   }
-  const ok = rows.every((r) => r.ok !== false);
-  const report = [`Harness on ${branch}@${sha}${dirty ? ` (+${dirty} uncommitted)` : ''}: ${ok ? 'PASS' : 'FAIL'}`, '', ...rows.map((r) => `- ${r.ok === null ? 'SKIP' : r.ok ? 'PASS' : 'FAIL'} ${r.g} (${r.s} s)\n${r.tail ? r.tail.split('\n').map((l) => `    ${l}`).join('\n') : ''}`)].join('\n');
+  // A gate asked for and skipped is not a pass.
+  const failed = rows.some((r) => r.ok === false);
+  const verdict = failed ? 'FAIL' : rows.some((r) => r.ok === null) ? 'INCOMPLETE' : 'PASS';
+  const ok = verdict === 'PASS';
+  const report = [`Harness on ${branch}@${sha}${dirty ? ` (+${dirty} uncommitted)` : ''}: ${verdict}`, '', ...rows.map((r) => `- ${r.ok === null ? 'SKIP' : r.ok ? 'PASS' : 'FAIL'} ${r.g} (${r.s} s)\n${r.tail ? r.tail.split('\n').map((l) => `    ${l}`).join('\n') : ''}`)].join('\n');
   process.stdout.write(`\n${report}\n`);
-  if (to) say(me, to, `harness ${ok ? 'PASS' : 'FAIL'} ${branch}@${sha}`, report, { task, ref: `${branch}@${sha}`, kind: 'harness' });
-  process.exit(ok ? 0 : 1);
+  if (to) say(me, to, `harness ${verdict} ${branch}@${sha}`, report, { task, ref: `${branch}@${sha}`, kind: 'harness', verdict, gates: gates.join(','), dirty: String(dirty) });
+  process.exit(ok ? 0 : verdict === 'INCOMPLETE' ? 3 : 1);
 }
 
 const [cmd, me, ...rest] = process.argv.slice(2);
@@ -207,7 +221,7 @@ if (!cmd || cmd === 'help' || cmd === '--help') {
   process.stdout.write(readFileSync(new URL(import.meta.url)).toString().split('*/')[0]);
   process.exit(0);
 }
-if (cmd !== 'graph' && !AGENTS.includes(me)) die(`who are you? (${AGENTS.join(', ')})`);
+if (cmd !== 'graph' && !isConsumer(me)) die(`who are you? (${AGENTS.join(', ')}, or a workstream like gpt-build)`);
 
 switch (cmd) {
   case 'read': {
@@ -246,11 +260,23 @@ switch (cmd) {
     break;
   }
   case 'graph':
-    printGraph(AGENTS.includes(me) ? me : null);
+    printGraph(isConsumer(me) ? me : null);
     break;
   case 'set': {
-    const [id, ...pairs] = rest;
-    if (!id || !pairs.length) die('set <me> <task> status=done branch=... note=...');
+    const force = rest.includes('--force');
+    const [id, ...pairs] = rest.filter((a) => a !== '--force');
+    if (!id || !pairs.length) die('set <me> <task> status=done branch=... note=... [--force]');
+    if (pairs.includes('status=done') && !force) {
+      // Done needs a clean PASS of the task's accept gates posted for it (bus harness --task <id> --post …).
+      fetch();
+      const t = loadGraph().tasks.find((x) => x.id === id);
+      const need = (t?.accept ?? []).filter((g) => GATES[g]);
+      const passes = list('channel')
+        .map((f) => parse(show(`channel/${f}`)).meta)
+        .filter((m) => m.kind === 'harness' && m.task === id && m.verdict === 'PASS' && m.dirty === '0' && need.every((g) => (m.gates ?? '').split(',').includes(g)));
+      if (need.length && !passes.length) die(`${id}: no clean harness PASS posted for ${need.join(',')} (run harness ${me} --gates ${need.join(',')} --task ${id} --post <to>, or --force with a note why)`);
+      if (passes.length) pairs.push(`evidence=${passes.at(-1).ref}`);
+    }
     commit(me, `${me}: ${id} ${pairs.join(' ')}`, () => {
       const g = loadGraph();
       const t = g.tasks.find((x) => x.id === id);
