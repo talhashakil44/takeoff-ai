@@ -191,3 +191,36 @@ page 21 opens in the evidence viewer. Both-floor wheel zoom round trips retained
 alignment. Independent replay and IFC checks pass for both project versions.
 Private proof: `diag/explore/proofs/mf3-foundation-overlay-v29.png`; camera proof
 `main-build-mf3-camera-v28.png`; second-floor zoom proof `second-floor-zoom-v28.png`.
+
+
+## Follow-up source review — 2026-10-30 16:40 EDT
+
+Claude reviewed `dc2ffa0` and approved compatibility of the narrow shared UI changes.
+His revised S1.0 datum inventory was independently checked against the original
+Addendum 5 PDF. The east 400 mm mass-footing notes already belong to the two
+recovered MF2 bodies; they are not additional geometry.
+
+Two remaining SF2 strip datums are now tied to actual filled arrowheads:
+
+- East: top -0.725 / underside -1.025 m; arrow subpath 23173 at
+  (2055.72, 974.64), parallel boundaries x2030.28/2055.72. Step crossbar
+  y959.52, next mass perimeter y1005.48: a 1.621367 m plan interval.
+- West: same local strip levels; arrow subpath 23199 at (865.92, 1085.52),
+  boundaries x865.92/891.48. Step crossbar y1059.72, next mass perimeter
+  y1110.84: a 1.8034 m plan interval.
+
+These are not yet constant-depth solids. Revised detail 5/S1.2 (Add5 page 23)
+shows a stepped top and sloping underside: 7 vertical to 10 horizontal, maximum
+610 mm rise and minimum 1220 mm between steps. The plan S.F. symbol does not
+explicitly locate the transition face, ramp endpoints or axis. East's known
+475 mm level change establishes a step but not both transition endpoints;
+west also lacks the upstream mass-footing datum. A 300 mm box across either
+whole interval would misrepresent the drawn concrete profile.
+
+Next bounded implementation: associate the plan step with the section profile's
+reference face and direction, then support multiple top elevations and a sloping
+underside while retaining the one accepted measurement and quantity. Require
+both local levels and profile placement evidence; do not assign a nearby strip
+level to a 400 mm mass footing. Counts remain 28 physical foundations plus three
+drawing-derived MF3s. Private evidence and original crops are recorded in
+`/tmp/explore-foundation-next/stepped-strip-next-contract.md`.
