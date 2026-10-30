@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import {
   footingTopDatum,
+  padJunctionPerimeter,
   recoverFoundationGeometry,
 } from '../src/build/foundationGeometry';
 import type { Project } from '../src/model';
@@ -1082,6 +1083,24 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
   expect(recoverFoundationGeometry(p,bandModel,displacedStep,{'spec:revision:21':[...padBandLines['spec:revision:21'],stepStroke]}).elements[1].shape?.type).toBe('locator');
   expect(recoverFoundationGeometry(p,bandModel,directSource,{'spec:revision:21':[...bridge,...nearArrow,padBandLines['spec:revision:21'].at(-1)!]}).elements[1].shape?.type).toBe('locator');
 
+  const branchTip = padEdge + 40, branchStart = padEdge + 10, branchEnd = branchStart + .6 / scale;
+  const branchArrowPoints = [[branchTip,100-halfStrip],[branchTip-8,100-halfStrip-1.5],[branchTip-8,100-halfStrip+1.5],[branchTip,100-halfStrip]];
+  const branchArrow = branchArrowPoints.slice(1).map((q,i) => ({x1:branchArrowPoints[i][0],y1:branchArrowPoints[i][1],x2:q[0],y2:q[1],width:0,filled:true,sub:860}));
+  const returnEdges = [branchStart,branchEnd].map((x,i) => ({x1:x,y1:100-halfStrip,x2:x,y2:100-halfStrip-10,width:.6,filled:false,sub:861+i}));
+  const branchLines = {'spec:revision:21':[
+    ...lines['spec:revision:21'].filter(l => !l.filled),
+    {...boundaries[0],x1:padEdge,x2:branchStart}, {...boundaries[0],x1:branchEnd,x2:branchTip+2},
+    {...boundaries[1],x1:padEdge,x2:branchTip+2}, ...returnEdges,...branchArrow,
+    {x1:branchTip,y1:100-halfStrip,x2:205,y2:55,width:.24,filled:false,sub:863},
+  ]};
+  const branchPad = recoverFoundationGeometry(p,bandModel,directSource,branchLines);
+  expect(branchPad.elements[1].shape).toMatchObject({type:'point',z:-.55});
+  expect(recoverFoundationGeometry(p,branchPad,directSource,branchLines)).toEqual(branchPad);
+  expect(recoverFoundationGeometry(p,branchPad,directSource,{'spec:revision:21':branchLines['spec:revision:21'].filter(l => l.sub !== 861)}).elements[1].shape?.type).toBe('locator');
+  expect(recoverFoundationGeometry(p,branchPad,directSource,{'spec:revision:21':branchLines['spec:revision:21'].map(l => l.sub === 862 ? {...l,x1:l.x1+5,x2:l.x2+5}:l)}).elements[1].shape?.type).toBe('locator');
+  const branchStep = {...directSource,'spec:revision:21':[...directSource['spec:revision:21'],text('S.F.',branchStart+2,100)]};
+  expect(recoverFoundationGeometry(p,branchPad,branchStep,branchLines).elements[1].shape?.type).toBe('locator');
+
   const embeddedPad = {
     ...located, id: 'embedded-pad', measurementId: 'embedded-pad',
     shape: { type: 'locator' as const, at: [160 * scale, 100 * scale] as [number, number], z: -1.2 },
@@ -1154,4 +1173,28 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
   expect(clean.elements[0].sources[0].quote).toContain('still requires its own footprint and datum association');
   expect(recoverFoundationGeometry(sp,clean,directSource,directLines)).toEqual(clean);
 
+});
+
+it('accounts for every large pad-perimeter gap using actual scheduled strip returns', () => {
+  const segment = (x1: number, y1: number, x2: number, y2: number, sub: number) => ({ x1, y1, x2, y2, width: .6, filled: false, color: '#000000', sub });
+  const exposed = [segment(0,0,0,20,1),segment(0,80,0,100,2),segment(100,0,100,20,3),segment(100,80,100,100,4),segment(0,0,20,0,5),segment(80,0,100,0,6),segment(0,100,100,100,7)];
+  const returns = [segment(-20,20,0,20,8),segment(-20,80,0,80,9),segment(100,20,120,20,10),segment(100,80,120,80,11),segment(20,-20,20,0,12),segment(80,-20,80,0,13)];
+  const plan = { docId: 'revision', page: 21, key: 'spec:revision:21', sheetId: 'plan', frame: { a: .01, b: 0, tx: 0, ty: 0, residual: 0 }, texts: [], lines: [...exposed, ...returns] };
+  const strips = [{ width: .6, depth: .3, source: { kind: 'spec' as const, id: 'revision', page: 19, label: 'Strip schedule' } }];
+  const result = padJunctionPerimeter(plan, [0,0,100,100], .3, strips);
+  expect(result?.openings).toHaveLength(3);
+  expect(result?.coverage).toEqual([1,1,1,1]);
+  expect(padJunctionPerimeter({ ...plan, lines: plan.lines.filter(l => l.sub !== 8) }, [0,0,100,100], .3, strips)).toBeNull();
+  expect(padJunctionPerimeter({ ...plan, lines: plan.lines.map(l => l.sub === 8 ? { ...l, width: 1.32 } : l) }, [0,0,100,100], .3, strips)).toBeNull();
+  expect(padJunctionPerimeter({ ...plan, lines: plan.lines.map(l => l.sub === 9 ? { ...l, y1: 75, y2: 75 } : l) }, [0,0,100,100], .3, strips)).toBeNull();
+  expect(padJunctionPerimeter(plan, [0,0,100,100], .3, [])).toBeNull();
+});
+
+ it('does not borrow footing boundary weights from remote collinear strokes', () => {
+  const line = (x1: number,y1: number,x2: number,y2: number,width=.6) => ({x1,y1,x2,y2,width,filled:false});
+  const plan = {docId:'revision',page:21,key:'spec:revision:21',sheetId:'plan',frame:{a:.01,b:0,tx:0,ty:0,residual:0},texts:[],lines:[
+    line(0,0,0,20),line(0,80,0,100),line(100,0,100,100),line(0,0,100,0),line(0,100,100,100),
+    line(0,200,0,300,1.32),line(-20,20,0,20,1.32),line(-20,80,0,80,1.32),
+  ]};
+  expect(padJunctionPerimeter(plan,[0,0,100,100],.3,[{width:.6,depth:.3,source:{kind:'spec',id:'revision',page:19,label:'Strip schedule'}}])).toBeNull();
 });

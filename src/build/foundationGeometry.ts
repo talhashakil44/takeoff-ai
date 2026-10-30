@@ -972,7 +972,9 @@ export function recoverFoundationGeometry(
     lines,
     revision,
   );
-  const padConnected=recoverRevisedPads(project,model,stripped,texts,lines,revision);
+  // Qualify merged pad components after strip selection, so new junctions do not
+  // replace an already source-resolved strip interval in the single-run model.
+  const padConnected=recoverRevisedPads(project,model,stripped,texts,lines,revision,true);
   const recovered=recoverRevisedPiers(project,model,recoverRevisedMassFootings(project,model,padConnected,texts,lines,revision),texts,lines,revision);
   return {...recovered,elements:recovered.elements.map(e=>{
     if(e.measurementSource!=='foundations')return e;
@@ -1066,6 +1068,62 @@ export function revisedPlan(
   }
   return candidates.length === 1 ? candidates[0] : null;
 }
+/** Only source-drawn, schedule-sized branches may explain a strip-edge opening. */
+function stripBranchIntervals(
+  plan: RevisedPlan,
+  along: number,
+  edge: number,
+  start: number,
+  end: number,
+  outward: number,
+  penWeight: number,
+  depth: number,
+  strips: { width: number; depth: number; source: SourceRef }[],
+): number[][] {
+  const normal = 1 - along,
+    scale = Math.hypot(plan.frame.a, plan.frame.b);
+  const returns = plan.lines.flatMap((l) => {
+    if (
+      l.filled ||
+      l.curve ||
+      (l.color && l.color !== '#000000') ||
+      Math.abs(l.width - penWeight) > 0.05
+    )
+      return [];
+    const a = [l.x1, l.y1],
+      b = [l.x2, l.y2];
+    if (
+      Math.abs(a[along] - b[along]) > 0.05 ||
+      a[along] < start - 0.15 ||
+      a[along] > end + 0.15
+    )
+      return [];
+    const other =
+      Math.abs(a[normal] - edge) < 0.15
+        ? b
+        : Math.abs(b[normal] - edge) < 0.15
+          ? a
+          : null;
+    return other && (other[normal] - edge) * outward * scale >= 0.1
+      ? [(a[along] + b[along]) / 2]
+      : [];
+  });
+  const positions = [...new Set(returns.map((v) => Math.round(v * 100) / 100))];
+  return positions.flatMap((a) =>
+    positions
+      .filter(
+        (b) =>
+          b > a &&
+          strips.some(
+            (s) =>
+              Math.abs(s.depth - depth) < 0.002 &&
+              Math.abs(s.width - (b - a) * scale) < 0.015,
+          ),
+      )
+      .map((b) => [Math.max(start, a), Math.min(end, b)]),
+  );
+}
+
 /** A local leader can terminate on an adjoining strip, but its datum reaches a
  * pad only through drawn, scheduled parallel edges without an intervening step. */
 function padStripDatum(
@@ -1109,7 +1167,7 @@ function padStripDatum(
           useful.map((l) => Math.round((axis === 0 ? l.y1 : l.x1) * 100) / 100),
         ),
       ].filter((v) => v >= box[cross] - 0.3 && v <= box[cross + 2] + 0.3);
-      const covered = (at: number, width: number) => {
+      const covered = (at: number, width: number, outward: number) => {
         const spans = useful
           .filter(
             (l) =>
@@ -1128,10 +1186,24 @@ function padStripDatum(
           ])
           .filter((v) => v[1] > v[0])
           .sort((a, b) => a[0] - b[0]);
+        const branches = stripBranchIntervals(
+          plan,
+          axis,
+          at,
+          lo,
+          hi,
+          outward,
+          width,
+          depth,
+          strips,
+        );
+        const connectedSpans = [...spans, ...branches].sort(
+          (a, b) => a[0] - b[0],
+        );
         let last = lo,
           total = 0,
           gap = 0;
-        for (const [a, b] of spans) {
+        for (const [a, b] of connectedSpans) {
           gap = Math.max(gap, a - last);
           total += Math.max(0, b - Math.max(a, last));
           last = Math.max(last, b);
@@ -1161,11 +1233,10 @@ function padStripDatum(
                 .map((l) => l.width),
             ),
           ];
-          if (
-            !schedules.length ||
-            !weights.some((w) => covered(a, w) && covered(b, w))
-          )
-            continue;
+          const validWeights = weights.filter(
+            (w) => covered(a, w, -1) && covered(b, w, 1),
+          );
+          if (!schedules.length || !validWeights.length) continue;
           if (
             plan.texts.some(
               (t) =>
@@ -1187,6 +1258,7 @@ function padStripDatum(
                 !l.curve &&
                 (!l.color || l.color === '#000000') &&
                 l.width >= 0.5 &&
+                validWeights.some((w) => Math.abs(w - l.width) < 0.05) &&
                 Math.abs(axis === 0 ? l.x1 - l.x2 : l.y1 - l.y2) < 0.05,
             )
             .filter((l) => {
@@ -1712,6 +1784,120 @@ function embeddedPadDatum(
   });
 }
 
+interface PadJunctionPerimeter {
+  coverage: number[];
+  openings: { side: string; from: number; to: number; stripWidth: number }[];
+}
+
+/** Reconstruct only a scheduled rectangle component whose exposed perimeter
+ * gaps are fully accounted for by actual returning strip boundaries. */
+export function padJunctionPerimeter(
+  plan: RevisedPlan,
+  box: number[],
+  depth: number,
+  strips: { width: number; depth: number; source: SourceRef }[],
+): PadJunctionPerimeter | null {
+  const scale = Math.hypot(plan.frame.a, plan.frame.b);
+  const black = plan.lines.filter(
+    (l) =>
+      !l.filled &&
+      !l.curve &&
+      (!l.color || l.color === '#000000') &&
+      l.width >= 0.5,
+  );
+  const openings: PadJunctionPerimeter['openings'] = [];
+  const coverage: number[] = [];
+  for (const [axis, edge, start, end, outward, side] of [
+    [0, box[0], box[1], box[3], -1, 'left'],
+    [0, box[2], box[1], box[3], 1, 'right'],
+    [1, box[1], box[0], box[2], -1, 'top'],
+    [1, box[3], box[0], box[2], 1, 'bottom'],
+  ] as [number, number, number, number, number, string][]) {
+    const cross = 1 - axis;
+    const points = (l: DrawingLines[string][number]) => [
+      [l.x1, l.y1],
+      [l.x2, l.y2],
+    ];
+    const exposed = black.filter((l) => {
+      const [a, b] = points(l);
+      return Math.abs(a[axis] - edge) < 0.15 && Math.abs(b[axis] - edge) < 0.15 &&
+        Math.max(a[cross], b[cross]) > start && Math.min(a[cross], b[cross]) < end;
+    });
+    const spans = exposed
+      .map((l) => {
+        const [a, b] = points(l);
+        return [
+          Math.max(start, Math.min(a[cross], b[cross])),
+          Math.min(end, Math.max(a[cross], b[cross])),
+        ];
+      })
+      .filter((v) => v[1] > v[0]);
+    if (!spans.length) return null;
+    const weights = [...new Set(exposed.map((l) => l.width))];
+    const returns = black.flatMap((l) => {
+      const [a, b] = points(l);
+      if (
+        Math.abs(a[cross] - b[cross]) > 0.05 ||
+        a[cross] < start - 0.15 ||
+        a[cross] > end + 0.15
+      )
+        return [];
+      const endpoint =
+        Math.abs(a[axis] - edge) < 0.15
+          ? b
+          : Math.abs(b[axis] - edge) < 0.15
+            ? a
+            : null;
+      if (
+        !endpoint ||
+        (endpoint[axis] - edge) * outward * scale < 0.1 ||
+        !weights.some((w) => Math.abs(w - l.width) < 0.05)
+      )
+        return [];
+      return [{ at: (a[cross] + b[cross]) / 2, weight: l.width }];
+    });
+    const unique = [
+      ...new Map(
+        returns.map((r) => [`${r.at.toFixed(2)}:${r.weight.toFixed(2)}`, r]),
+      ).values(),
+    ];
+    const supported: number[][] = [];
+    for (const a of unique)
+      for (const b of unique) {
+        if (b.at <= a.at || Math.abs(a.weight - b.weight) > 0.05) continue;
+        const matches = strips.filter(
+          (s) =>
+            Math.abs(s.depth - depth) < 0.002 &&
+            Math.abs(s.width - (b.at - a.at) * scale) < 0.015,
+        );
+        if (!matches.length) continue;
+        supported.push([Math.max(start, a.at), Math.min(end, b.at)]);
+        openings.push({
+          side,
+          from: a.at,
+          to: b.at,
+          stripWidth: matches[0].width,
+        });
+      }
+    let last = start,
+      total = 0,
+      gap = 0;
+    for (const [a, b] of [...spans, ...supported].sort((x, y) => x[0] - y[0])) {
+      gap = Math.max(gap, a - last);
+      total += Math.max(0, b - Math.max(a, last));
+      last = Math.max(last, b);
+    }
+    gap = Math.max(gap, end - last);
+    if (gap * scale > 0.25) return null;
+    coverage.push(total / (end - start));
+  }
+  return openings.length &&
+    coverage.every((v) => v > 0.35) &&
+    coverage.filter((v) => v > 0.6).length >= 2
+    ? { coverage, openings }
+    : null;
+}
+
 function recoverRevisedPads(
   project: Project,
   original: BuildModel,
@@ -1719,6 +1905,7 @@ function recoverRevisedPads(
   texts: DrawingTexts,
   lines: DrawingLines,
   pages: { docId: string; page: number }[],
+  allowMergedComponents = false,
 ): BuildModel {
   const plan = revisedPlan(project, original, texts, lines, pages);
   if (!plan) return held;
@@ -1941,17 +2128,32 @@ function recoverRevisedPads(
               sideCoverage('y', yy[0], xx[0], xx[1]),
               sideCoverage('y', yy[1], xx[0], xx[1]),
             ];
-            return coverage.every((v) => v > 0.35) &&
-              coverage.filter((v) => v > 0.6).length >= 2
+            const ordinary =
+              coverage.every((v) => v > 0.35) &&
+              coverage.filter((v) => v > 0.6).length >= 2;
+            const junction =
+              ordinary || !allowMergedComponents
+                ? null
+                : padJunctionPerimeter(
+                    plan,
+                    [xx[0], yy[0], xx[1], yy[1]],
+                    section.depth,
+                    stripSections,
+                  );
+            return ordinary || junction
               ? [
                   {
+                    junction,
                     box: [xx[0], yy[0], xx[1], yy[1]] as [
                       number,
                       number,
                       number,
                       number,
                     ],
-                    score: coverage.reduce((a, b) => a + b, 0),
+                    score: (junction?.coverage ?? coverage).reduce(
+                      (a, b) => a + b,
+                      0,
+                    ),
                   },
                 ]
               : [];
@@ -1969,6 +2171,17 @@ function recoverRevisedPads(
       )
         return e;
       box = boxes[0].box;
+      const footprintJunction = boxes[0].junction;
+      const junctionPerimeterSource: SourceRef | undefined = footprintJunction
+        ? {
+            kind: 'spec',
+            id: plan.docId,
+            page: plan.page,
+            label: 'Revised scheduled pad component at strip junctions',
+            quote: `${code} scheduled rectangle component within the merged strip/pad outline; not a bounding box of the whole compound footing. Exposed perimeter gaps are supported by paired same-weight returning strip edges: ${footprintJunction.openings.map((o) => `${o.side} ${o.from.toFixed(2)}–${o.to.toFixed(2)} PDF pt (${o.stripWidth} m strip)`).join('; ')}. Component placement is inferred; accepted quantities unchanged.`,
+            box,
+          }
+        : undefined;
       const onPad = (x: number, y: number) =>
         x >= box[0] - 4 &&
         x <= box[2] + 4 &&
@@ -2132,6 +2345,7 @@ function recoverRevisedPads(
               ...e.sources,
               section.source,
               source,
+              ...(junctionPerimeterSource ? [junctionPerimeterSource] : []),
               ...(cut && anchor ? [cut.source, cut.planSource, anchor] : []),
               ...(junction
                 ? [
@@ -2149,7 +2363,7 @@ function recoverRevisedPads(
           ...e.issues.filter(
             (i) => !i.startsWith('Foundation revision unresolved:'),
           ),
-          `Foundation revision applied: revised grid registration, drawn footing perimeter and ${junction ? 'closed pad junction on source-resolved strip (top continuity inferred)' : cut ? 'explicitly crossing interior section cut (local datum applicability inferred)' : propagated ? 'source-bounded adjoining strip datum (inferred continuity)' : 'local elevation leader'} agree.${cut?.alternate ? ' ALTERNATE DETAIL applies only to this explicitly cut pad; confirm local detail selection.' : ''} Top ${d.z} m; bottom ${d.bottom} m. Source takeoff quantity unchanged.`,
+          `Foundation revision applied: revised grid registration, drawn footing perimeter and ${junction ? 'closed pad junction on source-resolved strip (top continuity inferred)' : cut ? 'explicitly crossing interior section cut (local datum applicability inferred)' : propagated ? 'source-bounded adjoining strip datum (inferred continuity)' : 'local elevation leader'} agree.${footprintJunction ? ' Scheduled rectangle component inferred inside the merged strip/pad perimeter; every large perimeter gap is explained by source-drawn strip returns.' : ''}${cut?.alternate ? ' ALTERNATE DETAIL applies only to this explicitly cut pad; confirm local detail selection.' : ''} Top ${d.z} m; bottom ${d.bottom} m. Source takeoff quantity unchanged.`,
         ],
       };
     }),
