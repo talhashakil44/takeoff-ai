@@ -19,6 +19,12 @@ describe('Build It drawing evidence', () => {
     expect(needsText({ id: 'f', title: 'MILLWORK DETAILS' }, measured)).toBe(false);
     expect(needsLines({ title: 'BUILDING SECTIONS' })).toBe(true);
     expect(needsLines({ title: 'INTERIOR ELEVATIONS' })).toBe(false);
+    // Structural sections and framing elevations: beam tops against the level heads.
+    expect(needsLines({ name: 'S4.0', title: 'SECTIONS' })).toBe(true);
+    expect(needsLines({ name: 'S3.1', title: 'ELEVATIONS' })).toBe(true);
+    expect(needsLines({ name: 'S6.0', title: 'DETAILS' })).toBe(false);
+    expect(needsLines({ name: 'A4.20', title: 'SECTION DETAILS' })).toBe(false);
+    expect(needsLines({ name: 'M4.0', title: 'SECTIONS' })).toBe(false);
     // Plans with counted doors: their swing arcs host the doors.
     const doors = doorSheets({
       types: [{ id: 'd', name: 'Doors', kind: 'count' } as Project['types'][number], { id: 'w', name: 'Windows', kind: 'count' } as Project['types'][number]],
