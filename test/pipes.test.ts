@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { background, inlineRun, leaderTip, oneRunPerPipe, pipeTag, spreadLabels } from '../src/automate/pipes';
+import { background, inlineRuns, leaderTip, oneRunPerPipe, pipeTag, spreadLabels } from '../src/automate/pipes';
 import type { InkRun } from '../src/fill/inkRuns';
 import type { Segment } from '../src/fill/vectors';
 import type { PageText } from '../src/pageText';
@@ -57,7 +57,9 @@ describe('pipes by label', () => {
       { a: [208, 132], b: [208, 220], width: 2 }, // a pipe beside, off its centreline
       { a: [140, 100], b: [196, 100], width: 2 }, // a pipe ending at the label, across it
     ];
-    expect(inlineRun(t, runs)).toBe(0);
-    expect(inlineRun(t, runs.slice(1))).toBe(-1);
+    expect(inlineRuns(t, runs)).toEqual([0]);
+    expect(inlineRuns(t, runs.slice(1))).toEqual([]);
+    // The pipe running on below the label too.
+    expect(inlineRuns(t, [...runs, { a: [200, 132], b: [200, 200], width: 2 }])).toEqual([0, 3]);
   });
 });

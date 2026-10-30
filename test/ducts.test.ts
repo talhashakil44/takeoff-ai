@@ -31,3 +31,21 @@ describe('ducts by label', () => {
     expect(sizes[3]).toBeNull();
   });
 });
+
+describe('uncover', () => {
+  it('counts a stretch traced twice once, keeping what only one trace covers', async () => {
+    const { uncover } = await import('../src/fill/runs');
+    const out = uncover(
+      [
+        [[0, 0], [100, 0]],
+        [[60, 1], [140, 1]], // overlaps 60–100, runs on to 140
+        [[20, 0.5], [50, 0.5]], // wholly along the first
+        [[0, 20], [100, 20]], // a separate run
+      ],
+      2.5,
+      3,
+    );
+    const len = out.reduce((n, [a, b]) => n + Math.hypot(b[0] - a[0], b[1] - a[1]), 0);
+    expect(len).toBeCloseTo(240, 5);
+  });
+});

@@ -1,5 +1,5 @@
 import { inkRuns, type InkRun } from '../fill/inkRuns';
-import { ductSizes, joinRuns, sizeRuns, type DuctSize, type PairedRun } from '../fill/runs';
+import { ductSizes, joinRuns, sizeRuns, uncover, type DuctSize, type PairedRun } from '../fill/runs';
 import { newId, type Measurement, type Project, type Pt, type Sheet, type TakeoffType } from '../model';
 import { tradeOfNumber } from '../sheetKind';
 import { titleBlockBox } from '../titleBlock';
@@ -142,7 +142,7 @@ export async function automateDucts(p: Project, access: SetAccess): Promise<Duct
       const sized: (typeof first)[number][] = [];
       const used = new Set<number>();
       // Ducts drawn over, read in pieces: the pieces joined across what is drawn over them.
-      for (const g of bridgeRuns(bands, first, pt(2.5))) {
+      for (const g of bridgeRuns(bands, first, pt(4))) {
         runs.push(asRun(g.run));
         sized.push(g.size);
       }
@@ -193,7 +193,7 @@ export async function automateDucts(p: Project, access: SetAccess): Promise<Duct
           };
           fresh.push(t);
         }
-        for (const l of joinRuns(list, pt(0.9), pt(0.1))) {
+        for (const l of joinRuns(uncover(list, Math.max(2, 0.4 * z.w * unit), 3), pt(0.9), pt(0.1))) {
           // A run hardly longer than the duct is wide is a box (a riser or plenum drawn with an X), not duct.
           const along = l.slice(1).reduce((n, q, x) => n + Math.hypot(q[0] - l[x][0], q[1] - l[x][1]), 0);
           if (along < 1.5 * Math.max(z.w, z.h ?? 0) * unit) continue;

@@ -1,5 +1,5 @@
 import { inkRuns, type InkRun } from '../fill/inkRuns';
-import { joinRuns } from '../fill/runs';
+import { joinRuns, uncover } from '../fill/runs';
 import type { Segment } from '../fill/vectors';
 import { newId, type Measurement, type Project, type Pt, type Sheet, type TakeoffType } from '../model';
 import type { PageText } from '../pageText';
@@ -308,15 +308,14 @@ function isPipePlan(s: Sheet): boolean {
 }
 
 /**
- * The run a label written in the pipe's own line belongs to ("75Ø SAN" breaking the pipe it
- * names): a run along the label's baseline, on its centreline, leading away from one of its ends.
- * -1 when there is none.
+ * The runs a label written in the pipe's own line belongs to ("75Ø SAN" breaking the pipe it
+ * names): on each side, the run along the label's baseline, on its centreline, leading away
+ * from that end of it. Empty when there is none.
  */
-export function inlineRun(t: PageText, runs: InkRun[]): number {
+export function inlineRuns(t: PageText, runs: InkRun[]): number[] {
   const ux = Math.cos(t.angle ?? 0);
   const uy = Math.sin(t.angle ?? 0);
-  let best = -1;
-  let bd = Infinity;
+  const best: [number, number][] = [[-1, Infinity], [-1, Infinity]];
   runs.forEach((r, j) => {
     const dx = r.b[0] - r.a[0];
     const dy = r.b[1] - r.a[1];
@@ -327,15 +326,13 @@ export function inlineRun(t: PageText, runs: InkRun[]): number {
       const off = Math.abs(-(e[0] - t.cx) * uy + (e[1] - t.cy) * ux);
       if (off > Math.max(t.h * 0.8, r.width)) continue;
       const gap = Math.abs(along) - t.w / 2;
-      if (gap > 6 || gap < -t.w / 4) continue;
+      if (gap > Math.max(6, t.h * 2.2) || gap < -t.w / 4) continue;
       if (Math.abs((o[0] - t.cx) * ux + (o[1] - t.cy) * uy) < Math.abs(along)) continue;
-      if (gap < bd) {
-        bd = gap;
-        best = j;
-      }
+      const side = along < 0 ? 0 : 1;
+      if (gap < best[side][1]) best[side] = [j, gap];
     }
   });
-  return best;
+  return best.map(([j]) => j).filter((j) => j >= 0);
 }
 
 export async function automatePipes(p: Project, access: SetAccess): Promise<PipesResult> {
@@ -409,9 +406,14 @@ export async function automatePipes(p: Project, access: SetAccess): Promise<Pipe
           }
         });
         if ((best < 0 || bd > reach) && !tip) {
-          // No leader and no run beside it: a label written in the pipe's own line.
-          best = inlineRun(t, runs);
-          bd = reach;
+          // No leader and no run beside it: a label written in the pipe's own line, the pipe
+          // running on from both its ends.
+          for (const j of inlineRuns(t, runs))
+            if (!seeds.has(j) || reach < seedDist.get(j)!) {
+              seeds.set(j, k);
+              seedDist.set(j, reach);
+            }
+          return;
         }
         if (best < 0 || bd > reach) return;
         if (!seeds.has(best) || bd < seedDist.get(best)!) {
@@ -432,7 +434,8 @@ export async function automatePipes(p: Project, access: SetAccess): Promise<Pipe
       });
       for (const [k, list] of groups) {
         const tag = tags[k].tag;
-        const lines = joinRuns(list, 12, 1.2);
+        // A stretch traced twice (double lines read as two runs, two labels) counted once.
+        const lines = joinRuns(uncover(list, 2.5, 3), 12, 1.2);
         const length = lines.reduce((n, l) => n + l.slice(1).reduce((m, q, x) => m + near(l[x], q), 0), 0) * mpp;
         if (tag.existing) {
           existing += length;
