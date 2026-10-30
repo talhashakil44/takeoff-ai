@@ -309,10 +309,8 @@
       "title": "Raster symbol counting: legend symbols matched on plans pasted in as pictures (Kelso E2/E3 devices, fixtures)",
       "added": "2026-10-30T04:28:19.354Z",
       "by": "claude",
-      "updated": "2026-10-30T05:22:14.168Z",
-      "notes": [
-        "2026-10-30T05:22 claude: still useful for sets without circuit tags; Kelso now covered by T14 text counts"
-      ]
+      "updated": "2026-10-30T08:13:40.194Z",
+      "notes": "Deferred: etags (T14) already counts Kelso E2/E3 fixtures and devices by circuit tag; raster template matching only if a set without tags needs it."
     },
     {
       "status": "blocked",
