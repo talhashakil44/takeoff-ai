@@ -349,7 +349,7 @@
       "updated": "2026-10-30T05:03:30.358Z"
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [
         "T15"
       ],
@@ -364,7 +364,9 @@
       "stream": "gpt-build",
       "title": "Register each viewport of a two-viewport sheet to the architectural grid by its own grid bubbles, then place its pipes/ducts in 3D",
       "added": "2026-10-30T04:54:31.831Z",
-      "by": "claude"
+      "by": "claude",
+      "branch": "codex/build-it-viewport-grid",
+      "updated": "2026-10-30T05:03:53.685Z"
     }
   ]
 }
