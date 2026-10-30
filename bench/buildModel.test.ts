@@ -12,6 +12,7 @@ import { applySetupEdits } from '../src/build/plan';
 import { readSpecFacts } from '../src/build/facts';
 import { titleBlockWords } from '../src/build/extract';
 import { registerSheets, type DrawingTexts } from '../src/build/building';
+import { doorSheets } from '../src/build/sources';
 import { toIfc } from '../src/build/ifc';
 import type { Project } from '../src/model';
 
@@ -38,11 +39,12 @@ it.skipIf(!root)(
       const drawingLines: DrawingLines = {};
       const drawingTexts: DrawingTexts = {},
         levelHints: Record<string, string> = {};
+      const planDoorSheets = doorSheets(project);
       for (const s of project.sheets.filter((s) => !s.superseded)) {
         const d = await getDoc(s.docId);
         const texts = await pageTexts(await d.pdf.getPage(s.page));
         drawingTexts[s.id] = texts;
-        if (/ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? ''))
+        if (planDoorSheets.has(s.id) || /ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? ''))
           drawingLines[s.id] = await segmentsOf(await d.pdf.getPage(s.page));
         levelHints[s.id] = titleBlockWords(texts, s.width, s.height);
       }

@@ -1,4 +1,5 @@
 import { wallFootprint } from './footprint';
+import type { DoorHostHint } from './doorSwings';
 import type { Project, Pt } from '../model';
 import type { BuildElement, BuildModel } from './types';
 
@@ -342,34 +343,51 @@ export function levelDatums(project: Project, texts: DrawingTexts): Record<strin
 }
 
 /** Associate measured door/window tags with the nearest wall, without changing their takeoff. */
-export function cutOpenings(model: BuildModel) {
+export function cutOpenings(model: BuildModel, doorHints = new Map<string, DoorHostHint[]>(), lineworkSheets = new Set<string>()) {
   const inferredHosts: BuildElement[] = [];
+  const noSwing: BuildElement[] = [];
+  const usedSwings = new Set<string>();
   for (const e of model.elements.filter((e) => e.trade === 'doors' && e.shape?.type === 'point')) {
     const sh = e.shape;
     if (sh?.type !== 'point') continue;
-    let best:
-      | {
-          wall: BuildElement;
-          segment: number;
-          offset: number;
-          distance: number;
+    type Host = { wall: BuildElement; segment: number; offset: number; distance: number };
+    const nearestHost = (at: [number, number], limit: number, sameSheet = false): Host | undefined => {
+      let nearest: Host | undefined;
+      for (const wall of model.elements) {
+        const run = wall.shape;
+        if (wall.level !== e.level || (sameSheet && wall.sheetId !== e.sheetId) || run?.type !== 'run' || !['partitions', 'structure', 'envelope'].includes(wall.trade)) continue;
+        for (let i = 1; i < run.points.length; i++) {
+          const a = run.points[i - 1], b = run.points[i], dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+          if (len < 0.01) continue;
+          const offset = ((at[0] - a[0]) * dx + (at[1] - a[1]) * dy) / len;
+          if (offset < 0 || offset > len) continue;
+          const distance = Math.hypot(at[0] - a[0] - (offset * dx) / len, at[1] - a[1] - (offset * dy) / len);
+          if (distance < limit && (!nearest || distance < nearest.distance)) nearest = { wall, segment: i - 1, offset, distance };
         }
-      | undefined;
-    for (const wall of model.elements) {
-      const run = wall.shape;
-      if (wall.level !== e.level || run?.type !== 'run' || !['partitions', 'structure', 'envelope'].includes(wall.trade)) continue;
-      for (let i = 1; i < run.points.length; i++) {
-        const a = run.points[i - 1],
-          b = run.points[i],
-          dx = b[0] - a[0],
-          dy = b[1] - a[1],
-          len = Math.hypot(dx, dy);
-        if (len < 0.01) continue;
-        const offset = ((sh.at[0] - a[0]) * dx + (sh.at[1] - a[1]) * dy) / len;
-        if (offset < 0 || offset > len) continue;
-        const distance = Math.hypot(sh.at[0] - a[0] - (offset * dx) / len, sh.at[1] - a[1] - (offset * dy) / len);
-        if (distance < 0.6 && (!best || distance < best.distance)) best = { wall, segment: i - 1, offset, distance };
       }
+      return nearest;
+    };
+    let best = nearestHost(sh.at, 0.6);
+    let chosen: { host: Host; hint: DoorHostHint; at: [number, number]; score: number; key: string } | undefined;
+    if (/\bdoors?\b/i.test(e.typeName))
+      for (const hint of doorHints.get(e.id) ?? []) {
+        const key = `${e.sheetId}:${hint.box.map((v) => Math.round(v * 10)).join(':')}`;
+        if (usedSwings.has(key)) continue;
+        const at: [number, number] = [sh.at[0] + hint.delta[0], sh.at[1] + hint.delta[1]];
+        const host = nearestHost(at, 0.4, true);
+        if (!host) continue;
+        const score = hint.tagDistanceM + host.distance * 2;
+        if (!chosen || score < chosen.score) chosen = { host, hint, at, score, key };
+      }
+    if (chosen) {
+      best = chosen.host;
+      usedSwings.add(chosen.key);
+      sh.at = chosen.at;
+      e.sources.push({ kind: 'sheet', id: e.sheetId, page: e.sources[0].page, label: e.sources[0].label, box: chosen.hint.box });
+      e.issues.push(`Door swing located within ${chosen.hint.tagDistanceM.toFixed(2)} m of the saved tag; opening midpoint hosted to a wall. The tag point remains in its first source box.`);
+    } else if (/\bdoors?\b/i.test(e.typeName) && lineworkSheets.has(e.sheetId)) {
+      noSwing.push(e);
+      e.issues.push('No door swing could be matched to a wall within 2 m of the saved tag; any proximity host remains provisional.');
     }
     if (!best) {
       e.issues.push('No wall within 600 mm of opening tag; host unknown.');
@@ -421,6 +439,12 @@ export function cutOpenings(model: BuildModel) {
       text: `${inferredHosts.length} openings were hosted to nearby walls by proximity. Their default width, sill and head need door/window schedule verification.`,
       refs: inferredHosts.map((e) => e.id),
       sources: inferredHosts.slice(0, 3).flatMap((e) => e.sources),
+    });
+  if (noSwing.length)
+    model.issues.push({
+      id: 'door-opening-evidence-missing', severity: 'warning',
+      text: `${noSwing.length} measured door tags on sheets with linework have no door swing matched to a wall within 2 m. Review their opening and host before relying on their 3D position.`,
+      refs: noSwing.map((e) => e.id), sources: noSwing.slice(0, 3).flatMap((e) => e.sources.slice(0, 1)),
     });
 }
 

@@ -5,6 +5,7 @@ import { recoverRoof, type DrawingLines } from './roof';
 import { simpleRing } from './surface';
 import { nearestGridIntersection } from './gridCounts';
 import { existingEquipmentNote, planningExclusion, roofViewEvidence } from './interpret';
+import { doorHostHints, doorSwings, type DoorHostHint, type DoorSwing } from './doorSwings';
 import { drawingFingerprint } from './sources';
 import { registerViewportMeasurements, viewportLevels, type ViewportLevel } from './viewports';
 import {
@@ -29,7 +30,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 24;
+export const MODEL_VERSION = 25;
 
 export interface Trade {
   key: string;
@@ -339,6 +340,8 @@ export function extractModel(input: ExtractInput): BuildModel {
   const codedStatusNoted = new Set<string>();
   const roofViews = roofViewEvidence(project);
   const shiftedDemoNotes = project.types.some((t) => /^demo\s*0\s*:/i.test(t.name));
+  const swingsBySheet = new Map<string, DoorSwing[]>();
+  const doorHints = new Map<string, DoorHostHint[]>();
   const elements: BuildElement[] = [];
   const gridCountsWithoutPlace = new Map<string, string[]>();
   let minX = Infinity;
@@ -365,6 +368,11 @@ export function extractModel(input: ExtractInput): BuildModel {
     const box: [number, number, number, number] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
     const src: SourceRef = { kind: 'sheet', id: s.id, page: s.page, label: s.name, box };
     const elIssues: string[] = [];
+    if (type.kind === 'count' && trade === 'doors' && /\bdoors?\b/i.test(type.name) && s.metersPerPoint && input.drawingLines?.[s.id]?.length && m.points.length === 1) {
+      if (!swingsBySheet.has(s.id)) swingsBySheet.set(s.id, doorSwings(input.drawingLines[s.id], s.metersPerPoint));
+      const reg = viewportRegistration.get(m.id) ?? registration[s.id];
+      doorHints.set(m.id, doorHostHints(swingsBySheet.get(s.id)!, m.points[0], s.metersPerPoint, reg?.rotation ?? 0));
+    }
     if (shiftedDemoNotes && m.source === 'demolition' && /^A20[1-4]$/i.test(s.name) && /^demo\s*\d+\s*:/i.test(type.name))
       elIssues.push('Saved demolition keynote labels on A201–A204 may be shifted by one note; the measured marker remains, but its removal type and production basis need drawing review.');
     if (inferredRoofView) elIssues.push('Roof level inferred from multiple coincident equipment marks on a separately titled roof plan; confirm the unpaired marks on this sheet.');
@@ -600,7 +608,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     });
   recoverFacadeOpenings(model, project, input.drawingTexts ?? {}, input.drawingLines ?? {}, modelOrigin);
   rejectUnsupportedCurtainWalls(model);
-  cutOpenings(model);
+  cutOpenings(model, doorHints, new Set(Object.keys(input.drawingLines ?? {})));
   sealWallCorners(model);
   return model;
 }
