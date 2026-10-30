@@ -133,7 +133,7 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
   // The work, by trade and level.
   const levelOrder = [...model.levels.map((l) => l.id), null];
   const byTL = new Map<string, typeof model.elements>();
-  for (const e of model.elements.filter(e => e.origin !== 'building' && e.status !== 'existing')) {
+  for (const e of model.elements.filter(e => e.origin !== 'building' && e.status !== 'existing' && !e.planningExcluded)) {
     const k = `${e.trade}|${e.level ?? ''}`;
     byTL.set(k, [...(byTL.get(k) ?? []), e]);
   }
@@ -141,14 +141,14 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
   // rough-in when no rough-in takeoff exists on that level. A saved user allowance
   // takes precedence, so old GFA allowances and these counts never stack.
   const taggedRough = activeAllowances(setup).some(([key]) => key === 'elec-rough') ? [] : model.elements.filter((e) =>
-    e.origin === 'takeoff' && e.status !== 'existing' && e.measurementSource === 'etags' &&
+    e.origin === 'takeoff' && e.status !== 'existing' && !e.planningExcluded && e.measurementSource === 'etags' &&
     e.trade === 'elec-trim' && e.unit === 'ea' && Number.isFinite(e.quantity) && e.quantity > 0);
   const workId = (t: string, l: string | null) => `work:${t}:${l ?? (t === 'site' ? 'site' : 'unplaced')}`;
-  const tradesUsed = TRADES.filter((t) => model.elements.some((e) => e.trade === t.key) || (t.key === 'elec-rough' && taggedRough.length > 0));
+  const tradesUsed = TRADES.filter((t) => [...byTL.keys()].some((key) => key.startsWith(`${t.key}|`)) || (t.key === 'elec-rough' && taggedRough.length > 0));
   const levelName = (l: string | null) => (l ? model.levels.find((x) => x.id === l)?.name ?? l : 'Unplaced (level not known)');
   for (const t of tradesUsed) {
     const setupT = setup.trades[t.key]?.value ?? { rates: {}, crews: 1, leadDays: 0 };
-    const specKeys = [...new Set(model.elements.filter((e) => e.trade === t.key).flatMap((e) => e.specs.map((s) => s.key)))];
+    const specKeys = [...new Set([...byTL.values()].flat().filter((e) => e.trade === t.key).flatMap((e) => e.specs.map((s) => s.key)))];
     const specs = specKeys.map((k) => secByKey.get(k)).filter((s): s is SpecSection => !!s);
     // Submittals: what the trade's spec sections ask for, reviewed, maybe resubmitted, then ordered and delivered.
     const asked = specs.filter((s) => s.articles.some((x) => SUBMIT.test(x.title)));

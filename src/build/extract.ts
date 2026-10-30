@@ -4,6 +4,7 @@ import { quarantineDetachedSheets } from './placementQuality';
 import { recoverRoof, type DrawingLines } from './roof';
 import { simpleRing } from './surface';
 import { nearestGridIntersection } from './gridCounts';
+import { existingEquipmentNote, planningExclusion, roofViewEvidence } from './interpret';
 import { drawingFingerprint } from './sources';
 import { registerViewportMeasurements, viewportLevels, type ViewportLevel } from './viewports';
 import {
@@ -28,7 +29,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 22;
+export const MODEL_VERSION = 23;
 
 export interface Trade {
   key: string;
@@ -336,6 +337,7 @@ export function extractModel(input: ExtractInput): BuildModel {
   const specCache = new Map<string, { key: string; basis: Basis }[]>();
   const missingSec = new Map(sections.filter((s) => s.missing).map((s) => [s.key, `${s.number} ${s.title}`]));
   const codedStatusNoted = new Set<string>();
+  const roofViews = roofViewEvidence(project);
   const elements: BuildElement[] = [];
   const gridCountsWithoutPlace = new Map<string, string[]>();
   let minX = Infinity;
@@ -346,10 +348,14 @@ export function extractModel(input: ExtractInput): BuildModel {
     const s = sheets.get(m.sheetId);
     const type = types.get(m.typeId);
     if (!s || !type || s.superseded) continue;
+    const exclusion = planningExclusion(m, type, s, roofViews.duplicates);
     const classifiedTrade = tradeOf(type, m.source);
-    const trade = type.kind === 'area' && m.ceilingHeight && classifiedTrade !== 'demolition' ? 'ceilings' : classifiedTrade;
+    const trade = exclusion === 'room-context' ? 'other' : type.kind === 'area' && m.ceilingHeight && classifiedTrade !== 'demolition' ? 'ceilings' : classifiedTrade;
     const viewport = viewportOfMeasurement.get(m.id);
-    const lv = viewport ? { id: viewport.id, basis: 'inferred' as Basis, from: `viewport title “${viewport.title}”` } : levelOfSheet.get(s.id);
+    const inferredRoofView = m.source === 'trades' && type.kind === 'count' && /^equipment identification\b/i.test(type.name) && roofViews.inferredRoofSheets.has(s.id);
+    const lv = exclusion === 'elevation-window' ? undefined : inferredRoofView
+      ? { id: 'roof', basis: 'inferred' as Basis, from: 'matching equipment marks on a labelled roof plan' }
+      : viewport ? { id: viewport.id, basis: 'inferred' as Basis, from: `viewport title “${viewport.title}”` } : levelOfSheet.get(s.id);
     const level = lv ? levelById.get(lv.id) ?? null : null;
     const vars = measurementVars(m, type, s, units);
     const quantity = vars ? primaryOf(type.kind, vars) : 0;
@@ -358,10 +364,22 @@ export function extractModel(input: ExtractInput): BuildModel {
     const box: [number, number, number, number] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
     const src: SourceRef = { kind: 'sheet', id: s.id, page: s.page, label: s.name, box };
     const elIssues: string[] = [];
+    if (inferredRoofView) elIssues.push('Roof level inferred from multiple coincident equipment marks on a separately titled roof plan; confirm the unpaired marks on this sheet.');
     const gridCount = trade === 'structure' && type.kind === 'count' && /\b(?:footing|pier|base\s*plate|column)\b/i.test(type.name);
     let shape: ElementShape | null = null;
     let placement: Basis = 'unknown';
-    if (trade === 'site') {
+    if (exclusion) {
+      const reason: Record<NonNullable<typeof exclusion>, string> = {
+        'egress-demolition': 'Egress diagram line is not evidence of demolition work.',
+        'unverified-demo-type': 'Demo 0 is concatenated legend text, not a verified removal type.',
+        'room-context': 'Generic room area is spatial context, not a ceiling or floor finish quantity.',
+        'elevation-window': 'Elevation window marks may show the same assemblies as plan marks; opening count and level need reconciliation.',
+        'open-ceiling': 'Open or unshown ceiling is not evidence of a new ceiling.',
+        'unverified-ceiling-type': 'Concatenated ceiling legend text is not a verified new ceiling type.',
+        'duplicate-roof-view': 'Coincident generic equipment mark is retained on the roof plan; this view adds no second count.',
+      };
+      elIssues.push(`${reason[exclusion]} Excluded from new work pending drawing review.`);
+    } else if (trade === 'site') {
       elIssues.push(`Site work is scheduled without a building level. Its plan route is not coordinated to the building model${m.statedLength !== undefined ? '; the length comes from the drawing label' : ''}.`);
       if (!vars) elIssues.push(`${s.name} has no scale or stated length: its quantity is unknown.`);
     } else if (!s.metersPerPoint) {
@@ -469,6 +487,8 @@ export function extractModel(input: ExtractInput): BuildModel {
     const specs = specCache.get(type.id)!;
     if (!specs.length) elIssues.push(`No spec section found for ${type.name}.`);
     for (const sp of specs) if (missingSec.has(sp.key)) elIssues.push(`Spec section ${missingSec.get(sp.key)} is listed in the table of contents but not issued.`);
+    const existingNote = existingEquipmentNote(m, type, s, input.drawingTexts);
+    if (existingNote) elIssues.push('Existing equipment status inferred from a nearby X-coded tag and “as exist” note; confirm on the drawing.');
     const explicitExisting = /\b(?:EXISTING|EXST|EXIST|TO REMAIN)\b/i.test(type.name);
     const codedExisting = /\b[A-Z]{1,4}X\d/i.test(type.name);
     if (codedExisting && !explicitExisting && !/\bNEW\b/i.test(type.name) && !codedStatusNoted.has(type.id)) {
@@ -478,7 +498,8 @@ export function extractModel(input: ExtractInput): BuildModel {
     elements.push({
       id: m.id,
       origin: "takeoff",
-      status: trade === 'demolition' ? 'demolished' : (explicitExisting || codedExisting) && !/\bNEW\b/i.test(type.name) ? 'existing' : 'new',
+      status: trade === 'demolition' ? 'demolished' : (explicitExisting || codedExisting || existingNote) && !/\bNEW\b/i.test(type.name) ? 'existing' : 'new',
+      ...(exclusion ? { planningExcluded: exclusion } : {}),
       name: m.label ? `${type.name} · ${m.label}` : type.name,
       trade,
       level: trade === 'site' ? null : level?.id ?? null,

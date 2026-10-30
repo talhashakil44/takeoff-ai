@@ -83,6 +83,8 @@ export interface BuildElement {
   opening?: { width:number; height:number; sill:number };
   origin?: "takeoff" | "building";
   status?: "existing" | "new" | "demolished";
+  /** Source takeoff is retained for review, but has no verified new-work quantity in the plan. */
+  planningExcluded?: string;
   sheetId: string;
   /** Spec sections it is governed by (keys), with how they were linked. */
   specs: { key: string; basis: Basis }[];

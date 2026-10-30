@@ -41,6 +41,70 @@ const sections = [
 ] as unknown as SpecSection[];
 
 describe('build it', () => {
+  it('retains disputed takeoffs as evidence while excluding them from Frederick work quantities', () => {
+    const p = project();
+    p.units = 'metric';
+    p.sheets = [
+      sheet('egress', 'A011', 'OBC Matrix and Information', 1),
+      sheet('demo', 'A201', 'Demolition Plan', 2),
+      sheet('floor', 'A211', 'Basement Floor Plan', 3),
+      sheet('elevation', 'A301', 'Building Elevations', 4),
+      sheet('ceiling', 'A503', 'Second Floor Reflected Ceiling Plan', 5),
+      sheet('plumbing', 'M104', 'Third Floor Plumbing Plan', 6),
+      sheet('roof', 'M305', 'Roof HVAC Plan', 7),
+      sheet('existing', 'M203', 'Second Floor Heating Hydronic System Plan', 8),
+    ];
+    p.types = [
+      type('wall', 'Demo: other walls and partitions shown dashed', 'linear', '02 Existing Conditions'),
+      type('demo0', 'Demo 0: Floor Types, see A000 series Sheets Roof Types', 'count', '02 Existing Conditions'),
+      type('room', 'Rooms', 'area', '09 Finishes'),
+      type('window', 'Windows', 'count', '08 Openings'),
+      type('open', 'Ceiling – open / none shown (untagged)', 'area', '09 Finishes'),
+      type('bad', '0 – See A000 series Sheets', 'area', '09 Finishes'),
+      type('equipment', 'Equipment Identification', 'count', '20-25 Mechanical'),
+    ];
+    const m = (id: string, sheetId: string, typeId: string, source: NonNullable<Project['measurements'][number]['source']>, points: [number, number][]) => ({ id, sheetId, typeId, source, points, holes: [] });
+    p.measurements = [
+      m('egress-wall', 'egress', 'wall', 'demolition', [[10, 10], [20, 10]]),
+      m('real-demo', 'demo', 'wall', 'demolition', [[10, 10], [20, 10]]),
+      m('demo-zero', 'demo', 'demo0', 'demolition', [[30, 30]]),
+      { ...m('room-area', 'floor', 'room', 'rooms', [[10, 10], [20, 10], [20, 20], [10, 20]]), ceilingHeight: 3 },
+      m('plan-window', 'floor', 'window', 'windows', [[40, 40]]),
+      m('elevation-window', 'elevation', 'window', 'windows', [[40, 40]]),
+      m('open-ceiling', 'ceiling', 'open', 'ceilings', [[10, 10], [20, 10], [20, 20], [10, 20]]),
+      m('bad-ceiling', 'ceiling', 'bad', 'ceilings', [[30, 10], [40, 10], [40, 20], [30, 20]]),
+      ...[100, 200, 300].flatMap((x, i) => [
+        m(`plumbing-${i}`, 'plumbing', 'equipment', 'trades', [[x, 100]]),
+        m(`roof-${i}`, 'roof', 'equipment', 'trades', [[x, 100]]),
+      ]),
+      m('exist-equip', 'existing', 'equipment', 'trades', [[585, 303]]),
+    ];
+    const drawingTexts = { existing: [
+      { str: 'BB-X1', cx: 520, cy: 230 }, { str: 'as exist.', cx: 520, cy: 241 },
+    ] };
+    const model = extractModel({ project: p, sections: [], drawingTexts, floorToFloor: 3.6 });
+    const byId = (id: string) => model.elements.find((e) => e.id === id)!;
+    expect(model.elements.filter((e) => e.origin === 'takeoff')).toHaveLength(p.measurements.length);
+    expect(byId('room-area')).toMatchObject({ trade: 'other', planningExcluded: 'room-context', shape: null });
+    expect(byId('elevation-window')).toMatchObject({ level: null, planningExcluded: 'elevation-window', shape: null });
+    expect(byId('exist-equip').status).toBe('existing');
+    for (const id of ['egress-wall', 'demo-zero', 'open-ceiling', 'bad-ceiling', 'plumbing-0', 'plumbing-1', 'plumbing-2'])
+      expect(byId(id).planningExcluded).toBeTruthy();
+    for (const id of ['real-demo', 'plan-window', 'roof-0', 'roof-1', 'roof-2'])
+      expect(byId(id).planningExcluded).toBeUndefined();
+    expect(byId('plumbing-0').level).toBe('roof');
+    const setup = defaultSetup(model, [], '2026-11-02');
+    const acts = planActivities(model, setup, [], []);
+    const work = acts.filter((a) => a.kind === 'work');
+    expect(work.flatMap((a) => a.elements).sort()).toEqual(['plan-window', 'real-demo', 'roof-0', 'roof-1', 'roof-2'].sort());
+    expect(work.find((a) => a.id === 'work:mech-trim:roof')?.quantities?.ea).toBe(3);
+    const schedule = replan(model, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule;
+    expect(schedule.issues.map((i) => i.id)).toEqual(expect.arrayContaining([
+      'takeoff-review:egress-demolition', 'takeoff-review:unverified-demo-type',
+      'takeoff-review:open-ceiling', 'takeoff-review:unverified-ceiling-type',
+    ]));
+  });
+
   it('places structural count markers on registered grid crossings and keeps their tag source', () => {
     expect(nearestGridIntersection({
       '1': { axis: 'x', at: 500 }, '2': { axis: 'x', at: 1000 },
