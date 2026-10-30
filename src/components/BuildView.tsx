@@ -366,7 +366,9 @@ export default function BuildView({ project, sections, specText, sheetText, shee
               const live = revisionSheets.filter((r) => !r.superseded);
               const issues = [...new Set(live.map((r) => r.issue))];
               const moved = live.filter((r) => r.revises && project.measurements.some((m) => m.sheetId === r.revises));
-              return `${issues.join(', ')} re-issued ${live.map((r) => r.name).join(', ')}.${moved.length ? ` Takeoffs on ${moved.map((r) => r.name).join(', ')} are on the earlier issue.` : ''}`;
+              const again = live.filter((r) => r.revises).map((r) => r.name);
+              const added = live.filter((r) => !r.revises).map((r) => r.name);
+              return `${issues.join(', ')} ${again.length ? `re-issued ${again.join(', ')}` : ''}${again.length && added.length ? ' and ' : ''}${added.length ? `added ${added.join(', ')}` : ''}.${moved.length ? ` Takeoffs on ${moved.map((r) => r.name).join(', ')} are on the earlier issue.` : ''}`;
             })()}
           </div>
         )}
