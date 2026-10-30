@@ -25,7 +25,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 14;
+export const MODEL_VERSION = 15;
 
 export interface Trade {
   key: string;
@@ -366,7 +366,11 @@ export function extractModel(input: ExtractInput): BuildModel {
           level.elevation + input.floorToFloor) - level.elevation;
       const typeH = type.height > 0 ? toM(type.height) : 0;
       if (type.kind === 'linear') {
-        if (trade === 'mech-rough') shape = { type: 'run', points: pts, z0: ceil - 0.05, height: 0.3, thickness: 0.3 };
+        if (trade === 'structure' && m.source === 'structure' && /\bbeam\b/i.test(type.name)) {
+          shape = { type: 'axis', points: pts, z: level.elevation };
+          elIssues.push('Beam span is positioned in plan only. Its framing elevation and physical section need verification; the 3D line is a diagrammatic axis, not an IFC solid.');
+        }
+        else if (trade === 'mech-rough') shape = { type: 'run', points: pts, z0: ceil - 0.05, height: 0.3, thickness: 0.3 };
         else if (trade === 'fire-rough') shape = { type: 'run', points: pts, z0: ceil + 0.2, height: 0.1, thickness: 0.1 };
         else if (trade === 'elec-rough') shape = { type: 'run', points: pts, z0: ceil + 0.1, height: 0.06, thickness: 0.06 };
         else shape = { type: 'run', points: pts, z0: level.elevation, height: /to ceiling/i.test(type.description ?? "")
@@ -457,7 +461,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     for (const e of elements) {
       const sh = e.shape;
       if (!sh) continue;
-      if (sh.type === 'run') sh.points = sh.points.map(shift);
+      if (sh.type === 'run' || sh.type === 'axis') sh.points = sh.points.map(shift);
       else if (sh.type === 'surface') {
         sh.ring = sh.ring.map(shift);
         sh.holes = sh.holes.map((h) => h.map(shift));

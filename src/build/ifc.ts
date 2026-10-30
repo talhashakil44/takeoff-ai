@@ -98,7 +98,7 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
   };
   const shapeOf = (e: BuildElement, zBase: number): string | null => {
     const s = e.shape;
-    if (!s) return null;
+    if (!s || s.type === 'axis') return null;
     const items: string[] = [];
     if ((s.type==='surface' && s.slope) || (s.type==='run' && s.topPlane)) {
         const geometry = geometryOf(e)!;
@@ -214,6 +214,9 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
       if (e.unit === 'ft' || e.unit === 'm') q.push(add(`IFCQUANTITYLENGTH('Length',$,$,${num(e.unit === 'ft' ? e.quantity * 0.3048 : e.quantity)},$)`));
       else if (e.unit === 'SF' || e.unit === 'm²') q.push(add(`IFCQUANTITYAREA('NetArea',$,$,${num(e.unit === 'SF' ? e.quantity * 0.09290304 : e.quantity)},$)`));
       else q.push(add(`IFCQUANTITYCOUNT('Count',$,$,${num(e.quantity)},$)`));
+    } else if (s.type === 'axis') {
+      const len = s.points.slice(1).reduce((acc, p, i) => acc + Math.hypot(p[0] - s.points[i][0], p[1] - s.points[i][1]), 0);
+      q.push(add(`IFCQUANTITYLENGTH('Length',$,$,${num(len)},$)`));
     } else if (s.type === 'run') {
       const len = s.points.slice(1).reduce((acc, p, i) => acc + Math.hypot(p[0] - s.points[i][0], p[1] - s.points[i][1]), 0);
       q.push(add(`IFCQUANTITYLENGTH('Length',$,$,${num(len)},$)`), add(`IFCQUANTITYLENGTH('Height',$,$,${num(s.height)},$)`), add(`IFCQUANTITYAREA('GrossSideArea',$,$,${num(len * s.height)},$)`));

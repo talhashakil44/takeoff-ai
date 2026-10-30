@@ -5,6 +5,7 @@ import { extractModel, levelWords, tradeOf } from '../src/build/extract';
 import { readSpecFacts } from '../src/build/facts';
 import { toIfc } from '../src/build/ifc';
 import { ifcClassLabel, ifcGuid } from '../src/build/ifcClass';
+import { geometryOf } from '../src/build/sceneGeometry';
 import { replan } from '../src/build/run';
 import type { Project, TakeoffType } from '../src/model';
 import type { SpecSection } from '../src/spec/parse';
@@ -48,6 +49,26 @@ describe('build it', () => {
       expect(tradeOf(type('s', name, 'count', '06 Wood, Plastics & Composites'))).toBe('structure');
     expect(tradeOf(type('s', 'Joist / truss J1', 'count', '06 Wood'), 'structure')).toBe('structure');
     expect(tradeOf(type('f', 'Excavation', 'area', '31 Earthwork'), 'foundations')).toBe('site');
+  });
+
+  it('shows located beam spans as plan axes without exporting invented solids', () => {
+    const p = project();
+    p.units = 'metric';
+    p.sheets = [sheet('framing', 'S2.0', 'LEVEL 1 FRAMING PLAN', 1)];
+    p.types = [type('beam', 'B3 – Beam 265 x 608 GLULAM', 'linear', '06 Wood')];
+    p.measurements = [{ id: 'beam-span', sheetId: 'framing', typeId: 'beam', source: 'structure', points: [[100, 100], [200, 100]], holes: [] }];
+    const model = extractModel({ project: p, sections: [], floorToFloor: 3.6 });
+    const e = model.elements[0];
+    expect(e).toMatchObject({ trade: 'structure', level: 'L1', quantity: 3.39, unit: 'm', shape: { type: 'axis' } });
+    expect(e.issues.join(' ')).toMatch(/diagrammatic axis/);
+    const g = geometryOf(e)!;
+    g.computeBoundingBox();
+    expect(g.boundingBox!.max.y - g.boundingBox!.min.y).toBeLessThan(0.06);
+    g.dispose();
+    expect(ifcClassLabel(e)).toBe('IfcBeam · Beam');
+    const ifc = toIfc({ model, schedule: null, project: p, sections: [] });
+    expect(ifc).toMatch(/IFCBEAM\([^\n]+,\$,/);
+    expect(ifc).toContain("IFCQUANTITYLENGTH('Length'");
   });
 
   it('plans stated site lengths after mobilization without a building level or route geometry', () => {

@@ -14,7 +14,7 @@ export function quarantineDetachedSheets(model: BuildModel, registered: Set<stri
       const slab = model.elements.find((s) => s.origin === 'building' && s.level === e.level && s.id.endsWith(':slab'))?.shape;
       const shape = e.shape;
       if (slab?.type !== 'surface' || !shape) continue;
-      const points = shape.type === 'point' ? [shape.at] : shape.type === 'run' ? shape.points : shape.ring;
+      const points = shape.type === 'point' ? [shape.at] : shape.type === 'run' || shape.type === 'axis' ? shape.points : shape.ring;
       const x = points.reduce((n, p) => n + p[0], 0) / points.length,
         y = points.reduce((n, p) => n + p[1], 0) / points.length;
       const xs = slab.ring.map((p) => p[0]),
