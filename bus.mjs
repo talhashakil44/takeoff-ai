@@ -27,6 +27,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 
 const BRANCH = 'agents/bus';
 const REMOTE_REF = `refs/remotes/origin/${BRANCH}`;
@@ -189,6 +190,13 @@ function harness(me, args) {
   const branch = tryGit(['rev-parse', '--abbrev-ref', 'HEAD']);
   const sha = tryGit(['rev-parse', '--short', 'HEAD']);
   const dirty = (tryGit(['status', '--porcelain']) ?? '').split('\n').filter(Boolean).length;
+  // The tree tested: HEAD plus a hash of every uncommitted change, at the start and the end.
+  const tree = () => {
+    const diff = spawnSync('git', ['diff', 'HEAD'], { encoding: 'utf8', maxBuffer: 256 << 20 }).stdout ?? '';
+    const untracked = tryGit(['ls-files', '--others', '--exclude-standard']) ?? '';
+    return `${tryGit(['rev-parse', 'HEAD'])}:${createHash('sha1').update(diff).update(untracked).digest('hex').slice(0, 12)}`;
+  };
+  const startTree = tree();
   const rows = [];
   for (const g of gates) {
     const spec = GATES[g];
@@ -207,12 +215,14 @@ ${r.signal ? `killed after ${limit / 1000} s` : r.error.message}`;
     process.stdout.write(`${r.status === 0 ? 'PASS' : 'FAIL'} ${g} (${rows.at(-1).s} s)\n`);
   }
   // A gate asked for and skipped is not a pass.
+  const endTree = tree();
+  if (endTree !== startTree) rows.push({ g: 'tree', ok: null, s: 0, tail: `the tree changed during the run (${startTree} → ${endTree}): rerun` });
   const failed = rows.some((r) => r.ok === false);
   const verdict = failed ? 'FAIL' : rows.some((r) => r.ok === null) ? 'INCOMPLETE' : 'PASS';
   const ok = verdict === 'PASS';
   const report = [`Harness on ${branch}@${sha}${dirty ? ` (+${dirty} uncommitted)` : ''}: ${verdict}`, '', ...rows.map((r) => `- ${r.ok === null ? 'SKIP' : r.ok ? 'PASS' : 'FAIL'} ${r.g} (${r.s} s)\n${r.tail ? r.tail.split('\n').map((l) => `    ${l}`).join('\n') : ''}`)].join('\n');
   process.stdout.write(`\n${report}\n`);
-  if (to) say(me, to, `harness ${verdict} ${branch}@${sha}`, report, { task, ref: `${branch}@${sha}`, kind: 'harness', verdict, gates: gates.join(','), dirty: String(dirty) });
+  if (to) say(me, to, `harness ${verdict} ${branch}@${sha}`, report, { task, ref: `${branch}@${sha}`, kind: 'harness', verdict, gates: gates.join(','), dirty: String(dirty), tree: endTree });
   process.exit(ok ? 0 : verdict === 'INCOMPLETE' ? 3 : 1);
 }
 
