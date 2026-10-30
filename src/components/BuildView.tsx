@@ -29,7 +29,7 @@ interface Props {
   /** A spec page's text (for the time requirements it states). */
   specText: (docId: string, page: number) => Promise<string>;
   /** A sheet's text, for the level its title block names. */
-  sheetText: (sheetId: string) => Promise<{ str: string; cx: number; cy: number }[]>;
+  sheetText: (sheetId: string) => Promise<{ str: string; cx: number; cy: number; w?: number; h?: number; angle?: number }[]>;
   sheetLines?: (sheetId: string) => Promise<DrawingLines[string]>;
   onEdits: (edits: BuildEdits) => void;
   onOpenSpec: (docId: string, page: number, key: string) => void;

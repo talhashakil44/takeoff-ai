@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { doorSheets, drawingFingerprint, linePlans, structuralSheets, markPolylineArcs, needsLines, needsText, packLines, slimLines, unpackLines } from '../src/build/sources';
+import { doorSheets, drawingFingerprint, linePlans, slimText, structuralSheets, markPolylineArcs, needsLines, needsText, packLines, slimLines, unpackLines } from '../src/build/sources';
 import { sourceHashOf } from '../src/build/extract';
 import { writtenDate } from '../src/build/facts';
 import type { Segment } from '../src/fill/vectors';
@@ -69,6 +69,11 @@ describe('Build It drawing evidence', () => {
     expect('color' in slim[3]).toBe(false);
     expect(slim.every((l) => !('layer' in l) && !('sub' in l))).toBe(true);
     expect(unpackLines(packLines(slim))).toEqual(slim);
+  });
+
+  it('keeps a text\'s size and angle where the PDF gave them, and invents none', () => {
+    expect(slimText({ str: 'B7', cx: 1, cy: 2, w: 9, h: 4, angle: -Math.PI / 2, extra: 1 } as never)).toEqual({ str: 'B7', cx: 1, cy: 2, w: 9, h: 4, angle: -Math.PI / 2 });
+    expect(slimText({ str: 'B7', cx: 1, cy: 2, w: NaN, angle: undefined })).toEqual({ str: 'B7', cx: 1, cy: 2 });
   });
 
   it('fingerprints linework cheaply and still sees a different read', () => {
