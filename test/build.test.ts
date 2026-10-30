@@ -47,7 +47,7 @@ describe('build it', () => {
     for (const name of ['Beam B2 GLULAM', 'Column C1', 'Lintel L1', 'Brace BR1', 'Post P1', 'Base plate BP1', 'Structural wall WT1'])
       expect(tradeOf(type('s', name, 'count', '06 Wood, Plastics & Composites'))).toBe('structure');
     expect(tradeOf(type('s', 'Joist / truss J1', 'count', '06 Wood'), 'structure')).toBe('structure');
-    expect(tradeOf(type('f', 'Excavation', 'area', '31 Earthwork'), 'foundations')).toBe('structure');
+    expect(tradeOf(type('f', 'Excavation', 'area', '31 Earthwork'), 'foundations')).toBe('site');
   });
 
   it('plans stated site lengths after mobilization without a building level or route geometry', () => {
@@ -99,6 +99,38 @@ describe('build it', () => {
     expect(replan(model, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.some((i) => i.id === 'structure-production-review')).toBe(true);
     const confirmed = applySetupEdits(setup, { setup: { trades: { structure: { rates: { ea: 4, 'm³': 6 } } } } });
     expect(replan(model, confirmed, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.some((i) => i.id === 'structure-production-review')).toBe(false);
+  });
+
+  it('schedules Div 31 bank excavation after mobilization and before foundation work', () => {
+    const p = project();
+    p.units = 'metric';
+    p.sheets = [{ ...sheet('fdn', 'S1.0', 'FOUNDATION PLAN', 1), metersPerPoint: 0.1 }, { ...sheet('civil', 'C1.0', 'SITE SERVICES PLAN', 2), metersPerPoint: null }];
+    p.types = [
+      { ...type('dig', 'Excavation and backfill (depth assumed)', 'area', '31 Earthwork'), depth: 1.5, items: [
+        { id: 'bank', name: 'Excavation (bank)', unit: 'm³', formula: 'A * D' },
+        { id: 'swell', name: 'Excavation + 25% swell', unit: 'm³', formula: 'A * D * 1.25' },
+      ] },
+      type('pad', 'F1 – Pad footing', 'count', '03 Concrete'),
+      type('pipe', 'Sanitary sewer', 'linear', '33 Utilities'),
+    ];
+    p.measurements = [
+      { id: 'dig1', sheetId: 'fdn', typeId: 'dig', source: 'foundations', points: [[0, 0], [296, 0], [296, 300], [0, 300]], holes: [] },
+      { id: 'pad1', sheetId: 'fdn', typeId: 'pad', source: 'foundations', points: [[1, 1]], holes: [] },
+      { id: 'pipe1', sheetId: 'civil', typeId: 'pipe', source: 'site', points: [[0, 0], [20, 0]], holes: [], statedLength: 900 },
+    ];
+    const model = extractModel({ project: p, sections: [], floorToFloor: 3.6 });
+    expect(model.elements.find((e) => e.id === 'dig1')).toMatchObject({ trade: 'site', level: null, quantity: 888, unit: 'm²', production: { quantity: 1332, unit: 'm³' } });
+    const setup = defaultSetup(model, [], '2026-11-02');
+    const acts = planActivities(model, setup, [], []);
+    const dig = acts.find((a) => a.id === 'work:site:earthwork')!;
+    const foundation = acts.find((a) => a.id === 'work:structure:fdn')!;
+    expect(dig).toMatchObject({ quantities: { 'm³': 1332 }, rates: { 'm³': 50 }, duration: 27 });
+    expect(dig.deps.map((d) => d.from)).toEqual(['mobilize']);
+    expect(foundation.deps.map((d) => d.from)).toContain(dig.id);
+    expect(foundation.deps.map((d) => d.from)).not.toContain('work:site:site');
+    expect(replan(model, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.some((i) => i.id === 'excavation-production-review')).toBe(true);
+    const unmeasured = { ...model, elements: model.elements.map((e) => e.id === 'dig1' ? { ...e, production: undefined } : e) };
+    expect(replan(unmeasured, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.some((i) => i.id === 'excavation-volume-missing')).toBe(true);
   });
 
   it('reads the review period the specification gives', async () => {

@@ -25,7 +25,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 12;
+export const MODEL_VERSION = 13;
 
 export interface Trade {
   key: string;
@@ -66,6 +66,7 @@ export function tradeOf(type: TakeoffType, source?: Measurement['source']): stri
   const name = `${type.name} ${type.assemblyTitle ?? ''}`.toLowerCase();
   if (d === 2) return 'demolition';
   if (/\bdemo(lition|lish)?\b|\bremove\b|\bexisting to be removed\b/.test(name)) return 'demolition';
+  if (d === 31) return 'site';
   if (source === 'structure' || source === 'foundations') return 'structure';
   if (source === 'site') return 'site';
   if (/\b(?:beam|column|lintel|brace|post|base\s*plate|structural\s*wall|shear\s*wall|glulam)\b/.test(name)) return 'structure';
@@ -399,7 +400,9 @@ export function extractModel(input: ExtractInput): BuildModel {
       elIssues.push('Counted structural item retained; member position, span and section must be established before generating physical geometry.');
     }
     let productionItem: TakeoffType['items'][number] | undefined;
-    if (vars && m.source === 'foundations' && trade === 'structure')
+    if (vars && trade === 'site' && divNum(type.division) === 31)
+      productionItem = type.items.find((item) => /^excavation\s*\(bank\)$/i.test(item.name) && (item.unit === 'm³' || item.unit === 'CY'));
+    else if (vars && m.source === 'foundations' && trade === 'structure')
       productionItem = type.items.find((item) => /^concrete\b/i.test(item.name) && (item.unit === 'm³' || item.unit === 'CY'));
     else if (vars && trade === 'site' && divNum(type.division) === 32)
       productionItem = type.items.find((item) => /^road area$/i.test(item.name) && (item.unit === 'm²' || item.unit === 'SF'));
