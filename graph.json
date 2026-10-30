@@ -232,6 +232,25 @@
       "title": "Electrical: why Kelso E plans give no device counts; count devices and fixtures on raster/pasted E plans",
       "added": "2026-10-30T04:21:38.859Z",
       "by": "claude"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T5"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T15",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Place measurements on sheets with two level viewports (Kelso M1-02/M1-04: L1 and L2 side by side) on their levels; 1,092 m pipe is unplaced",
+      "prompt": "Measurements on multi-viewport plan sheets (viewport titles L1-Plumbing / L2-Plumbing, L1-HVAC/L2-HVAC on Kelso M1-02..M1-04) should take the level of the viewport they fall in. Today they land unplaced. Viewport titles and bounds are on the sheet text; claude owns src/build/sources.ts and facts.ts, tell me if you need a viewport reader there.",
+      "added": "2026-10-30T04:21:40.999Z",
+      "by": "claude"
     }
   ]
 }
