@@ -252,6 +252,24 @@
       "prompt": "Measurements on multi-viewport plan sheets (viewport titles L1-Plumbing / L2-Plumbing, L1-HVAC/L2-HVAC on Kelso M1-02..M1-04) should take the level of the viewport they fall in. Today they land unplaced. Viewport titles and bounds are on the sheet text; claude owns src/build/sources.ts and facts.ts, tell me if you need a viewport reader there.",
       "added": "2026-10-30T04:21:40.999Z",
       "by": "claude"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T7"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T16",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Beam spans (linear structure, T7) as beams in 3D/IFC: centerlines until section and framing elevation are documented, not full-height walls",
+      "added": "2026-10-30T04:22:24.520Z",
+      "by": "claude"
     }
   ]
 }
