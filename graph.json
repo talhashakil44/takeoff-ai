@@ -456,7 +456,11 @@
       "owner": "claude",
       "title": "QA follow-ups: missed M1-01 75 SAN vertical and M1-03 auditorium 400x300 branches; S1.0 pad/pier count points on the symbol centre, not the tag",
       "added": "2026-10-30T05:29:58.375Z",
-      "by": "claude"
+      "by": "claude",
+      "notes": [
+        "2026-10-30T05:44 claude: footing XY moved to T25 (Build It, grid intersections); misses remain"
+      ],
+      "updated": "2026-10-30T05:44:01.220Z"
     },
     {
       "status": "todo",
