@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chainage, pipeLabel, serviceOf } from '../src/automate/site';
+import { chainage, granularLayer, pipeLabel, roadSection, serviceOf } from '../src/automate/site';
 import { measurementVars } from '../src/quantities';
 import type { Measurement, Sheet, TakeoffType } from '../src/model';
 
@@ -31,5 +31,18 @@ describe('site works', () => {
     expect(measurementVars(m, type, { metersPerPoint: null } as Sheet, 'metric')!.L).toBe(80.2);
     expect(measurementVars(m, type, { metersPerPoint: 0.1 } as Sheet, 'imperial')!.L).toBeCloseTo(263.12, 2);
     expect(measurementVars({ ...m, statedLength: undefined }, type, { metersPerPoint: 0.1 } as Sheet, 'metric')!.L).toBe(1);
+  });
+});
+
+describe('road section', () => {
+  const tx = (str: string, cx: number, cy: number, h = 6.9) => ({ str, cx, cy, w: 50, h }) as never;
+  it('reads granular layers', () => {
+    expect(granularLayer('450 MIN. GRANULAR B')).toEqual([450, 'B']);
+    expect(granularLayer("150MM GRANULAR 'A' COMPLYING TO OPSS.1010")).toEqual([150, 'A']);
+    expect(granularLayer("COVER MATERIAL SHOULD BE OPSS GRANULAR 'A'")).toBeNull();
+  });
+  it('takes the depths in the detail above the road title', () => {
+    const s = roadSection([tx('TYPICAL GRAVEL ACCESS ROAD', 1916, 501, 13.9), tx('450 MIN. GRANULAR B', 1861, 320), tx("150MM GRANULAR 'A'", 801, 783)]);
+    expect(s).toEqual({ title: 'TYPICAL GRAVEL ACCESS ROAD', B: 450 });
   });
 });

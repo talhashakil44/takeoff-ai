@@ -59,6 +59,30 @@ export function serviceOf(what: string): string {
   return 'Pipe';
 }
 
+/** A granular layer's depth as a section writes it: "450 MIN. GRANULAR B", "150MM GRANULAR 'A'" → [mm, 'A' | 'B']. */
+export function granularLayer(text: string): [number, 'A' | 'B'] | null {
+  const m = /^(\d{2,4})\s*(?:MM)?\s*(?:MIN\.?\s*)?(?:OF\s+)?GRANULAR\s*['‘’"]?([AB])\b/i.exec(text.trim());
+  return m ? [Number(m[1]), m[2].toUpperCase() as 'A' | 'B'] : null;
+}
+
+/**
+ * The road's granular layers from its typical section: the depths written in the detail above a
+ * title naming a road ("TYPICAL GRAVEL ACCESS ROAD"), within the detail's width.
+ */
+export function roadSection(texts: PageText[]): { A?: number; B?: number; title: string } | null {
+  for (const t of texts) {
+    if (!/\bTYPICAL\b.*\b(ROAD|ACCESS|LANE|DRIVE)\b|\b(ROAD|ACCESS)\b.*\b(TYPICAL\s+)?SECTION\b/i.test(t.str) || t.h < 9) continue;
+    const out: { A?: number; B?: number; title: string } = { title: t.str.trim() };
+    for (const x of texts) {
+      if (x.cy > t.cy || t.cy - x.cy > 450 || Math.abs(x.cx - t.cx) > 500) continue;
+      const g = granularLayer(x.str);
+      if (g) out[g[1]] = Math.max(out[g[1]] ?? 0, g[0]);
+    }
+    if (out.A || out.B) return out;
+  }
+  return null;
+}
+
 /** A chainage: 0+275.15 → 275.15 m; 1+050 → 1050 m. */
 export function chainage(text: string): number | null {
   const m = /^(?:STA\.?\s*)?(\d{1,3})\+(\d{2,3}(?:\.\d+)?)$/.exec(text.trim());
@@ -90,12 +114,14 @@ export async function automateSite(p: Project, access: SetAccess): Promise<SiteR
   const bySheet = new Map<string, Hit[]>();
   const roads = new Map<string, { sheetId: string; at: PageText; values: number[] }[]>();
   let width: { meters: number; says: string } | null = null;
+  let section: ReturnType<typeof roadSection> = null;
   let existing = 0;
   for (const s of sheets)
     await perSheet(access, s, async () => {
       const texts = await access.texts(s);
       const tb = titleBlockBox(texts, s.width, s.height);
       const keep = texts.filter((t) => !(tb && t.cx >= tb[0] && t.cx <= tb[2] && t.cy >= tb[1] && t.cy <= tb[3]));
+      section ??= roadSection(keep);
       for (const t of keep) {
         const l = pipeLabel(t.str);
         if (l?.existing) existing++;
@@ -177,6 +203,16 @@ export async function automateSite(p: Project, access: SetAccess): Promise<SiteR
       description: `Length from chainage ${Math.min(...all).toFixed(3)} to ${Math.max(...all).toFixed(3)} on the plan and profile.${w ? ` Width from "${w.says}".` : ' Width (W) assumed 6 m: set it from the road section.'}`,
       items: [item('Road length', len, 'L'), item('Road area', metric ? 'm²' : 'SF', 'L * W')],
     };
+    const sec = section as ReturnType<typeof roadSection>;
+    if (sec) {
+      const vol = metric ? 'm³' : 'CY';
+      const depth = (mm: number) => (metric ? mm / 1000 : mm / 304.8);
+      const per = metric ? '' : ' / 27';
+      if (sec.A) t.items.push(item(`Granular A, ${sec.A} mm`, vol, `L * W * ${depth(sec.A).toFixed(4)}${per}`));
+      if (sec.B) t.items.push(item(`Granular B, ${sec.B} mm`, vol, `L * W * ${depth(sec.B).toFixed(4)}${per}`));
+      t.items.push(item('Excavation for the road structure', vol, `L * W * ${depth((sec.A ?? 0) + (sec.B ?? 0)).toFixed(4)}${per}`));
+      t.description += ` Granular depths from "${sec.title}": ${[sec.A ? `${sec.A} mm A` : '', sec.B ? `${sec.B} mm B` : ''].filter(Boolean).join(', ')}.`;
+    }
     types.push(t);
     added.push({ id: newId(), sheetId: last.sheetId, typeId: t.id, points: underline(last.at), holes: [], source: 'site', label: `${road}: ${Math.min(...all)} to ${Math.max(...all)}`, statedLength: length });
     roadNotes.push(`${Math.round(length)} m of ${t.name.toLowerCase()}`);
