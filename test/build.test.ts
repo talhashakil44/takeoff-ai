@@ -6,6 +6,7 @@ import { readSpecFacts } from '../src/build/facts';
 import { toIfc } from '../src/build/ifc';
 import { ifcClassLabel, ifcGuid } from '../src/build/ifcClass';
 import { geometryOf } from '../src/build/sceneGeometry';
+import { nearestGridIntersection } from '../src/build/gridCounts';
 import { registerViewportMeasurements, viewportLevels } from '../src/build/viewports';
 import { replan } from '../src/build/run';
 import type { Project, TakeoffType } from '../src/model';
@@ -40,6 +41,39 @@ const sections = [
 ] as unknown as SpecSection[];
 
 describe('build it', () => {
+  it('places structural count markers on registered grid crossings and keeps their tag source', () => {
+    expect(nearestGridIntersection({
+      '1': { axis: 'x', at: 500 }, '2': { axis: 'x', at: 1000 },
+      A: { axis: 'y', at: 500 }, B: { axis: 'y', at: 1000 },
+    }, ['1', '2', 'A', 'B'], [520, 525], 0.05)).toMatchObject({ point: [500, 500], labels: ['1', 'A'] });
+    expect(nearestGridIntersection({ '1': { axis: 'x', at: 500 }, A: { axis: 'y', at: 500 } }, ['1', 'A'], [600, 600], 0.05)).toBeNull();
+
+    const p = project();
+    p.units = 'metric';
+    p.sheets = [{ ...sheet('struct', 'S1.0', 'FOUNDATION PLAN', 1), metersPerPoint: 0.05 }];
+    p.types = [type('footing', 'F1 – Pad footing 1500 x 1500 x 300', 'count', '03 Concrete')];
+    p.measurements = [
+      { id: 'near', sheetId: 'struct', typeId: 'footing', source: 'foundations', points: [[520, 525]], holes: [] },
+      { id: 'far', sheetId: 'struct', typeId: 'footing', source: 'foundations', points: [[2000, 1500]], holes: [] },
+    ];
+    const drawingTexts = { struct: [
+      { str: 'A', cx: 100, cy: 500 }, { str: 'A', cx: 2500, cy: 500 },
+      { str: 'B', cx: 100, cy: 1000 }, { str: 'B', cx: 2500, cy: 1000 },
+      { str: '1', cx: 500, cy: 100 }, { str: '1', cx: 500, cy: 1800 },
+      { str: '2', cx: 1000, cy: 100 }, { str: '2', cx: 1000, cy: 1800 },
+    ] };
+    const model = extractModel({ project: p, sections: [], drawingTexts, floorToFloor: 3.6 });
+    const near = model.elements.find((e) => e.id === 'near')!;
+    const far = model.elements.find((e) => e.id === 'far')!;
+    expect(near.shape?.type).toBe('locator');
+    expect(near.sources[0].box).toEqual([520, 525, 520, 525]);
+    expect(near.issues.some((s) => s.includes('structural grid 1/A'))).toBe(true);
+    expect(geometryOf(near)).not.toBeNull();
+    expect(far.shape).toBeNull();
+    expect(far.issues.some((s) => s.includes('No registered structural grid intersection within 2.5 m'))).toBe(true);
+    expect(toIfc({ model, schedule: null, project: p, sections: [] })).toContain("TagPointOnSheet");
+  });
+
   it('keeps the electrical tag source on extracted elements for rough-in planning', () => {
     const p = project();
     p.sheets = [sheet('e1', 'E2-01', 'LEVEL 1 ELECTRICAL PLAN', 1)];

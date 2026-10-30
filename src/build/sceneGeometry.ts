@@ -6,6 +6,11 @@ import type { BuildElement } from './types';
 export function geometryOf(e: BuildElement): THREE.BufferGeometry | null {
   const s = e.shape;
   if (!s) return null;
+  if (s.type === 'locator') {
+    const marker = new THREE.SphereGeometry(0.16, 8, 6);
+    marker.translate(s.at[0], s.z + 0.16, s.at[1]);
+    return marker;
+  }
   if (s.type === 'axis') {
     const parts: THREE.BufferGeometry[] = [];
     for (let i = 1; i < s.points.length; i++) {

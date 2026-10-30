@@ -3,11 +3,13 @@ import { imperialDatumEvidence } from './datumEvidence';
 import { quarantineDetachedSheets } from './placementQuality';
 import { recoverRoof, type DrawingLines } from './roof';
 import { simpleRing } from './surface';
+import { nearestGridIntersection } from './gridCounts';
 import { drawingFingerprint } from './sources';
 import { registerViewportMeasurements, viewportLevels, type ViewportLevel } from './viewports';
 import {
   addBuilding,
   cutOpenings,
+  gridAxes,
   sealWallCorners,
   registerSheets,
   levelDatums,
@@ -26,7 +28,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 20;
+export const MODEL_VERSION = 21;
 
 export interface Trade {
   key: string;
@@ -316,6 +318,17 @@ export function extractModel(input: ExtractInput): BuildModel {
   }
   const mainScale = [...scales].sort((a, b) => b[1] - a[1])[0]?.[0];
   const registration = registerSheets(project, input.drawingTexts ?? {});
+  const gridAxesBySheet = new Map<string, ReturnType<typeof gridAxes>>();
+  const axesFor = (s: Sheet) => {
+    const cached = gridAxesBySheet.get(s.id);
+    if (cached) return cached;
+    const points = project.measurements.filter((m) => m.sheetId === s.id).flatMap((m) => m.points);
+    const median = (axis: number) => points.map((p) => p[axis]).sort((a, b) => a - b)[Math.floor(points.length / 2)];
+    const focus: [number, number] | undefined = points.length ? [median(0), median(1)] : undefined;
+    const axes = gridAxes(input.drawingTexts?.[s.id] ?? [], s.width, s.height, focus);
+    gridAxesBySheet.set(s.id, axes);
+    return axes;
+  };
   const viewportRegistration = registerViewportMeasurements(project, input.drawingTexts ?? {}, viewportOfMeasurement);
   const placeable = (s: Sheet) => !!s.metersPerPoint && isPlan(s) && !isEnlarged(s) && (Math.round(s.metersPerPoint * 1e5) === mainScale || !!registration[s.id]) && levelOfSheet.has(s.id);
   const unplaced = new Map<string, string>();
@@ -324,6 +337,7 @@ export function extractModel(input: ExtractInput): BuildModel {
   const missingSec = new Map(sections.filter((s) => s.missing).map((s) => [s.key, `${s.number} ${s.title}`]));
   const codedStatusNoted = new Set<string>();
   const elements: BuildElement[] = [];
+  const gridCountsWithoutPlace = new Map<string, string[]>();
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -344,6 +358,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     const box: [number, number, number, number] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
     const src: SourceRef = { kind: 'sheet', id: s.id, page: s.page, label: s.name, box };
     const elIssues: string[] = [];
+    const gridCount = trade === 'structure' && type.kind === 'count' && /\b(?:footing|pier|base\s*plate|column)\b/i.test(type.name);
     let shape: ElementShape | null = null;
     let placement: Basis = 'unknown';
     if (trade === 'site') {
@@ -402,7 +417,17 @@ export function extractModel(input: ExtractInput): BuildModel {
         shape = { type: 'surface', ring: pts, holes, z: zz, thickness: trade === 'structure' ? 0.2 : 0.04 };
       } else {
         const at = pts[0];
-        if (trade === 'doors') shape = { type: 'point', at, z: level.elevation, size: [0.95, 0.12, 2.1] };
+        if (gridCount) {
+          const reg = registration[s.id];
+          const snap = reg && nearestGridIntersection(axesFor(s), reg.grids, m.points[0], k);
+          if (snap) {
+            shape = { type: 'locator', at: transform(snap.point), z: level.elevation };
+            elIssues.push(`Symbolic 3D location inferred at structural grid ${snap.labels.join('/')} (${snap.distanceM.toFixed(2)} m from the original tag). The tag point remains in the source box; member section and height are not inferred.`);
+          } else {
+            elIssues.push(`No registered structural grid intersection within 2.5 m of the tag${reg ? '' : ' on this sheet'}; count retained without 3D placement.`);
+          }
+        }
+        else if (trade === 'doors') shape = { type: 'point', at, z: level.elevation, size: [0.95, 0.12, 2.1] };
         else if (trade === 'elec-trim' && /light|luminaire|fixture|exit/i.test(type.name)) shape = { type: 'point', at, z: ceil - 0.1, size: [0.6, 0.6, 0.1] };
         else if (trade === 'elec-trim') shape = { type: 'point', at, z: level.elevation + 0.45, size: [0.12, 0.12, 0.12] };
         else if (trade === 'fire-heads') shape = { type: 'point', at, z: ceil - 0.05, size: [0.15, 0.15, 0.12] };
@@ -410,16 +435,19 @@ export function extractModel(input: ExtractInput): BuildModel {
         else if (trade === 'mech-trim') shape = { type: 'point', at, z: level.elevation, size: [0.5, 0.5, 0.8] };
         else shape = { type: 'point', at, z: level.elevation, size: [0.4, 0.4, 0.4] };
       }
-      for (const p of pts) {
+      for (const p of shape?.type === 'locator' ? [shape.at] : pts) {
         minX = Math.min(minX, p[0]);
         minY = Math.min(minY, p[1]);
         maxX = Math.max(maxX, p[0]);
         maxY = Math.max(maxY, p[1]);
       }
     }
-    if (trade === 'structure' && type.kind === 'count') {
+    if (trade === 'structure' && type.kind === 'count' && shape?.type !== 'locator') {
       shape=null;placement='unknown';
-      elIssues.push('Counted structural item retained; member position, span and section must be established before generating physical geometry.');
+      if (gridCount) gridCountsWithoutPlace.set(s.name, [...(gridCountsWithoutPlace.get(s.name) ?? []), m.id]);
+      elIssues.push(gridCount
+        ? 'Counted footing, pier, base plate or column retained; its grid position is unverified, so no 3D marker or physical geometry is generated.'
+        : 'Counted structural item retained; member position, span and section must be established before generating physical geometry.');
     }
     let productionItem: TakeoffType['items'][number] | undefined;
     if (vars && trade === 'site' && divNum(type.division) === 31)
@@ -470,6 +498,14 @@ export function extractModel(input: ExtractInput): BuildModel {
       issues: elIssues,
     });
   }
+
+  if (gridCountsWithoutPlace.size)
+    issues.push({
+      id: 'grid-counts-unplaced',
+      severity: 'warning',
+      text: `${[...gridCountsWithoutPlace].map(([sheet, ids]) => `${sheet}: ${ids.length}`).join('; ')} counted footings, piers, base plates or columns have no verified structural-grid location within 2.5 m or lack a calibrated, registered plan. They remain in quantities without 3D markers.`,
+      refs: [...gridCountsWithoutPlace.values()].flat(),
+    });
 
   const modelOrigin: [number,number] = Number.isFinite(minX) ? [(minX+maxX)/2,(minY+maxY)/2] : [0,0];
   // Centre what is drawn on the origin.
