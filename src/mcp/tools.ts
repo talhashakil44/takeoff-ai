@@ -3,6 +3,7 @@ import { automateStructure } from '../automate/structure';
 import { automateSite } from '../automate/site';
 import { automatePipes } from '../automate/pipes';
 import { automateDucts } from '../automate/ducts';
+import { automateRoof } from '../automate/envelope';
 import type { Automation } from '../automate/result';
 import { sheetEdges, type DrawingGraph } from '../graph/graph';
 import type { ProjectMap } from '../spec/links';
@@ -106,7 +107,7 @@ const str = (description: string, extra: Record<string, unknown> = {}) => ({ typ
 const num = (description: string) => ({ type: 'number', description });
 const point = { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 };
 
-export const AUTOMATIONS = ['rooms', 'walls', 'doors', 'windows', 'ceilings', 'sprinklers', 'symbols', 'finishes', 'ductwork_piping', 'trade_counts', 'keynotes_demolition', 'foundations', 'structure', 'site', 'piping_by_label', 'ductwork_by_label'] as const;
+export const AUTOMATIONS = ['rooms', 'walls', 'doors', 'windows', 'ceilings', 'sprinklers', 'symbols', 'finishes', 'ductwork_piping', 'trade_counts', 'keynotes_demolition', 'foundations', 'structure', 'site', 'piping_by_label', 'ductwork_by_label', 'roof'] as const;
 type AutomationKind = (typeof AUTOMATIONS)[number];
 
 export const TOOL_DEFS: ToolDef[] = [
@@ -278,6 +279,7 @@ export const TOOL_DEFS: ToolDef[] = [
       'structure: beams, columns, lintels, braces and base plates counted by tag on the structural plans with their schedule sizes, and structural walls along their tagged runs.',
       'piping_by_label: piping on plumbing and mechanical plans drawn without CAD layers, read off the sheet as drawn (heavy and double-line pipe) and sized and serviced by the engineer\'s labels (75Ø DCW), each label carried along its pipe from where its leader points.',
       'ductwork_by_label: ductwork on HVAC plans drawn without CAD layers: the ducts drawn in grey tone read off the sheet, each sized by the nearest size label of its plan width (300x250).',
+      'roof: the roof plan area from the building outline the exterior walls (already taken off) enclose, with eaves. Run walls first.',
       'Set scales first. Then check the result with get_sheet_image.',
     ].join(' '),
     inputSchema: obj({ kind: str('Which automation', { enum: [...AUTOMATIONS] }), sheet_id: str('Sheet, for rooms, walls, doors'), all_sheets: { type: 'boolean', description: 'doors: every sheet' } }, ['kind']),
@@ -890,6 +892,9 @@ async function automation(ctx: McpContext, a: Record<string, unknown>): Promise<
       break;
     case 'ductwork_by_label':
       r = await automateDucts(p, access);
+      break;
+    case 'roof':
+      r = automateRoof(p);
       break;
     case 'symbols': {
       const t = await symbolTallies(p, access);

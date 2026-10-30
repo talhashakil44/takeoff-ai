@@ -2,6 +2,7 @@ import { applyFinishes, ceilingsFromRcps, finishRooms, levelOfSheet, readFinishe
 import { automateCeilings } from './ceilings';
 import { automateKeynotes } from './keynotes';
 import { automateDucts } from './ducts';
+import { automateRoof } from './envelope';
 import { automatePipes } from './pipes';
 import { automateRuns } from './runs';
 import { automateTrades } from './trades';
@@ -291,6 +292,16 @@ export async function takeOffWholeSet(
     await pause();
     const r = await automateSite(project, access);
     apply('site', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('roof', async () => {
+    say('Whole set: roof…');
+    await pause();
+    const r = automateRoof(project);
+    apply('envelope', r);
     await hold();
     for (const c of r.checks) review.push({ kind: 'check', text: c });
     return r.message;
