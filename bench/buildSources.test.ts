@@ -13,7 +13,7 @@ import { segmentsOf } from '../src/fill/sheetWalls';
 import { buildAll } from '../src/build/run';
 import { readSpecFacts } from '../src/build/facts';
 import { sourceHashOf, titleBlockWords } from '../src/build/extract';
-import { doorSheets, markPolylineArcs, needsLines, needsText, slimLines } from '../src/build/sources';
+import { linePlans, markPolylineArcs, needsLines, needsText, slimLines } from '../src/build/sources';
 import type { Project } from '../src/model';
 
 const root = process.env.BUILD_PROJECTS_ROOT;
@@ -34,7 +34,7 @@ it.skipIf(!root)(
       const full: Src = { texts: {}, lines: {}, hints: {} };
       const slim: Src = { texts: {}, lines: {}, hints: {} };
       const measured = new Set(project.measurements.map((m) => m.sheetId));
-      const doors = doorSheets(project);
+      const doors = linePlans(project);
       for (const s of project.sheets.filter((s) => !s.superseded)) {
         const page = await (await getDoc(s.docId)).pdf.getPage(s.page);
         const t = await pageTexts(page);

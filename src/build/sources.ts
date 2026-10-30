@@ -13,20 +13,39 @@ import type { DrawingLines } from './roof';
  * so the cache key is the document and page; the version is bumped when what is kept changes.
  */
 
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
-/** Sheets whose linework the model reads: building elevations and sections (window elevations included). */
 /**
  * Sheets whose linework the model reads: exterior elevations and building sections (façades,
- * roof), and plans with counted doors (the swing arcs and wall openings the doors are hosted in).
+ * roof), and the measured plans in `plans` (see `linePlans`: door swings and wall openings,
+ * structural member strokes).
  */
-export const needsLines = (s: Pick<Sheet, 'title'> & { id?: string }, doors?: Set<string>) =>
-  (/ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? '')) || (!!s.id && !!doors?.has(s.id));
+export const needsLines = (s: Pick<Sheet, 'title'> & { id?: string }, plans?: Set<string>) =>
+  (/ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? '')) || (!!s.id && !!plans?.has(s.id));
 
 /** Sheets with door counts: by the door takeoff (source doors) or on a Doors count type. */
 export function doorSheets(project: Pick<Project, 'measurements'> & { types?: Project['types'] }): Set<string> {
   const doorTypes = new Set((project.types ?? []).filter((t) => t.kind === 'count' && /^doors?\b/i.test(t.name)).map((t) => t.id));
   return new Set(project.measurements.filter((m) => m.source === 'doors' || doorTypes.has(m.typeId)).map((m) => m.sheetId));
+}
+
+/**
+ * Structural plans with takeoffs (foundation, framing, S-sheets): the member strokes under
+ * lintel and beam tags. Mechanical, electrical and plumbing sheets are not structural even
+ * when titled a foundation plan.
+ */
+export function structuralSheets(project: Pick<Project, 'sheets' | 'measurements'>): Set<string> {
+  const measured = new Set(project.measurements.map((m) => m.sheetId));
+  return new Set(
+    project.sheets
+      .filter((s) => measured.has(s.id) && !/^[MEP]\d/i.test(s.name ?? '') && (/^S[-\d.]/i.test(s.name ?? '') || /FOUNDATION|FRAMING/i.test(s.title ?? '')))
+      .map((s) => s.id),
+  );
+}
+
+/** Measured plans whose linework the model reads: door plans and structural plans. */
+export function linePlans(project: Pick<Project, 'sheets' | 'measurements'> & { types?: Project['types'] }): Set<string> {
+  return new Set([...doorSheets(project), ...structuralSheets(project)]);
 }
 
 /**
@@ -78,12 +97,13 @@ export function markPolylineArcs(segs: Segment[]): Segment[] {
   return out;
 }
 
-/** Only what Build It uses of a line: its ends and whether it is a curve or dashed. */
+/** Only what Build It uses of a line: its ends, ink, and whether it is a curve or dashed. */
 export function slimLines(segs: Segment[]): Segment[] {
   return markPolylineArcs(segs).map((l) => {
     const out: Segment = { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, width: l.width, filled: l.filled };
     if (l.curve) out.curve = true;
     if (l.dashed) out.dashed = true;
+    if (l.color) out.color = l.color;
     return out;
   });
 }
@@ -94,17 +114,22 @@ export interface PackedLines {
   /** Bit 0 filled, 1 curve, 2 dashed. */
   flags: Uint8Array;
   width: Float32Array;
+  /** Ink as 0xrrggbb, -1 for none. */
+  color: Int32Array;
 }
+const hex = (c?: string) => (c && /^#[0-9a-f]{6}$/i.test(c) ? parseInt(c.slice(1), 16) : -1);
 export function packLines(segs: Segment[]): PackedLines {
   const xy = new Float64Array(segs.length * 4);
   const flags = new Uint8Array(segs.length);
   const width = new Float32Array(segs.length);
+  const color = new Int32Array(segs.length);
   segs.forEach((l, i) => {
     xy.set([l.x1, l.y1, l.x2, l.y2], i * 4);
     flags[i] = (l.filled ? 1 : 0) | (l.curve ? 2 : 0) | (l.dashed ? 4 : 0);
     width[i] = l.width;
+    color[i] = hex(l.color);
   });
-  return { v: CACHE_VERSION, xy, flags, width };
+  return { v: CACHE_VERSION, xy, flags, width, color };
 }
 export function unpackLines(p: PackedLines): Segment[] {
   const out: Segment[] = new Array(p.flags.length);
@@ -113,6 +138,8 @@ export function unpackLines(p: PackedLines): Segment[] {
     const l: Segment = { x1: p.xy[i * 4], y1: p.xy[i * 4 + 1], x2: p.xy[i * 4 + 2], y2: p.xy[i * 4 + 3], width: p.width[i], filled: !!(f & 1) };
     if (f & 2) l.curve = true;
     if (f & 4) l.dashed = true;
+    const c = p.color?.[i] ?? -1;
+    if (c >= 0) l.color = `#${c.toString(16).padStart(6, '0')}`;
     out[i] = l;
   }
   return out;
@@ -144,7 +171,7 @@ export async function loadDrawingSources(opts: {
   const { project, sheetText, sheetLines, titleWords, progress, cancelled } = opts;
   const useCache = opts.cache !== false && typeof indexedDB !== 'undefined';
   const measured = new Set(project.measurements.map((m) => m.sheetId));
-  const doors = doorSheets(project);
+  const plans = linePlans(project);
   const todo = project.sheets.filter((s) => !s.superseded && needsText(s, measured));
   const out: DrawingSources = { texts: {}, lines: {}, hints: {} };
   let done = 0;
@@ -159,7 +186,7 @@ export async function loadDrawingSources(opts: {
     }
     out.texts[s.id] = texts ?? [];
     out.hints[s.id] = titleWords(out.texts[s.id], s.width, s.height);
-    if (sheetLines && needsLines(s, doors)) {
+    if (sheetLines && needsLines(s, plans)) {
       const packed = useCache ? await get<PackedLines | undefined>(lineKey(s)).catch(() => undefined) : undefined;
       if (packed?.v === CACHE_VERSION) out.lines[s.id] = unpackLines(packed);
       else {
