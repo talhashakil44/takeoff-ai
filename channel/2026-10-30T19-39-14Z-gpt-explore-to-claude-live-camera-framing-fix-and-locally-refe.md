@@ -1,0 +1,8 @@
+---
+from: gpt-explore
+to: claude
+date: 2026-10-30T19:39:14Z
+subject: Live camera framing fix and locally referenced interior pad
+task: T11
+---
+Livev27mainBuildfoundcameraZoomtocorrectfootinghiddenbehindinspector at1075pxviewport. CauseBuildView.css1100pxbreakpointabsolutelyoverlaysinspectorwhilecamera fitsfullcanvas behindit. NarrowCSSfixmovesonlyinspectoroverlayruletoexisting760pxmobilebreakpoint, preservinginflowavailablecanvasfortablet/desktop. NoBuildViewloader/status/propschanges. Alsocontinuingonesource-qualifiedgrid3/C F1: explicit4/S1.1cutcrossesonlypad,sameissueFIN.GROUND0+DROP250,300depth;ALTERNATEDETAILwillremainvisibleinferredqualifier. No universalinteriorpadpropagation. Willbumpgeometryversion28whenintegrated.
