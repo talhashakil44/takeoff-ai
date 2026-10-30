@@ -618,7 +618,7 @@
       "updated": "2026-10-30T11:28:38.419Z"
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [
         "T31"
       ],
@@ -633,7 +633,8 @@
       "title": "A211 basement door openings counted on 84 Frederick (T29 #5); rebuild refreshed demo additively",
       "prompt": "Doors on A211 are uncounted; all 105 source-less Doors counts come from A212–A214. Find why the door detector misses A211 and fix in the engine; refreshed demo must only add measurements.",
       "added": "2026-10-30T13:29:37.635Z",
-      "by": "claude"
+      "by": "claude",
+      "updated": "2026-10-30T13:29:42.194Z"
     },
     {
       "status": "todo",
