@@ -3481,6 +3481,10 @@ function recoverRevisedMassFootings(
           ? Math.min(Math.abs(p[0]-r.x0),Math.abs(p[0]-r.x1))<.3&&p[1]-half>=r.y0-.3&&p[1]+half<=r.y1+.3
           : Math.min(Math.abs(p[1]-r.y0),Math.abs(p[1]-r.y1))<.3&&p[0]-half>=r.x0-.3&&p[0]+half<=r.x1+.3);
         if(!touched)return [];
+        const alongAxis=horizontal?0:1,crossAxis=1-alongAxis;
+        const centre=ps[0][crossAxis];
+        if(hasFootingCrossbar(plan,alongAxis,centre-half,centre+half,
+          (alongAxis===0?r.x0:r.y0)-20,(alongAxis===0?r.x1:r.y1)+20))return [];
         if(plan.texts.some(t=>/^S\.?F\.?$/.test(t.str.trim())&&t.cx>=r.x0-20&&t.cx<=r.x1+20&&t.cy>=r.y0-20&&t.cy<=r.y1+20))return [];
         return [{top:Math.round((sh.z0+sh.height)*1e6)/1e6,proof,strip}];
       });
@@ -3574,6 +3578,73 @@ function localFootingLeaders(plan:RevisedPlan):LocalFootingLeader[] {
   const d=candidates[0],source:SourceRef={kind:'spec',id:plan.docId,page:plan.page,label:'Revised local footing elevation',quote:`${d.t.str}; ${d.us.str}; connected triangular leader arrowhead`,box:[Math.min(tip[0],d.t.cx-40),Math.min(tip[1],d.t.cy-10),Math.max(tip[0],d.t.cx+40),Math.max(tip[1],d.us.cy+10)]};
   return [{tip,top:d.top,bottom:d.bottom,source}];
  });
+}
+
+/** A drawn footing step survives loss of its text label. Match transverse
+ * inward arms to BOTH local footing-edge pens, not a thick wall/tag bar. */
+export function hasFootingCrossbar(
+  plan: RevisedPlan,
+  axis: number,
+  a: number,
+  b: number,
+  lo: number,
+  hi: number,
+): boolean {
+  const cross = 1 - axis,
+    scale = Math.hypot(plan.frame.a, plan.frame.b);
+  const black = plan.lines.filter(
+    (l) =>
+      !l.filled &&
+      !l.curve &&
+      (!l.color || l.color === '#000000') &&
+      l.width >= 0.5,
+  );
+  const arms = black.flatMap((l) => {
+    const p = [l.x1, l.y1],
+      q = [l.x2, l.y2];
+    if (
+      Math.abs(p[axis] - q[axis]) > 0.05 ||
+      p[axis] <= lo + 0.15 ||
+      p[axis] >= hi - 0.15
+    )
+      return [];
+    const left = Math.min(p[cross], q[cross]),
+      right = Math.max(p[cross], q[cross]);
+    // A dimension tick outside the band is not an inward step arm.
+    if (left < a - 0.15 || right > b + 0.15 || (right - left) * scale < 0.1)
+      return [];
+    const side =
+      Math.abs(left - a) < 0.15 ? 0 : Math.abs(right - b) < 0.15 ? 1 : -1;
+    return side < 0
+      ? []
+      : [{ at: (p[axis] + q[axis]) / 2, left, right, weight: l.width, side }];
+  });
+  const localEdge = (edge: number, at: number, weight: number) =>
+    black.some((l) => {
+      const p = [l.x1, l.y1],
+        q = [l.x2, l.y2];
+      return (
+        Math.abs(l.width - weight) < 0.05 &&
+        Math.abs(p[cross] - edge) < 0.15 &&
+        Math.abs(q[cross] - edge) < 0.15 &&
+        Math.max(p[axis], q[axis]) >= at - 0.25 / scale &&
+        Math.min(p[axis], q[axis]) <= at + 0.25 / scale &&
+        Math.abs(p[axis] - q[axis]) * scale > 0.1
+      );
+    });
+  return arms.some(
+    (left) =>
+      left.side === 0 &&
+      localEdge(a, left.at, left.weight) &&
+      localEdge(b, left.at, left.weight) &&
+      (Math.abs(left.right - b) < 0.15 ||
+        arms.some(
+          (right) =>
+            right.side === 1 &&
+            Math.abs(left.at - right.at) < 0.15 &&
+            Math.abs(left.weight - right.weight) < 0.05,
+        )),
+  );
 }
 
 /** Propagate a datum only through a drawn constant-width band connected to a
@@ -3750,6 +3821,7 @@ function recoverRevisedContinuousStrips(
                 if((hi-lo)*scale<1)return [];
                 const ca=coverage(aa,lo,hi),cb=coverage(bb,lo,hi);if(Math.min(ca.ratio,cb.ratio)<.4)return [];
                 if(plan.texts.some(t=>/^S\.?F\.?$/.test(t.str.trim())&&(horizontal?t.cx:t.cy)>lo-10&&(horizontal?t.cx:t.cy)<hi+10&&(horizontal?t.cy:t.cx)>a-20&&(horizontal?t.cy:t.cx)<b+20))return [];
+                if(hasFootingCrossbar(plan,axis,a,b,lo,hi))return [];
                 const connections=pads.flatMap(pad=>{
                   const sh=pad.shape;if(sh?.type!=='point')return [];
                   const q=sheetPoint(sh.at,plan.frame),halfAlong=sh.size[axis]/scale/2,halfAcross=sh.size[cross]/scale/2;

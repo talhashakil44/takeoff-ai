@@ -75,7 +75,7 @@ credible zero lengths. Source-derived spans remain separate.
   separately in `model.drawingGeometry`: no quantities, materials or schedule
   assignments. The first and southeast top -0.250 m are direct; the middle top -0.250 m is inferred through
   the adjoining unstepped strip. All bottoms are -0.650 m. Explore and Build
-  expose their drawing references and acceptance status. Model version 32 forces
+  expose their drawing references and acceptance status. Model version 33 forces
   older geometry to rebuild; imported accepted takeoffs remain unchanged.
 - Three WT-1 wall defaults are axes, not unsupported four-metre-high solids.
   Their complete footprints, opening cuts and vertical sections are unresolved.
@@ -458,3 +458,52 @@ Next: request Claude's independent source resolution for the conflicting S3.1
 end-bay titles; continue independent stepped-strip placement/section association
 while these two free ends await unique applicable evidence. Do not repeat
 unchanged searches or count support-only spans as complete cantilevers.
+
+## Step-symbol extraction failure — October 30, 23:33 wake
+
+Actual-source ablation removed only five SF/S.F. text labels from revised S1.0,
+leaving all vectors intact. This incorrectly produced an east SF2 flat solid
+across the drawn step (band x2030.28–2055.72, y1056.48–1110.84) and assigned a
+previously withheld west MF2 an unsupported propagated top -1.200 m. Source
+proof: `/tmp/east-step-ablation-source.png`; reproducible changes and references:
+`/tmp/sf-label-ablation.json`. Both recovery paths require independent drawn
+step-symbol rejection, not only OCR/text recognition. Model33 invalidates older
+saved derivations once the protective fix and validation below are complete.
+
+Claude's new roof references were traced through actual cut vectors. 4/S4.0
+runs at x1029.48, about673mm beyond grid2's x1010.4 support, through the adjacent
+B3 span rather than B2's x770.76–1010.4 end bay. 4/S5.0 explicitly describes
+entry-roof framing. Nearby CANTILEVER labels refer to R2 purlins. These do not
+resolve the two B2 free-end elevations; no roof extension was fabricated.
+
+The fix independently recognises inward step arms touching both local footing
+boundaries, matching their pen weight. Split and full crossbars qualify; thick
+wall/tag bars, outside ticks, diagonal ticks and one-sided arms do not. Both
+continuous-strip recovery and mass-footing datum propagation use this guard.
+The durable regression covers withdrawal of a previously recovered flat strip
+and mass while preserving the valid adjoining strip. Sixteen foundation tests
+and TypeScript pass. No transition profile or new footing volume is inferred.
+
+Compiled model33 was rebuilt through normal Build It, then reviewed in Explore
+in2D and3D. S1.0 retains30/154 physical shapes; the affected11.65mSF2 remains
+a plan axis with physical geometry withheld, and its accepted quantity remains
+visible. Browser errors:none. Private proofs:
+`diag/explore/proofs/step-symbol-guard-v33-plan.png` and
+`diag/explore/proofs/step-symbol-guard-v33-3d.png`.
+
+Independent final validation: both projects retain exactly135 source physical
+shapes, byte-equivalent to their pre-fix shapes; all2108/2115 accepted quantity
+tuples and original projects remain unchanged. Replay changes nothing; removing
+all evidence removes derived solids/candidates. Removing only the five SF labels
+now adds ZERO solids: false east SF2 and west MF2 are blocked. Two prior east
+F2/P2 candidates conservatively withdraw under that ablation; drawing-only MF3s
+are unchanged. Prior IFC validation applies to the identical shape objects.
+Evidence: `/tmp/sf-label-ablation.json`, `/tmp/final-replay-report.txt`,
+`/tmp/engine-replay-report.json`, `/tmp/pre-step-fix-legacy-shapes.json` and
+`/tmp/pre-step-fix-engine-shapes.json`.
+
+Next action: obtain Claude review of the independent vector guard, then target
+remaining foundation-wall height/section associations. The stepped transition
+still requires source-defined profile placement; roof free-end references remain
+unresolved. T11 is not complete; do not equate this protective repair with new
+geometry coverage or mark the automation complete.

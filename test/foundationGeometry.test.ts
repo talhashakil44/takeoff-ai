@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import {
   footingTopDatum,
+  hasFootingCrossbar,
   padJunctionPerimeter,
   padMassTopDatum,
   recoverFoundationGeometry,
@@ -1011,6 +1012,12 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
   expect(
     recoverFoundationGeometry(sp, span, stepped, sl).elements[2].shape?.type,
   ).toBe('axis');
+  const splitStep = (x: number) => [
+    {x1:x,y1:100-halfStrip,x2:x,y2:100-halfStrip+.2/scale,width:.6,filled:false,sub:990},
+    {x1:x,y1:100+halfStrip-.2/scale,x2:x,y2:100+halfStrip,width:.6,filled:false,sub:991},
+  ];
+  const unlabelledStep = {'spec:revision:21':[...sl['spec:revision:21'],...splitStep(160)]};
+  expect(recoverFoundationGeometry(sp,stripOut,source,unlabelledStep).elements[2].shape?.type).toBe('axis');
   const broken={'spec:revision:21':[...lines['spec:revision:21'],{...boundaries[0],x2:155},{...boundaries[0],x1:175},boundaries[1]]};
   const stopped=recoverFoundationGeometry(sp,span,source,broken).elements[2].shape;
   expect(stopped?.type).toBe('run');
@@ -1052,6 +1059,11 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
   expect(massJoined.elements[2].issues.join(' ')).toContain('top inferred from directly dimensioned adjoining strip');
   expect(massJoined.elements[2].quantity).toBe(mass.quantity);
   expect(recoverFoundationGeometry(joinedProject,massJoined,joinedSource,joinedLines)).toEqual(massJoined);
+  const massWithUnlabelledStep={'spec:revision:21':[...joinedLines['spec:revision:21'],...splitStep(205)]};
+  const guardedMass=recoverFoundationGeometry(joinedProject,massJoined,joinedSource,massWithUnlabelledStep);
+  expect(guardedMass.elements[2].shape?.type).toBe('locator');
+  expect(guardedMass.elements[1].shape).toEqual(massJoined.elements[1].shape);
+  expect(guardedMass.elements.map(e=>e.quantity)).toEqual(massJoined.elements.map(e=>e.quantity));
   const drawingOnly=recoverFoundationGeometry(sp,directModel,joinedSource,joinedLines);
   expect(drawingOnly.elements).toEqual(recoverFoundationGeometry(sp,directModel,joinedSource,directLines).elements);
   expect(drawingOnly.drawingGeometry).toHaveLength(1);
@@ -1348,4 +1360,50 @@ it('requires two independent agreeing leaders and a closed shoulder for mass-to-
       ],
     }),
   ).toBeNull();
+});
+
+it('recognizes split and full step strokes without borrowing wall pens or outside ticks', () => {
+  const line = (
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    width = 0.6,
+  ) => ({ x1, y1, x2, y2, width, filled: false, color: '#000000' });
+  const edges = [line(0, 0, 0, 100), line(90, 0, 90, 100)];
+  const split = [line(0, 50, 22, 50), line(68, 50, 90, 50)];
+  const plan = {
+    docId: 'revision',
+    page: 21,
+    key: 'spec:revision:21',
+    sheetId: 'plan',
+    frame: { a: 0.01, b: 0, tx: 0, ty: 0, residual: 0 },
+    texts: [],
+    lines: [...edges, ...split],
+  };
+  const check = (lines = plan.lines) =>
+    hasFootingCrossbar({ ...plan, lines }, 1, 0, 90, 0, 100);
+  expect(check()).toBe(true);
+  expect(check([...edges, line(0, 50, 90, 50)])).toBe(true);
+  expect(check([...edges, split[0]])).toBe(false);
+  expect(check([...edges, ...split.map((l) => ({ ...l, width: 1.32 }))])).toBe(
+    false,
+  );
+  expect(check([{ ...edges[0], width: 1.32 }, edges[1], ...split])).toBe(false);
+  expect(check([...edges, line(-22, 50, 0, 50), line(90, 50, 112, 50)])).toBe(
+    false,
+  );
+  expect(check([...edges, line(-3, 47, 3, 53), line(87, 47, 93, 53)])).toBe(
+    false,
+  );
+  const rotated = plan.lines.map((l) => ({
+    ...l,
+    x1: l.y1,
+    y1: l.x1,
+    x2: l.y2,
+    y2: l.x2,
+  }));
+  expect(
+    hasFootingCrossbar({ ...plan, lines: rotated }, 0, 0, 90, 0, 100),
+  ).toBe(true);
 });
