@@ -45,7 +45,7 @@ export function buildAll(input: BuildInput): BuildOutput {
 export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInput, 'sections' | 'facts' | 'edits'> & { today?: string }): { schedule: Schedule } {
   const acts = planActivities(model, setup, input.sections, input.facts, input.edits);
   const schedule = planToTarget(acts, setup);
-  schedule.issues.push(...planningScopeIssues(model, input.facts));
+  schedule.issues.push(...planningScopeIssues(model, input.facts, setup));
   const structureRates = setup.trades.structure?.value.rates;
   const structureRateRefs = model.elements.filter((e) => e.trade === 'structure' && (
     (e.unit === 'ea' && structureRates?.ea === 10) ||
