@@ -79,6 +79,8 @@ export function ExploreWorkspace({
     [layerPanel, setLayerPanel] = useState(false),
     [opacity, setOpacity] = useState(0.65),
     [showBase, setShowBase] = useState(true),
+    [showAllowances, setShowAllowances] = useState(false),
+    [showFootprints, setShowFootprints] = useState(true),
     [showGrids, setShowGrids] = useState(false),
     [sourceView, setSourceView] = useState<Sheet | null>(null),
     [overlayPages, setOverlayPages] = useState<
@@ -690,6 +692,8 @@ export function ExploreWorkspace({
               visibleSheets={visibleSheets}
               overlays={overlays}
               showBase={showBase}
+              showAllowances={showAllowances}
+              showFootprints={showFootprints}
               resetView={resetView}
               showGrids={showGrids}
               grids={grids}
@@ -766,6 +770,14 @@ export function ExploreWorkspace({
                   onChange={(e) => setShowGrids(e.target.checked)}
                 />{" "}
                 Drawing grids · inferred labels
+              </label>
+              <label>
+                <input type="checkbox" checked={showFootprints} onChange={e => setShowFootprints(e.target.checked)} />{" "}
+                Takeoff footprints · drawing view
+              </label>
+              <label>
+                <input type="checkbox" checked={showAllowances} onChange={e => setShowAllowances(e.target.checked)} />{" "}
+                Guessed shell &amp; slab · translucent context only
               </label>
               <p>
                 Amber tags are measured counts, not physical members. Overlay
@@ -974,7 +986,7 @@ export function ExploreWorkspace({
             <p>{room ? room.name : "Select a measured space"}</p>
           </div>
           <div className="ex-stage-foot">
-            <span>REAL TAKEOFF / INFERRED GEOMETRY</span>
+            <span>{showAllowances ? "GUESSED SHELL VISIBLE · NOT DRAWING GEOMETRY" : mode === "sheet" ? (showFootprints ? "TEAL = TAKEOFF FOOTPRINTS · CHECK AGAINST PDF" : "ORIGINAL DRAWING · TAKEOFF FOOTPRINTS HIDDEN") : "MEASURED FOOTPRINTS · INFERRED HEIGHTS · SHELL HIDDEN"}</span>
             <label>
               <input
                 type="checkbox"

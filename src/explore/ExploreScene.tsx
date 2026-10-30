@@ -35,6 +35,8 @@ interface Props {
     opacity: number;
   }[];
   showBase?: boolean;
+  showAllowances?: boolean;
+  showFootprints?: boolean;
   structureOnly?: boolean;
   resetView?: number;
   showGrids?: boolean;
@@ -117,7 +119,7 @@ export function ExploreScene(props: Props) {
     );
     const box = new THREE.Box3();
     for (const e of floorEls.filter(
-      (e) => e.origin === "building" || e.sheetId === props.sheet.id,
+      (e) => e.origin !== "building" && e.sheetId === props.sheet.id,
     )) {
       const g = geometryOf(e);
       if (g) {
@@ -150,12 +152,15 @@ export function ExploreScene(props: Props) {
       layer: number;
     }[] = [];
     for (const e of floorEls) {
-      // A planning allowance is not a measured wall; keep it out of the room view.
+      // Building allowances are opt-in context, never measured construction.
       const g = geometryOf(e);
       if (!g) continue;
       g.computeBoundingBox();
       const material = new THREE.MeshStandardMaterial({
-        color: palette(e),
+        color: e.origin === "building" ? "#c39746" : palette(e),
+        transparent: e.origin === "building",
+        opacity: e.origin === "building" ? 0.18 : 1,
+        depthWrite: e.origin !== "building",
         roughness: 0.86,
         metalness: 0,
         side: THREE.DoubleSide,
@@ -165,7 +170,7 @@ export function ExploreScene(props: Props) {
       });
       const mesh = new THREE.Mesh(g, material);
       mesh.userData.id = e.id;
-      mesh.castShadow = true;
+      mesh.castShadow = e.origin !== "building";
       mesh.receiveShadow = true;
       const edge = new THREE.LineSegments(
         new THREE.EdgesGeometry(g, 28),
@@ -186,6 +191,21 @@ export function ExploreScene(props: Props) {
             : 1;
       items.push({ e, mesh, edge, min: g.boundingBox!.min.y, layer });
     }
+    // Project the actual takeoff geometry onto the same datum as the PDF.
+    // No hull, envelope or roof allowance participates in this alignment check.
+    const footprints = new THREE.Group();
+    for (const e of floorEls.filter(e => e.origin !== "building" && e.sheetId === props.sheet.id)) {
+      const shape = e.shape;
+      const paths: Pt[][] = shape?.type === "run" ? [shape.points]
+        : shape?.type === "surface" ? [shape.ring, ...(shape.holes ?? [])].map(r => [...r, r[0]]) : [];
+      for (const path of paths) {
+        if (path.length < 2) continue;
+        const geometry = new THREE.BufferGeometry().setFromPoints(path.map(([x, y]) => new THREE.Vector3(x, base + 0.025, y)));
+        footprints.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#007a75", depthTest: false, transparent: true, opacity: 0.85 })));
+      }
+    }
+    footprints.renderOrder = 5;
+    scene.add(footprints);
     const corners: [
       [number, number],
       [number, number],
@@ -630,7 +650,9 @@ export function ExploreScene(props: Props) {
     let lastVisible: Set<string> | undefined,
       lastBase: boolean | undefined,
       lastGrids: boolean | undefined,
-      lastStructure: boolean | undefined;
+      lastStructure: boolean | undefined,
+      lastAllowances: boolean | undefined,
+      lastFootprints: boolean | undefined;
     const draw = (now: number) => {
       if (disposed) return;
       const dt = Math.min(0.04, (now - clock) / 1000 || 0.016);
@@ -640,6 +662,7 @@ export function ExploreScene(props: Props) {
       overlayGroup.visible = p.mode === "sheet" || p.mode === "lift";
       paper.visible = p.showBase !== false;
       gridGroup.visible = !!p.showGrids;
+      footprints.visible = !!p.showFootprints && p.mode === "sheet";
       pins.forEach((pin) => {
         pin.sprite.visible =
           p.mode !== "room" && !!p.visibleSheets?.has(pin.sheetId);
@@ -649,11 +672,15 @@ export function ExploreScene(props: Props) {
         p.visibleSheets !== lastVisible ||
         p.showBase !== lastBase ||
         p.showGrids !== lastGrids ||
-        p.structureOnly !== lastStructure;
+        p.structureOnly !== lastStructure ||
+        p.showAllowances !== lastAllowances ||
+        p.showFootprints !== lastFootprints;
       lastVisible = p.visibleSheets;
       lastBase = p.showBase;
       lastGrids = p.showGrids;
       lastStructure = p.structureOnly;
+      lastAllowances = p.showAllowances;
+      lastFootprints = p.showFootprints;
       if (transition < 1) {
         transition = Math.min(1, transition + dt / 0.95);
         const t = smooth(transition);
@@ -698,6 +725,7 @@ export function ExploreScene(props: Props) {
           const { mesh, min, layer, e } = item;
           mesh.visible =
             currentLift > 0.002 &&
+            (e.origin !== "building" || !!p.showAllowances) &&
             (!p.structureOnly || e.trade === "structure") &&
             (e.origin === "building" ||
               !p.visibleSheets ||
