@@ -302,6 +302,22 @@
       "title": "Raster symbol counting: legend symbols matched on plans pasted in as pictures (Kelso E2/E3 devices, fixtures)",
       "added": "2026-10-30T04:28:19.354Z",
       "by": "claude"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T8"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ],
+      "id": "T18",
+      "owner": "claude",
+      "title": "Civil line types without layers: limit of construction (strip/grade area) and silt fence length on Kelso C-104/C-111",
+      "added": "2026-10-30T04:30:49.522Z",
+      "by": "claude"
     }
   ]
 }
