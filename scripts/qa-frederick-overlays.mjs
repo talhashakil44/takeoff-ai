@@ -13,7 +13,7 @@ const base = join(root, folder);
 const project = JSON.parse(readFileSync(join(base, 'project.json'), 'utf8')).project;
 const out = 'diag/qa-frederick';
 mkdirSync(out, { recursive: true });
-const colours = { walls: '#ec1c24', rooms: '#00a5ff', unknown: '#8b5cf6', windows: '#ff8c00', ceilings: '#00a86b', symbols: '#ff00c8', trades: '#bc6c25', demolition: '#c70000', pipes: '#00c6ff' };
+const colours = { walls: '#ec1c24', rooms: '#00a5ff', unknown: '#8b5cf6', doors: '#ffd000', windows: '#ff8c00', ceilings: '#00a86b', symbols: '#ff00c8', trades: '#bc6c25', demolition: '#c70000', pipes: '#00c6ff' };
 const sheets = project.sheets.filter((s) => !s.superseded && project.measurements.some((m) => m.sheetId === s.id && colours[m.source ?? 'unknown']));
 const types = new Map(project.types.map((t) => [t.id, t]));
 const docs = new Map();

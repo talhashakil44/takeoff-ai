@@ -63,7 +63,7 @@ export function planningScopeIssues(model: BuildModel, facts: SpecFact[], setup:
   const excluded = model.elements.filter((e) => e.origin === 'takeoff' && e.planningExcluded);
   const explanations: Record<string, string> = {
     'egress-demolition': 'Egress-diagram traces do not establish demolition work. Check the actual removals plan before adding them.',
-    'unverified-demo-type': 'Demo 0 joins unrelated legend text. Re-read the numbered demolition notes before assigning a removal type.',
+    'unverified-demo-type': 'These numbered labels are empty or join drawing reference text rather than naming a removal. Re-read the demolition notes before assigning a work type.',
     'room-context': 'Generic room polygons are floor-area context; no ceiling or floor-finish installation is inferred from them.',
     'elevation-window': 'Elevation glazing marks may repeat plan window assemblies and do not establish a building level. Reconcile opening IDs and the assembly/lite count basis.',
     'open-ceiling': 'An open or unshown ceiling area is not new ceiling installation.',
@@ -82,9 +82,10 @@ export function planningScopeIssues(model: BuildModel, facts: SpecFact[], setup:
   if (excluded.some((e) => e.planningExcluded === 'unverified-demo-type')) {
     const shiftedNotes = model.elements.filter((e) => e.origin === 'takeoff' && e.measurementSource === 'demolition' &&
       /^A20[1-4]$/i.test(e.sources[0]?.label ?? '') && /^demo\s*\d+\s*:/i.test(e.typeName));
+    const provisional = shiftedNotes.filter((e) => !e.planningExcluded).length;
     if (shiftedNotes.length) issues.push({
       id: 'takeoff-review:shifted-demo-keynotes', severity: 'warning',
-      text: `${shiftedNotes.length} saved A201–A204 demolition markers use note-numbered type labels from an extraction that shifted some keynote text by one line. Their marked positions remain in the source takeoff, but the specific removal types, units and production basis need drawing review; the other note-numbered quantities remain provisional in demolition work.`,
+      text: `${shiftedNotes.length} saved A201–A204 demolition markers use note-numbered type labels from an extraction that shifted some keynote text by one line. Their marked positions remain in the source takeoff, but the specific removal types, units and production basis need drawing review; ${provisional} labels that sound like removals remain provisional in demolition work.`,
       refs: shiftedNotes.map((e) => e.id), sources: shiftedNotes.map((e) => e.sources[0]),
     });
   }

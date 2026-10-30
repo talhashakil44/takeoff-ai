@@ -53,7 +53,13 @@ export function planningExclusion(m: Measurement, type: TakeoffType, sheet: Shee
   if (m.source === 'rooms' && type.kind === 'area' && /^rooms?\b/i.test(name)) return 'room-context';
   if (m.source === 'windows' && type.kind === 'count' && /\bELEVATIONS?\b/i.test(sheet.title ?? '') && !/\bPLAN\b/i.test(sheet.title ?? '')) return 'elevation-window';
   if (m.source === 'demolition' && /\bEGRESS\b.*\bDIAGRAM|\bOBC\b.*\bMATRIX/i.test(sheet.title ?? '') && /^demo/i.test(name)) return 'egress-demolition';
-  if (m.source === 'demolition' && /^demo\s*0\s*:/i.test(name)) return 'unverified-demo-type';
+  // Exclude only unmistakable drawing references and empty labels. Other
+  // note-numbered removals remain provisional because their text may be shifted.
+  const demoNote = /^demo\s*(\d+)\s*:\s*(.*)/i.exec(name);
+  if (m.source === 'demolition' && demoNote &&
+      (demoNote[1] === '0' || /^(?:\(each\))?\s*$/i.test(demoNote[2]) ||
+       /^(?:building elevation|electrical lighting plan|mechanical documents|plan\b)/i.test(demoNote[2])))
+    return 'unverified-demo-type';
   if (m.source === 'ceilings' && /\bceiling\s*[–-]\s*open\b|\bnone shown\b/i.test(name)) return 'open-ceiling';
   if (m.source === 'ceilings' && /^\s*0\s*[–-]\s*See A0+\b/i.test(name)) return 'unverified-ceiling-type';
   if (duplicateRoofIds.has(m.id)) return 'duplicate-roof-view';

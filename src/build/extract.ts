@@ -29,7 +29,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 23;
+export const MODEL_VERSION = 24;
 
 export interface Trade {
   key: string;
@@ -374,7 +374,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     if (exclusion) {
       const reason: Record<NonNullable<typeof exclusion>, string> = {
         'egress-demolition': 'Egress diagram line is not evidence of demolition work.',
-        'unverified-demo-type': 'Demo 0 is concatenated legend text, not a verified removal type.',
+        'unverified-demo-type': 'Numbered demolition label is empty or names drawing reference text, not a verified removal type.',
         'room-context': 'Generic room area is spatial context, not a ceiling or floor finish quantity.',
         'elevation-window': 'Elevation window marks may show the same assemblies as plan marks; opening count and level need reconciliation.',
         'open-ceiling': 'Open or unshown ceiling is not evidence of a new ceiling.',
