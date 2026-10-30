@@ -17,7 +17,9 @@ export function suggestScopeAllowances(model: BuildModel, setup: PlanSetup): Sco
     .filter((e) => e.origin === 'takeoff' && e.trade === 'structure' && e.level === 'fdn' && /slab on grade/i.test(e.typeName))
     .reduce((sum, e) => sum + (e.unit === 'm²' ? e.quantity : e.unit === 'SF' ? e.quantity * 0.09290304 : 0), 0);
   return AREA_PROXY_TRADES.flatMap((key): ScopeSuggestion[] => {
-    if (model.elements.some((e) => e.trade === key && e.origin === 'takeoff') || key in (setup.allowances?.value ?? {})) return [];
+    const measured = model.elements.some((e) => e.trade === key && e.origin === 'takeoff' &&
+      (key !== 'envelope' || (/roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF'))));
+    if (measured || key in (setup.allowances?.value ?? {})) return [];
     const referenceAreaM2 = key === 'envelope' ? slabM2 : areaM2;
     if (referenceAreaM2 <= 0) return [];
     const quantity = Math.round((model.units === 'metric' ? referenceAreaM2 : referenceAreaM2 / 0.09290304) * 10) / 10;
@@ -30,7 +32,7 @@ export function suggestScopeAllowances(model: BuildModel, setup: PlanSetup): Sco
       referenceAreaM2,
       areaBasis: 'inferred',
       rateBasis: 'assumed',
-      why: `${name} has no measured takeoff. ${quantity} ${unit} is a proxy from ${key === 'envelope' ? 'the measured slab-on-grade footprint (roof area and slope unverified)' : 'recovered gross floor area'}; ${rate} ${unit} per crew-day is an assumed planning rate, not a trade commitment. Review scope and rate before accepting.`,
+      why: `${key === 'envelope' ? 'Roof covering' : name} has no measured takeoff. ${quantity} ${unit} is a proxy from ${key === 'envelope' ? 'the measured slab-on-grade footprint (roof area and slope unverified)' : 'recovered gross floor area'}; ${rate} ${unit} per crew-day is an assumed planning rate, not a trade commitment. Review scope and rate before accepting.`,
     }];
   });
 }

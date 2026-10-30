@@ -7,7 +7,8 @@ follows structure on the same level. `MODEL_VERSION` 16 rebuilds models saved
 under the previous trade routing.
 
 `suggestScopeAllowances(model, setup)` returns reviewable suggestions for area
-based trades with no measured element. For floor trades, it uses recovered
+based floor trades with no measured element, plus missing roof covering even
+when exterior walls are measured. For floor trades, it uses recovered
 gross floor areas of normal levels as a **quantity proxy**, excluding Foundation
 and Roof. For an unmeasured envelope, it uses a measured slab-on-grade footprint
 as a **roof area proxy**, without inventing pitch, eaves or a solid. It uses
@@ -33,7 +34,8 @@ The function never edits `setup`, the project, or the plan. The Setup UI can
 read `out.scopeSuggestions` (present after both build and replan), show each
 suggestion, and accept it by copying `allowance` into
 `edits.setup.allowances[key]`. It must omit a suggestion when that trade already
-has a measured element or a saved allowance. If the required reference area is
+has a measured element (or, for envelope, a measured roof area) or a saved
+allowance. If the required reference area is
 missing, it returns no suggestion for that trade.
 
 The refreshed 1,653 measurement Kelso demo has 1,236.51 m² recovered gross

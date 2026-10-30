@@ -61,6 +61,11 @@ describe('Build It unmeasured scope allowances', () => {
       allowance: { quantity: 702.1, unit: 'm²', rate: 74, provisional: true },
       referenceAreaM2: 702.065,
     });
+    m.elements.push({ ...element('ew', 'envelope', 'L1', '07 Envelope', 'm', 30), typeName: 'EW1 exterior wall' });
+    expect(suggestScopeAllowances(m, setup).some((s) => s.key === 'envelope')).toBe(true);
+    m.elements.push({ ...element('roof', 'envelope', 'roof', '07 Envelope', 'm²', 700), typeName: 'Roof membrane' });
+    expect(suggestScopeAllowances(m, setup).some((s) => s.key === 'envelope')).toBe(false);
+    m.elements.pop();
     m.floorAreas = {};
     expect(suggestScopeAllowances(m, setup).map((s) => s.key)).toEqual(['envelope']);
   });
