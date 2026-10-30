@@ -17,7 +17,7 @@ import type { DrawingLines } from './roof';
  * so the cache key is the document and page; the version is bumped when what is kept changes.
  */
 
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 
 /**
  * Sheets whose linework the model reads: exterior elevations and building sections (façades,
@@ -107,13 +107,14 @@ export function markPolylineArcs(segs: Segment[]): Segment[] {
   return out;
 }
 
-/** Only what Build It uses of a line: its ends, ink, and whether it is a curve or dashed. */
+/** Only what Build It uses of a line: its ends, ink, the shape it belongs to, and whether it is a curve or dashed. */
 export function slimLines(segs: Segment[]): Segment[] {
   return markPolylineArcs(segs).map((l) => {
     const out: Segment = { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, width: l.width, filled: l.filled };
     if (l.curve) out.curve = true;
     if (l.dashed) out.dashed = true;
     if (l.color) out.color = l.color;
+    if (Number.isInteger(l.sub)) out.sub = l.sub;
     return out;
   });
 }
@@ -126,6 +127,8 @@ export interface PackedLines {
   width: Float32Array;
   /** Ink as 0xrrggbb, -1 for none. */
   color: Int32Array;
+  /** The subpath (drawn shape) it belongs to, -1 for none. */
+  sub: Int32Array;
 }
 const hex = (c?: string) => (c && /^#[0-9a-f]{6}$/i.test(c) ? parseInt(c.slice(1), 16) : -1);
 export function packLines(segs: Segment[]): PackedLines {
@@ -133,13 +136,15 @@ export function packLines(segs: Segment[]): PackedLines {
   const flags = new Uint8Array(segs.length);
   const width = new Float32Array(segs.length);
   const color = new Int32Array(segs.length);
+  const sub = new Int32Array(segs.length);
   segs.forEach((l, i) => {
+    sub[i] = Number.isInteger(l.sub) && l.sub! >= 0 ? l.sub! : -1;
     xy.set([l.x1, l.y1, l.x2, l.y2], i * 4);
     flags[i] = (l.filled ? 1 : 0) | (l.curve ? 2 : 0) | (l.dashed ? 4 : 0);
     width[i] = l.width;
     color[i] = hex(l.color);
   });
-  return { v: CACHE_VERSION, xy, flags, width, color };
+  return { v: CACHE_VERSION, xy, flags, width, color, sub };
 }
 export function unpackLines(p: PackedLines): Segment[] {
   const out: Segment[] = new Array(p.flags.length);
@@ -150,6 +155,8 @@ export function unpackLines(p: PackedLines): Segment[] {
     if (f & 4) l.dashed = true;
     const c = p.color?.[i] ?? -1;
     if (c >= 0) l.color = `#${c.toString(16).padStart(6, '0')}`;
+    const k = p.sub?.[i] ?? -1;
+    if (k >= 0) l.sub = k;
     out[i] = l;
   }
   return out;
