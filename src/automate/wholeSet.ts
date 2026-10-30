@@ -13,6 +13,8 @@ import { automateWalls, projectSetTypes } from './walls';
 import { automateWindows } from './windows';
 import { planShift as planShiftKnown, repeatedRuns } from './overlap';
 import { findRoomLabels } from '../fill/rooms';
+import { automateFoundations } from './foundations';
+import { automateStructure } from './structure';
 import type { Project, Pt, Sheet } from '../model';
 import type { PDFDocumentProxy } from '../pdf';
 import { classifySheet, tradeOfNumber, type SheetKind } from '../sheetKind';
@@ -258,6 +260,28 @@ export async function takeOffWholeSet(
       return of.length ? `${made} of ${of.length} plans` : 'no new-work floor plans found';
     });
   }
+
+  // Below and behind the walls: the foundations off the foundation plan and structural schedules,
+  // and the framing (beams, columns, lintels, structural walls) off the framing plans.
+  await run('foundations', async () => {
+    say('Whole set: foundations…');
+    await pause();
+    const r = await automateFoundations(project, access, opts.maxOpening);
+    apply('foundations', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('structure', async () => {
+    say('Whole set: structural framing…');
+    await pause();
+    const r = await automateStructure(project, access, opts.maxOpening);
+    apply('structure', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
 
   await run('doors', async () => {
     const home = levels[0] ?? plans[0];
