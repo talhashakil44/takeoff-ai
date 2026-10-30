@@ -117,7 +117,7 @@ export function ExploreScene(props: Props) {
     const base =
       props.model.levels.find((l) => l.id === floorLevel)?.elevation ?? 0;
     const floorEls = props.model.elements.filter(
-      (e) => e.level === floorLevel && e.shape && e.status !== "demolished",
+      (e) => e.shape && e.status !== "demolished" && (e.origin !== "building" || e.level === floorLevel),
     );
     const box = new THREE.Box3();
     for (const e of floorEls.filter(

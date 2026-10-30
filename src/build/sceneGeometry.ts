@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { runSolids } from './solids';
+import { continuousRunPoints, runSolids } from './solids';
 import type { BuildElement } from './types';
 
 export function geometryOf(e: BuildElement): THREE.BufferGeometry | null {
@@ -29,6 +29,24 @@ export function geometryOf(e: BuildElement): THREE.BufferGeometry | null {
     if (parts.length > 1) for (const p of parts) p.dispose();
     return g;
   }
+  if (s.type === 'run' && s.profile && s.profile.length >= 3) {
+    const parts: THREE.BufferGeometry[] = [];
+    const points = continuousRunPoints(s.points);
+    for (let i=1;i<points.length;i++) {
+      const a=points[i-1],b=points[i],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      if(length<.02)continue;
+      const dx=(b[0]-a[0])/length,dy=(b[1]-a[1])/length;
+      const section=new THREE.Shape(s.profile.map(([x,y])=>new THREE.Vector2(x,y)));
+      const geometry=new THREE.ExtrudeGeometry(section,{depth:length,bevelEnabled:false});
+      geometry.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(dy,0,-dx),new THREE.Vector3(0,1,0),new THREE.Vector3(dx,0,dy)));
+      geometry.translate(a[0],s.z0,a[1]);
+      parts.push(geometry);
+    }
+    if(!parts.length)return null;
+    const result=parts.length===1?parts[0]:mergeGeometries(parts);
+    if(parts.length>1)for(const part of parts)part.dispose();
+    return result;
+  }
   if (s.type === 'run') {
     const parts: THREE.BufferGeometry[] = [];
     for (const p of runSolids(s)) {
@@ -36,7 +54,10 @@ export function geometryOf(e: BuildElement): THREE.BufferGeometry | null {
       const g = new THREE.BoxGeometry(p.length, maxHeight, p.thickness);
       const vertices = g.getAttribute('position');
       for (let i = 0; i < vertices.count; i++)
-        if (vertices.getY(i) > 0) vertices.setY(i, (vertices.getX(i) < 0 ? p.height : p.endHeight) - maxHeight / 2);
+        {
+          const start=vertices.getX(i)<0, bottom=start?0:(p.endZ??p.z)-p.z;
+          vertices.setY(i,bottom+(vertices.getY(i)>0?(start?p.height:p.endHeight):0)-maxHeight/2);
+        }
       g.computeVertexNormals();
       g.rotateY(-Math.atan2(p.dy, p.dx));
       g.translate(p.x + (p.dx * p.length) / 2, p.z + maxHeight / 2, p.y + (p.dy * p.length) / 2);

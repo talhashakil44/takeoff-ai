@@ -46,6 +46,9 @@ export const structuralFingerprint = (e: BuildElement, p: Project) =>
     p.measurements.find((m) => m.id === e.measurementId),
     p.types.find((t) => t.id === e.typeId),
     p.sheets.find((s) => s.id === e.sheetId),
+    // A geometry review belongs to a document issue set. New addenda must not
+    // silently reuse a placement approved against an earlier structural issue.
+    (p.specs ?? []).map(s => [s.id, s.name, s.book?.addendum ?? null]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
   ]);
 /** SIZE and POSTS are different columns. Never take the nearest dimensional text across column boundaries. */
 export function structuralSections(
@@ -87,6 +90,7 @@ export function structuralSections(
         const size = ts.find(
           (t) =>
             Math.abs(t.cy - tag.cy) < 2 &&
+            /^(?:\d+\s*[-–]\s*)?\d+(?:\.\d+)?\s*[x×]\s*\d/i.test(t.str.trim()) &&
             t.cx > mark.cx + 15 &&
             t.cx < (right?.cx ?? header.cx + 150),
         );
@@ -560,7 +564,8 @@ export function connectStructuralModel(
     ...model,
     elements: model.elements.map((e) => {
       const ev = evidence[e.id];
-      if (!ev) return e;
+      // Footings have their own schedule/datum resolver; do not erase its solids.
+      if (!ev || e.measurementSource === "foundations") return e;
       const review = reviews?.[e.id],
         frame = frames[e.sheetId];
       const reviewed =
@@ -605,4 +610,14 @@ export function connectStructuralModel(
       };
     }),
   };
+}
+
+/** Apply valid local reviews last, using the individual drawing viewport frame. */
+export function applyStructuralReviews(project:Project,model:BuildModel,reviews:Record<string,StructuralPlacement>,memberFrames:Record<string,SheetFrame>):BuildModel {
+  return {...model,elements:model.elements.map(e=>{
+    const review=reviews[e.id],frame=memberFrames[e.id];
+    if(!review||!frame||review.sheetId!==e.sheetId||review.fingerprint!==structuralFingerprint(e,project))return e;
+    const shape=reviewedShape(review,frame);if(!shape)return e;
+    return {...e,shape,placement:'inferred' as const,sources:[...new Map([...e.sources,...review.evidence].map(s=>[JSON.stringify(s),s])).values()],issues:[...e.issues.filter(i=>!i.startsWith('Reviewed geometry:')),`Reviewed geometry: ${review.note}`]};
+  })};
 }

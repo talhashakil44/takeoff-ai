@@ -1,9 +1,23 @@
-import type { Project } from "../model";
-import type { BuildModel } from "./types";
-import { registerSheets, type DrawingTexts } from "./building";
-import type { DrawingLines } from "./roof";
-import { sheetFrame, type SheetFrame } from "./sheetCoordinates";
-import { structuralEvidence, connectStructuralModel } from "./structural";
+import { connectSourceColumns } from './columnGeometry';
+import { connectStructuralWalls } from './structuralWallGeometry';
+import { withRevisedRoofSources } from './structuralRevisions';
+import {
+  beginPhysicalGeometry,
+  endPhysicalGeometry,
+} from './physicalGeometryLifecycle';
+import { suppressCoincidentStructure } from './coincidentStructure';
+import { canopyRegistrations } from './canopyRegistration';
+import { canopyMemberGeometry } from './canopyMemberGeometry';
+import { connectFlatRoofMembers } from './flatRoofBeamGeometry';
+import { connectRoofMembers } from './roofMemberGeometry';
+import { connectFloorBeams } from './floorBeamGeometry';
+import { recoverFoundationGeometry } from './foundationGeometry';
+import type { Project } from '../model';
+import type { BuildModel } from './types';
+import { registerSheets, type DrawingTexts } from './building';
+import type { DrawingLines } from './roof';
+import { sheetFrame, type SheetFrame } from './sheetCoordinates';
+import { structuralEvidence, connectStructuralModel } from './structural';
 /** Register structural evidence into the existing model's coordinate system, not an independent scene. */
 export function connectStructure(
   project: Project,
@@ -16,8 +30,8 @@ export function connectStructure(
     (s) =>
       !s.superseded &&
       /^A/.test(s.name) &&
-      /FLOOR PLAN/i.test(s.title ?? "") &&
-      !/CEILING|FIRE SEPARATION|ENLARG/i.test(s.title ?? ""),
+      /FLOOR PLAN/i.test(s.title ?? '') &&
+      !/CEILING|FIRE SEPARATION|ENLARG/i.test(s.title ?? ''),
   );
   for (const base of anchors) {
     const bf = sheetFrame(project, model, base);
@@ -51,5 +65,91 @@ export function connectStructure(
     }
   }
   const evidence = structuralEvidence(project, model, texts, lines, frames);
-  return connectStructuralModel(project, model, evidence, {}, frames);
+  return suppressCoincidentStructure(
+    connectPhysicalStructure(
+      project,
+      connectStructuralModel(project, model, evidence, {}, frames),
+      texts,
+      lines,
+    ),
+  );
+}
+
+/** Shared source-backed geometry pipeline for Build, Explore and IFC. */
+export function connectPhysicalStructure(
+  project: Project,
+  model: BuildModel,
+  texts: DrawingTexts,
+  lines: DrawingLines,
+): BuildModel {
+  const baseline = connectStructuralWalls(
+    project,
+    beginPhysicalGeometry(project, model),
+    texts,
+    lines,
+  );
+  const floor = connectFloorBeams(project, baseline, texts, lines);
+  const roof = withRevisedRoofSources(
+    project,
+    floor,
+    texts,
+    lines,
+    (sourceProject, sourceModel, sourceTexts, sourceLines) => {
+      const highRoof = connectRoofMembers(
+        sourceProject,
+        sourceModel,
+        sourceTexts,
+        sourceLines,
+      );
+      const lowRoof = connectFlatRoofMembers(
+        sourceProject,
+        highRoof,
+        sourceTexts,
+        sourceLines,
+      );
+      const columns = connectSourceColumns(
+        sourceProject,
+        lowRoof,
+        sourceTexts,
+        sourceLines,
+      );
+      const canopy = canopyMemberGeometry(
+        sourceProject,
+        sourceTexts,
+        sourceLines,
+        canopyRegistrations(sourceProject, columns, sourceTexts, sourceLines),
+      );
+      return {
+        ...columns,
+        elements: columns.elements.map((e) => {
+          const member = canopy[e.measurementId];
+          if (!member) return e;
+          return {
+            ...e,
+            shape: member.shape,
+            placement: 'inferred' as const,
+            sources: [
+              ...new Map(
+                [...e.sources, ...member.sources].map((s) => [
+                  JSON.stringify(s),
+                  s,
+                ]),
+              ).values(),
+            ],
+            issues: [
+              ...new Set([
+                ...e.issues.filter(
+                  (i) => !i.includes('Calibrated') && !i.includes('plan only'),
+                ),
+                ...member.issues,
+              ]),
+            ],
+          };
+        }),
+      };
+    },
+  );
+  return endPhysicalGeometry(
+    recoverFoundationGeometry(project, roof, texts, lines),
+  );
 }

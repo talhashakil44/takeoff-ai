@@ -43,7 +43,9 @@ export type ElementShape =
   /** Grid-located counted item. Scene marker and IFC placement only; no invented physical section. */
   | { type: 'locator'; at: [number, number]; z: number }
   /** A run (wall, duct, pipe): a polyline extruded to a height. */
-  | { type: 'run'; points: [number, number][]; z0: number; height: number; thickness: number; topPlane?: [number, number, number];
+  | { type: 'run'; points: [number, number][]; z0: number; height: number; thickness: number; topPlane?: [number, number, number]; bottomPlane?: [number, number, number];
+      /** Source-traced cross section: lateral offset and height above z0, in metres. */
+      profile?: [number, number][];
       /** Inferred square-turn fills shared by viewer and IFC for separate measured wall runs. */
       cornerFills?: { at: [number, number]; incoming: [number, number]; turn: number; size: number }[];
       openings?: {
@@ -61,6 +63,8 @@ export type ElementShape =
   | { type: 'point'; at: [number, number]; z: number; size: [number, number, number]; rotation?: number };
 
 export interface BuildElement {
+  /** Original plan seed; restored before rechecking derived physical geometry. */
+  physicalGeometryBaseline?: import("./physicalGeometryLifecycle").PhysicalGeometryBaseline;
   /** Stable: the measurement's id. */
   id: string;
   name: string;

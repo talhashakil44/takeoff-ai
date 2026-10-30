@@ -425,3 +425,15 @@ describe('build it', () => {
     expect(ifc).toContain(`'${ifcGuid(wall.id)}'`);
   });
 });
+
+it('exports all indexed roof beam triangles as a closed manifold IFC mesh',()=>{
+  const p=project(),model=extractModel({project:p,sections:[],floorToFloor:3.6});
+  model.elements=[{...model.elements[0],shape:{type:'run',points:[[0,0],[5,0]],z0:8,height:.6,thickness:.265,topPlane:[.125,0,8.6],bottomPlane:[.125,0,8]}}];
+  const ifc=toIfc({model,project:p,sections:[],schedule:null});
+  const body=ifc.split('\n').find(line=>line.includes('IFCTRIANGULATEDFACESET'))!;
+  const faces=[...body.matchAll(/\((\d+),(\d+),(\d+)\)/g)].map(m=>m.slice(1).map(Number));
+  expect(faces).toHaveLength(12);
+  const edges=new Map<string,number>();
+  for(const face of faces)for(let i=0;i<3;i++){const edge=[face[i],face[(i+1)%3]].sort((a,b)=>a-b).join(',');edges.set(edge,(edges.get(edge)??0)+1);}
+  expect([...edges.values()].every(count=>count===2)).toBe(true);
+});

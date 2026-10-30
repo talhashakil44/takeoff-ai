@@ -4,9 +4,9 @@ import { measurementVars, primaryOf } from "../quantities";
 import { loadBuild } from "../build/client";
 import { openPdf, type PDFDocumentProxy } from "../pdf";
 import { segmentsOf } from "../fill/sheetWalls";
-import type { DrawingLines } from "../build/roof";
+import { loadDrawingSources, markPolylineArcs } from "../build/sources";
+import { titleBlockWords } from "../build/extract";
 import { pageTexts } from "../pageText";
-import type { DrawingTexts } from "../build/building";
 import type { Project, Sheet } from "../model";
 import type { ExploreWorkspaceProps } from "./ExploreWorkspace";
 import "./explore.css";
@@ -28,7 +28,8 @@ export function ExploreHost({
       null,
     ),
     [error, setError] = useState(""),
-    [stamp, setStamp] = useState("");
+    [stamp, setStamp] = useState(""),
+    [progress, setProgress] = useState("");
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -58,6 +59,7 @@ export function ExploreHost({
     const docs = new Map<string, Promise<PDFDocumentProxy>>();
     setData(null);
     setError("");
+    setProgress("");
     (async () => {
       const project = liveProject ?? (await loadCurrentProject());
       if (!project?.id) throw new Error("Open a project in Takeoff AI first.");
@@ -100,7 +102,7 @@ export function ExploreHost({
         throw new Error(
           "The takeoff has changed since this model was built. Rebuild in Build It before exploring.",
         );
-      const getPdf = async (s: Sheet) => {
+      const getPdf = async (s: Pick<Sheet, "docId">) => {
         if (!docs.has(s.docId))
           docs.set(
             s.docId,
@@ -129,31 +131,47 @@ export function ExploreHost({
       };
       if (!cancelled) {
         setStamp(saved.savedAt);
-        setData({
+        // Use the same source selection/cache as Build. Do not display saved
+        // structural solids until the current source evidence is available.
+        const revisionReaders = {
+          pages: async (docId: string) => {
+            if (!cancelled) setProgress(`Checking revised drawings in ${project.specs?.find(s => s.id === docId)?.name ?? "addendum"}…`);
+            return (await getPdf({ docId })).numPages;
+          },
+          size: async (docId: string, pageNumber: number) => {
+            const page = await (await getPdf({ docId })).getPage(pageNumber);
+            const viewport = page.getViewport({ scale: 1 });
+            return { width: viewport.width, height: viewport.height };
+          },
+          text: async (docId: string, pageNumber: number) =>
+            pageTexts(await (await getPdf({ docId })).getPage(pageNumber)),
+          lines: async (docId: string, pageNumber: number) =>
+            segmentsOf(await (await getPdf({ docId })).getPage(pageNumber)),
+        };
+        const source = await loadDrawingSources({
           project,
-          model: saved.output.model,
-          renderPage,
-          indexing: true,
+          revisions: revisionReaders,
+          sheetText: async id => {
+            const sheet=project.sheets.find(s=>s.id===id)!;
+            return pageTexts(await (await getPdf(sheet)).getPage(sheet.page));
+          },
+          sheetLines: async id => {
+            const sheet=project.sheets.find(s=>s.id===id)!;
+            return segmentsOf(await (await getPdf(sheet)).getPage(sheet.page));
+          },
+          titleWords:titleBlockWords,
+          cancelled:()=>cancelled,
+          progress:(done,total)=>{if(!cancelled)setProgress(`Reading drawing evidence ${done} of ${total}…`);},
         });
-        // Read local vector text once, progressively; no drawing upload or model mutation.
-        const drawingTexts: DrawingTexts = {};
-        const drawingLines: DrawingLines = {};
-        for (const sheet of project.sheets) {
-          if (cancelled) break;
-          if (sheet.superseded) continue;
-          try {
-            const page = await (await getPdf(sheet)).getPage(sheet.page);
-            drawingTexts[sheet.id] = await pageTexts(page);
-            if (
-              (/^S/.test(sheet.name) &&
-                project.measurements.some((m) => m.sheetId === sheet.id)) ||
-              /WINDOW ELEVATION|WINDOW SCHEDULE/i.test(sheet.title ?? "")
-            ) {
-              drawingLines[sheet.id] = await segmentsOf(page);
-            }
-          } catch {
-            /* unavailable PDFs stay explicit sources */
-          }
+        const drawingTexts=source.texts, drawingLines=source.lines;
+        // Architectural grid leaders constrain offset canopy grids even when
+        // the floor has no door counts and so was not a shared linework plan.
+        for(const sheet of project.sheets.filter(s=>!s.superseded &&
+          ((/^A/.test(s.name)&&/FLOOR PLAN/i.test(s.title??'')&&!/CEILING|ENLARG|FIRE/i.test(s.title??''))||/WINDOW SCHEDULE/i.test(s.title??'')))) {
+          if(cancelled)break;
+          if(drawingLines[sheet.id]?.length)continue;
+          try {drawingLines[sheet.id]=markPolylineArcs(await segmentsOf(await (await getPdf(sheet)).getPage(sheet.page)));}
+          catch { /* Missing source geometry stays unresolved. */ }
         }
         if (!cancelled)
           setData({
@@ -206,9 +224,9 @@ export function ExploreHost({
           />
           <div
             className="ex-snapshot"
-            title="Rebuild in Build It to refresh geometry. This is a saved model, not a live geometry calculation."
+            title="Saved takeoff model with geometry connected to the current local drawing evidence. Rebuild in Build It after changing takeoffs."
           >
-            Model snapshot · {new Date(stamp).toLocaleString()}
+            Takeoff snapshot · {new Date(stamp).toLocaleString()}
           </div>
         </>
       ) : (
@@ -219,7 +237,7 @@ export function ExploreHost({
               {error ? "A measured starting point." : "Opening your project…"}
             </h1>
             <p role={error ? "alert" : "status"}>
-              {error ||
+              {error || progress ||
                 "Reading the saved model and its original drawing references."}
             </p>
             <button onClick={() => setOpen(false)}>Back to takeoff</button>

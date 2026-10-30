@@ -5,6 +5,7 @@ import {
   structuralEvidence,
   lintelSpan,
   reviewedShape,
+  applyStructuralReviews,
   connectStructuralModel,
   structuralFingerprint,
   type StructuralPlacement,
@@ -300,4 +301,17 @@ describe("source-backed structure", () => {
     }
   });
 
+});
+
+
+it('applies reviewed geometry after inference using the member viewport, never a shared sheet frame',()=>{
+  const automatic={...model,elements:[{...member,shape:{type:'run' as const,points:[[0,0],[10,0]] as [number,number][],z0:8,height:.6,thickness:.2}}]};
+  const localFrame={a:.02,b:0,tx:20,ty:30,residual:0};
+  const out=applyStructuralReviews(project,automatic,{m:placement},{m:localFrame});
+  expect(out.elements[0].shape).toMatchObject({points:[[20,30],[22,30]],z0:2.74});
+  expect(out.elements[0].quantity).toBe(member.quantity);
+  expect(applyStructuralReviews(project,automatic,{m:placement},{s:frame})).toEqual(automatic);
+  expect(applyStructuralReviews(project,automatic,{m:{...placement,fingerprint:'stale'}},{m:localFrame})).toEqual(automatic);
+  const reissued = {...project, specs:[...(project.specs ?? []),{id:'new-addendum',name:'Addendum 10.pdf'}]};
+  expect(applyStructuralReviews(reissued,automatic,{m:placement},{m:localFrame})).toEqual(automatic);
 });

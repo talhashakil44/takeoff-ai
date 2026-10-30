@@ -1,3 +1,6 @@
+import { canopyRegistrations } from "../build/canopyRegistration";
+import type { DrawingLines } from "../build/roof";
+import { roofViewportRegistrations } from "../build/roofRegistration";
 import type { Project, Sheet } from "../model";
 import type { BuildElement, BuildModel } from "../build/types";
 import { gridAxes, registerSheets, type DrawingTexts } from "../build/building";
@@ -42,6 +45,7 @@ export interface DrawingLayer {
   level: string | null;
   elements: BuildElement[];
   reason: string;
+  geometryOnly?: boolean;
 }
 /** Grid registration must have evidence on both axes; equal page size/scale is not alignment. */
 export function drawingLayers(
@@ -49,6 +53,7 @@ export function drawingLayers(
   model: BuildModel,
   base: Sheet,
   texts: DrawingTexts,
+  lines: DrawingLines = {},
 ): DrawingLayer[] {
   const registrationProject = {
     ...project,
@@ -58,6 +63,7 @@ export function drawingLayers(
     })),
   };
   const baseFrame = sheetFrame(project, model, base);
+  const roofRegs = {...roofViewportRegistrations(project, model, texts), ...canopyRegistrations(project, model, texts, lines)};
   return project.sheets
     .filter((s) => !s.superseded)
     .map((sheet) => {
@@ -115,14 +121,19 @@ export function drawingLayers(
       }
       if (!frame && baseFrame && level && sheet.id !== base.id)
         frame = matchGridFrame(base, baseFrame, sheet, texts);
+      const roof = elements.map(e=>roofRegs[e.measurementId]).find(Boolean);
+      const geometryOnly = !frame && !!roof;
+      if (geometryOnly) frame = roof.frame;
       return {
+        geometryOnly,
         sheet,
         discipline: discipline(sheet),
         frame,
         level,
         elements,
         reason:
-          sheet.id === base.id
+          geometryOnly ? "Roof viewports registered independently. Unplaced members stay unresolved; open original for the full sheet."
+          : sheet.id === base.id
             ? "Base floor plan"
             : frame
               ? reg

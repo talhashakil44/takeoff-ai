@@ -23,6 +23,13 @@
 .ex-shell * {
   box-sizing: border-box;
 }
+.ex-revision-note {
+  border-left: 3px solid var(--accent);
+  padding: 10px 12px;
+  background: #f6f0e5;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
 .ex-shell button,
 .ex-shell input,
 .ex-shell select {

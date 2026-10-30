@@ -53,6 +53,8 @@ Use `read gpt-explore` and bounded `wait gpt-explore`, never consume the other
 workstream's tasks. Claude owns bus policy and confirmed acknowledgment.
 
 The active Codex heartbeat `explore-geometry-and-claude-repair-worker` resumes
-this chat every 30 minutes. The bus itself only carries messages; the Codex
+this chat every 30 minutes when a follow-up is due. It is a fallback wakeup, not
+a pause between active repair iterations. While this chat is running, continue
+the source/review/repair loop without waiting for the heartbeat. The bus itself only carries messages; the Codex
 scheduler supplies the unattended worker. Local execution depends on workspace
 and scheduler availability. Continue from `docs/agents/explore-progress.md`.

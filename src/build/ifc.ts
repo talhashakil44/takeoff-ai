@@ -100,8 +100,10 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
     const s = e.shape;
     if (!s || s.type === 'axis' || s.type === 'locator') return null;
     const items: string[] = [];
-    if ((s.type==='surface' && s.slope) || (s.type==='run' && s.topPlane)) {
-        const geometry = geometryOf(e)!;
+    if ((s.type==='surface' && s.slope) || (s.type==='run' && (s.topPlane || s.profile))) {
+        const sourceGeometry = geometryOf(e)!;
+        const geometry = sourceGeometry.index ? sourceGeometry.toNonIndexed() : sourceGeometry;
+        if (geometry !== sourceGeometry) sourceGeometry.dispose();
         const position = geometry.getAttribute('position');
         const vertices: number[][] = [], indices: number[] = [], unique = new Map<string,number>();
         for (let i=0;i<position.count;i++) {
@@ -128,7 +130,7 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
       items.push(solid(rect(0, 0, s.size[0], s.size[1]), s.at[0], -s.at[1], s.z - zBase, Math.cos(s.rotation ?? 0), -Math.sin(s.rotation ?? 0), s.size[2]));
     }
     if (!items.length) return null;
-    const rep = add(`IFCSHAPEREPRESENTATION(${body},'Body','${((s.type === 'surface' && s.slope) || (s.type==='run' && s.topPlane)) ? 'Tessellation' : 'SweptSolid'}',(${items.join(',')}))`);
+    const rep = add(`IFCSHAPEREPRESENTATION(${body},'Body','${((s.type === 'surface' && s.slope) || (s.type==='run' && (s.topPlane || s.profile))) ? 'Tessellation' : 'SweptSolid'}',(${items.join(',')}))`);
     return add(`IFCPRODUCTDEFINITIONSHAPE($,$,(${rep}))`);
   };
 

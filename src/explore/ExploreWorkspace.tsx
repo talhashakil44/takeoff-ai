@@ -1,3 +1,5 @@
+import { suppressCoincidentStructure } from "../build/coincidentStructure";
+import { canopyRegistrations } from "../build/canopyRegistration";
 import { useEffect, useMemo, useState } from "react";
 import type { Project, Sheet, Pt } from "../model";
 import type { BuildModel, BuildElement } from "../build/types";
@@ -13,11 +15,15 @@ import { StructuralEditor } from "./StructuralEditor";
 import {
   structuralEvidence,
   connectStructuralModel,
+  applyStructuralReviews,
   structuralFingerprint,
   type StructuralPlacement,
 } from "../build/structural";
 import type { DrawingLines } from "../build/roof";
+import { connectPhysicalStructure } from "../build/connectStructure";
+import { roofViewportRegistrations } from "../build/roofRegistration";
 import { SourceViewer } from "./SourceViewer";
+import { structuralRevisionContext } from "../build/structuralRevisions";
 export interface ExploreWorkspaceProps {
   project: Project;
   model: BuildModel;
@@ -42,6 +48,17 @@ export function ExploreWorkspace({
   indexing = false,
   onOpenTakeoff,
 }: ExploreWorkspaceProps) {
+  const revisedLayers = useMemo(() => {
+    const context = structuralRevisionContext(project, drawingTexts, drawingLines);
+    return Object.fromEntries(Object.entries(context.replacements).flatMap(([id, ref]) => {
+      const original = project.sheets.find(s => s.id === id);
+      return original ? [[id, { ...original, id: ref.key, docId: ref.docId, page: ref.page,
+        title: `${original.title ?? "Drawing"} · ${project.specs?.find(s => s.id === ref.docId)?.name ?? "revised issue"}` } as Sheet]] : [];
+    }));
+  }, [project, drawingTexts, drawingLines]);
+  const quantityPending = (e: BuildElement) => e.origin === "takeoff" && e.quantity === 0 &&
+    project.types.find(t=>t.id===e.typeId)?.kind === "linear" &&
+    !project.sheets.find(s=>s.id===e.sheetId)?.metersPerPoint;
   const sheets = useMemo(() => floorPlans(project, model), [project, model]);
   const [sid, setSid] = useState(
     () =>
@@ -81,6 +98,7 @@ export function ExploreWorkspace({
     [showBase, setShowBase] = useState(true),
     [showAllowances, setShowAllowances] = useState(false),
     [showFootprints, setShowFootprints] = useState(true),
+    [showUnplaced, setShowUnplaced] = useState(false),
     [showGrids, setShowGrids] = useState(false),
     [sourceView, setSourceView] = useState<Sheet | null>(null),
     [overlayPages, setOverlayPages] = useState<
@@ -117,7 +135,7 @@ export function ExploreWorkspace({
   const layers = useMemo(
     () =>
       sheet
-        ? drawingLayers(project, model, sheet, drawingTexts).map((l) =>
+        ? drawingLayers(project, model, sheet, drawingTexts, drawingLines).map((l) =>
             manual[`${sid}:${l.sheet.id}`]?.baseId === sid
               ? {
                   ...l,
@@ -130,14 +148,14 @@ export function ExploreWorkspace({
               : l,
           )
         : [],
-    [project, model, sheet, drawingTexts, manual, sid],
+    [project, model, sheet, drawingTexts, drawingLines, manual, sid],
   );
   const level =
     model.levels.find((l) => l.sheets.includes(sid))?.id ??
     model.elements.find((e) => e.sheetId === sid && e.level)?.level;
   const available = useMemo(
-    () => layers.filter((l) => l.level === level && l.sheet.id !== sid),
-    [layers, level, sid],
+    () => layers.filter((l) => (l.level === level || l.discipline === "Structure" || sheets.some(p=>p.id===l.sheet.id)) && l.sheet.id !== sid),
+    [layers, level, sid, sheets],
   );
   const visibleSheets = useMemo(
     () => new Set([sid, ...enabled]),
@@ -169,22 +187,23 @@ export function ExploreWorkspace({
       structuralEvidence(project, model, drawingTexts, drawingLines, frames),
     [project, model, drawingTexts, drawingLines, frames],
   );
+  const roofRegistrations = useMemo(() => ({...roofViewportRegistrations(project, model, drawingTexts), ...canopyRegistrations(project, model, drawingTexts, drawingLines)}), [project, model, drawingTexts, drawingLines]);
+  const memberFrames=useMemo(()=>Object.fromEntries(model.elements.flatMap(e=>{
+    const frame=roofRegistrations[e.measurementId]?.frame ?? (layers.find(l=>l.sheet.id===e.sheetId)?.geometryOnly ? undefined : frames[e.sheetId]);
+    return frame?[[e.id,frame]]:[];
+  })),[model,roofRegistrations,layers,frames]);
   const structuralModel = useMemo(
     () =>
-      connectStructuralModel(
-        project,
-        model,
-        recoveredStructure,
-        structuralReviews,
-        frames,
-      ),
-    [model, recoveredStructure, structuralReviews, frames, project],
+      suppressCoincidentStructure(applyStructuralReviews(project, connectPhysicalStructure(project, connectStructuralModel(
+        project, model, recoveredStructure, {}, frames,
+      ), drawingTexts, drawingLines), structuralReviews, memberFrames)),
+    [model, recoveredStructure, structuralReviews, frames, project, drawingTexts, drawingLines, memberFrames],
   );
   const coordinatedModel = useMemo(
     () => ({
       ...model,
       elements: structuralModel.elements.flatMap((e) => {
-        if (e.origin === "building" || e.sheetId === sid) return [e];
+        if (e.origin === "building" || e.sheetId === sid || (roofRegistrations[e.measurementId] && e.shape)) return [e];
         const l = available.find((l) => l.sheet.id === e.sheetId);
         if (!l?.frame) return [];
         const hasRecovered =
@@ -221,6 +240,7 @@ export function ExploreWorkspace({
       structuralModel,
       recoveredStructure,
       structuralReviews,
+      roofRegistrations,
       sid,
       available,
     ],
@@ -233,6 +253,7 @@ export function ExploreWorkspace({
           : l.elements
               .filter(
                 (e) =>
+                  (!l.geometryOnly || !!roofRegistrations[e.measurementId]) &&
                   !structuralModel.elements.find((v) => v.id === e.id)?.shape,
               )
               .flatMap((e) => {
@@ -248,13 +269,13 @@ export function ExploreWorkspace({
                         (ref.box[0] + ref.box[2]) / 2,
                         (ref.box[1] + ref.box[3]) / 2,
                       ],
-                      l.frame!,
+                      roofRegistrations[e.measurementId]?.frame ?? l.frame!,
                     ),
                   },
                 ];
               }),
       ),
-    [available, structuralModel],
+    [available, structuralModel, roofRegistrations],
   );
   const grids = useMemo(() => {
     if (!sheet || !frame) return [];
@@ -293,7 +314,7 @@ export function ExploreWorkspace({
   const overlays = useMemo(
     () =>
       available.flatMap((l) =>
-        enabled.has(l.sheet.id) && l.frame && overlayPages[l.sheet.id]
+        enabled.has(l.sheet.id) && !l.geometryOnly && l.frame && overlayPages[l.sheet.id]
           ? [
               {
                 sheet: l.sheet,
@@ -318,11 +339,11 @@ export function ExploreWorkspace({
     );
     (async () => {
       for (const id of enabled) {
-        if (overlayPages[id]) continue;
+        if (overlayPages[id] || available.find(l => l.sheet.id === id)?.geometryOnly) continue;
         const l = available.find((l) => l.sheet.id === id);
         if (!l?.frame) continue;
         try {
-          const full = await renderPage(l.sheet);
+          const full = await renderPage(revisedLayers[l.sheet.id] ?? l.sheet);
           const ratio = Math.min(1, 2048 / Math.max(full.width, full.height)),
             canvas = document.createElement("canvas");
           canvas.width = Math.ceil(full.width * ratio);
@@ -339,7 +360,7 @@ export function ExploreWorkspace({
     return () => {
       gone = true;
     };
-  }, [enabled, available, renderPage]);
+  }, [enabled, available, renderPage, revisedLayers]);
   const toggleLayer = (id: string) => {
     if (!enabled.has(id) && enabled.size >= 4) {
       setLayerError(
@@ -628,7 +649,7 @@ export function ExploreWorkspace({
                   >
                     <span>{e.name}</span>
                     <small>
-                      {num(e.quantity)} {e.unit}
+                      {quantityPending(e) ? "Quantity uncalibrated" : `${num(e.quantity)} ${e.unit}`}
                       {!e.shape ? " · unplaced" : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : ""}
                     </small>
                   </button>
@@ -697,7 +718,7 @@ export function ExploreWorkspace({
               resetView={resetView}
               showGrids={showGrids}
               grids={grids}
-              pins={pins}
+              pins={showUnplaced ? pins : []}
               sheet={sheet}
               frame={frame}
               page={page}
@@ -764,6 +785,10 @@ export function ExploreWorkspace({
                 Original floor plan
               </label>
               <label>
+                <input type="checkbox" checked={showUnplaced} onChange={e => setShowUnplaced(e.target.checked)} />{" "}
+                Unplaced count markers · source positions only
+              </label>
+              <label>
                 <input
                   type="checkbox"
                   checked={showGrids}
@@ -825,8 +850,9 @@ export function ExploreWorkspace({
                             }
                             /{l.elements.length} physical shapes
                           </small>
-                          <button onClick={() => setSourceView(l.sheet)}>
-                            Open original ↗
+                          {revisedLayers[l.sheet.id] && <small>Revised drawing · page {revisedLayers[l.sheet.id].page}. Takeoffs retain their original issue.</small>}
+                          <button onClick={() => setSourceView(revisedLayers[l.sheet.id] ?? l.sheet)}>
+                            {revisedLayers[l.sheet.id] ? "Open revised drawing ↗" : "Open original ↗"}
                           </button>
                           <button
                             disabled={!l.sheet.metersPerPoint}
@@ -1004,10 +1030,10 @@ export function ExploreWorkspace({
             <>
               <p className="ex-element-title">{element.name}</p>
               <div className="ex-quantity">
-                <strong>{num(element.quantity)}</strong>
-                <span>{element.unit}</span>
+                <strong>{quantityPending(element) ? "Uncalibrated" : num(element.quantity)}</strong>
+                <span>{quantityPending(element) ? "" : element.unit}</span>
                 <small>
-                  {element.origin === "takeoff"
+                  {quantityPending(element) ? "Saved quantity is unresolved. Drawing-derived span is shown separately below." : element.origin === "takeoff"
                     ? "Original takeoff quantity"
                     : "Derived building allowance"}
                 </small>
@@ -1025,6 +1051,12 @@ export function ExploreWorkspace({
                       "Unknown"}
                   </dd>
                 </div>
+                {element.sources.some(s => s.kind === "spec" && !s.section) && (
+                  <div>
+                    <dt>Revision evidence</dt>
+                    <dd>{[...new Set(element.sources.filter(s => s.kind === "spec" && !s.section).map(s => `${s.label} · p${s.page}`))].join("; ")}</dd>
+                  </div>
+                )}
                 {vars && t?.kind === "area" && (
                   <>
                     <div>
@@ -1046,6 +1078,9 @@ export function ExploreWorkspace({
                   <dd>{element.division || element.trade}</dd>
                 </div>
               </dl>
+              {element.issues.filter(issue => /revision|supersed|discrepancy|^Roof framing detail:/i.test(issue)).map((issue, index) => (
+                <p className="ex-revision-note" key={index}>{issue}</p>
+              ))}
               {element?.trade === "structure" && (
                 <section
                   className="ex-structural-proof"
@@ -1071,13 +1106,15 @@ export function ExploreWorkspace({
                     <dl>
                       <dt>Drawn span</dt>
                       <dd>{num(memberSpan!)} m</dd>
-                      <dt>Section</dt>
+                      <dt>Width × vertical depth</dt>
                       <dd>
                         {num(selectedShape.thickness * 1000)} ×{" "}
                         {num(selectedShape.height * 1000)} mm
                       </dd>
                       <dt>Bottom datum</dt>
-                      <dd>{num(selectedShape.z0)} m</dd>
+                      <dd>{selectedShape.bottomPlane ? selectedShape.points.map(p => (selectedShape.bottomPlane![0]*p[0]+selectedShape.bottomPlane![1]*p[1]+selectedShape.bottomPlane![2]).toFixed(3)).filter((v,i,a)=>a.indexOf(v)===i).join(" → ") : selectedShape.z0.toFixed(3)} m</dd>
+                      <dt>Top datum</dt>
+                      <dd>{selectedShape.topPlane ? selectedShape.points.map(p => (selectedShape.topPlane![0]*p[0]+selectedShape.topPlane![1]*p[1]+selectedShape.topPlane![2]).toFixed(3)).filter((v,i,a)=>a.indexOf(v)===i).join(" → ") : (selectedShape.z0+selectedShape.height).toFixed(3)} m</dd>
                     </dl>
                   )}
                   {structuralReviews?.[element.id]?.fingerprint ===
@@ -1122,11 +1159,11 @@ export function ExploreWorkspace({
                     </p>
                   )}
                   <ul>
-                    {recoveredStructure[element.id]?.issues.map((issue, i) => (
+                    {(element.issues.some(i=>i.startsWith("Physical ")) ? element.issues.filter(i=>i.startsWith("Physical ")) : recoveredStructure[element.id]?.issues ?? []).map((issue, i) => (
                       <li key={i}>{issue}</li>
                     ))}
                   </ul>
-                  {(recoveredStructure[element.id]?.sources ?? [])
+                  {element.sources
                     .filter((s) => s.kind === "sheet")
                     .map((ref, i) => (
                       <button
@@ -1142,12 +1179,12 @@ export function ExploreWorkspace({
                       </button>
                     ))}
                   <button
-                    disabled={!frames[element.sheetId]}
+                    disabled={!memberFrames[element.id]}
                     onClick={() => setEditingStructural(element)}
                   >
                     Review / connect geometry
                   </button>
-                  {!frames[element.sheetId] && (
+                  {!memberFrames[element.id] && (
                     <p>Align this source to the floor first.</p>
                   )}
                   {structuralReviews?.[element.id] && (
@@ -1227,14 +1264,19 @@ export function ExploreWorkspace({
               <section className="ex-details">
                 <h3>Drawing sources</h3>
                 {element.sources
-                  .filter((s) => s.kind === "sheet")
+                  .filter((s) => s.kind === "sheet" || (s.kind === "spec" && !s.section))
                   .map((s, i) => (
                     <button
                       key={i}
                       onClick={() => {
-                        const sh = project.sheets.find((x) => x.id === s.id);
+                        const sh = s.kind === "sheet"
+                          ? project.sheets.find((x) => x.id === s.id)
+                          : { id: `spec:${s.id}:${s.page}`, docId: s.id,
+                              page: s.page, name: s.label,
+                              title: "Addendum drawing evidence", width: 0, height: 0 } as Sheet;
                         if (sh) setSourceView(sh);
                       }}
+                      title={s.quote}
                     >
                       {s.label} · page {s.page} ↗
                     </button>
@@ -1341,7 +1383,7 @@ export function ExploreWorkspace({
           }}
         />
       )}
-      {editingStructural && frames[editingStructural.sheetId] && (
+      {editingStructural && memberFrames[editingStructural.id] && (
         <StructuralEditor
           element={editingStructural}
           existing={structuralReviews?.[editingStructural.id]?.fingerprint === structuralFingerprint(editingStructural,project) ? structuralReviews[editingStructural.id] : undefined}
@@ -1350,7 +1392,7 @@ export function ExploreWorkspace({
           sheet={project.sheets.find(
             (s) => s.id === editingStructural.sheetId,
           )!}
-          frame={frames[editingStructural.sheetId]}
+          frame={memberFrames[editingStructural.id]}
           renderPage={renderPage}
           onClose={() => setEditingStructural(null)}
           onSave={(placement) => {
@@ -1375,7 +1417,7 @@ export function ExploreWorkspace({
           sheet={sourceView}
           renderPage={renderPage}
           onClose={() => setSourceView(null)}
-          onOpenTakeoff={onOpenTakeoff}
+          onOpenTakeoff={project.sheets.some(s => s.id === sourceView.id) ? onOpenTakeoff : undefined}
         />
       )}
     </div>
