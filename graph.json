@@ -233,7 +233,7 @@
       "evidence": "claude/integration@e8391a0"
     },
     {
-      "status": "blocked",
+      "status": "done",
       "depends": [],
       "accept": [
         "tsc",
@@ -245,10 +245,13 @@
       "title": "Electrical: why Kelso E plans give no device counts; count devices and fixtures on raster/pasted E plans",
       "added": "2026-10-30T04:21:38.859Z",
       "by": "claude",
-      "updated": "2026-10-30T04:28:17.170Z",
+      "updated": "2026-10-30T05:22:12.111Z",
       "notes": [
-        "2026-10-30T04:28 claude: Kelso E2/E3 plans are pasted pictures: the legend symbols are not vectors on the plans, so symbol counting can't see devices (42 items found are mechanical tags). Needs raster symbol matching against the E0-00 legend (big job, T17). Until then electrical goes through T12 provisional allowances."
-      ]
+        "2026-10-30T04:28 claude: Kelso E2/E3 plans are pasted pictures: the legend symbols are not vectors on the plans, so symbol counting can't see devices (42 items found are mechanical tags). Needs raster symbol matching against the E0-00 legend (big job, T17). Until then electrical goes through T12 provisional allowances.",
+        "2026-10-30T05:22 claude: done by text instead of symbols: circuit tags + legend abbreviations"
+      ],
+      "branch": "claude/integration@797f13d",
+      "evidence": "claude/integration@797f13d"
     },
     {
       "status": "done",
