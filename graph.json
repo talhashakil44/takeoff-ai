@@ -618,7 +618,7 @@
       "updated": "2026-10-30T11:28:38.419Z"
     },
     {
-      "status": "doing",
+      "status": "done",
       "depends": [
         "T31"
       ],
@@ -634,7 +634,9 @@
       "prompt": "Doors on A211 are uncounted; all 105 source-less Doors counts come from A212–A214. Find why the door detector misses A211 and fix in the engine; refreshed demo must only add measurements.",
       "added": "2026-10-30T13:29:37.635Z",
       "by": "claude",
-      "updated": "2026-10-30T13:29:42.194Z"
+      "updated": "2026-10-30T13:39:25.274Z",
+      "ref": "claude/integration@494b6c1",
+      "evidence": "claude/integration@494b6c1"
     },
     {
       "status": "todo",
