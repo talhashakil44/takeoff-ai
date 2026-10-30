@@ -26,7 +26,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 19;
+export const MODEL_VERSION = 20;
 
 export interface Trade {
   key: string;
@@ -462,6 +462,7 @@ export function extractModel(input: ExtractInput): BuildModel {
       typeName: type.name,
       division: type.division ?? '',
       measurementId: m.id,
+      measurementSource: m.source,
       sheetId: s.id,
       specs,
       sources: [src],

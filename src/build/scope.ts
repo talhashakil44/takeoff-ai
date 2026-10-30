@@ -17,8 +17,10 @@ export function suggestScopeAllowances(model: BuildModel, setup: PlanSetup): Sco
     .filter((e) => e.origin === 'takeoff' && e.trade === 'structure' && e.level === 'fdn' && /slab on grade/i.test(e.typeName))
     .reduce((sum, e) => sum + (e.unit === 'm²' ? e.quantity : e.unit === 'SF' ? e.quantity * 0.09290304 : 0), 0);
   return AREA_PROXY_TRADES.flatMap((key): ScopeSuggestion[] => {
-    const measured = model.elements.some((e) => e.trade === key && e.origin === 'takeoff' &&
-      (key !== 'envelope' || (/roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF'))));
+    const measured = model.elements.some((e) => e.origin === 'takeoff' && e.status !== 'existing' && (
+      (e.trade === key && (key !== 'envelope' || (/roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF')))) ||
+      (key === 'elec-rough' && e.trade === 'elec-trim' && e.measurementSource === 'etags' && e.unit === 'ea' && e.quantity > 0)
+    ));
     if (measured || key in (setup.allowances?.value ?? {})) return [];
     const referenceAreaM2 = key === 'envelope' ? slabM2 : areaM2;
     if (referenceAreaM2 <= 0) return [];

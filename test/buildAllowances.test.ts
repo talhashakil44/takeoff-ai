@@ -33,6 +33,38 @@ const allowance = (quantity: number, unit: string, rate: number, provisional = t
   ({ quantity, unit, rate, provisional });
 
 describe('Build It unmeasured scope allowances', () => {
+  it('plans electrical rough-in from measured circuit tags by level without a second area allowance', () => {
+    const m = model();
+    m.levels.push({ id: 'L2', name: 'Level 2', elevation: 3.6, basis: 'inferred', sheets: [] });
+    m.floorAreas = { L1: 100, L2: 200 };
+    m.elements.push(
+      ...Array.from({ length: 65 }, (_, i) => ({ ...element(`tag-l1-${i}`, 'elec-trim', 'L1', '26 Electrical', 'ea', 1), measurementSource: 'etags' })),
+      ...Array.from({ length: 15 }, (_, i) => ({ ...element(`tag-l2-${i}`, 'elec-trim', 'L2', '26 Electrical', 'ea', 1), measurementSource: 'etags' })),
+      element('manual-device', 'elec-trim', 'L1', '26 Electrical', 'ea', 4),
+    );
+    const setup = defaultSetup(m, [], '2026-11-02');
+    const acts = planActivities(m, setup, [], []);
+    const rough1 = acts.find((a) => a.id === 'work:elec-rough:L1')!;
+    const rough2 = acts.find((a) => a.id === 'work:elec-rough:L2')!;
+    expect(rough1).toMatchObject({ level: 'L1', quantities: { ea: 65 }, rates: { ea: 30 }, duration: 3, durationBasis: 'assumed' });
+    expect(rough2).toMatchObject({ level: 'L2', quantities: { ea: 15 }, duration: 1 });
+    expect(rough1.elements).toHaveLength(65);
+    expect(rough1.durationWhy).toContain('device-to-rough-in equivalence assumed');
+    expect(rough2.deps.map((d) => d.from)).toContain(rough1.id);
+    expect(acts.find((a) => a.id === 'work:ceilings:L1')?.deps.map((d) => d.from)).toContain(rough1.id);
+    expect(acts.find((a) => a.id === 'work:elec-trim:L2')?.deps.map((d) => d.from)).toContain(rough2.id);
+    expect(suggestScopeAllowances(m, setup).some((s) => s.key === 'elec-rough')).toBe(false);
+    expect(schedule(acts, setup).issues.some((i) => i.id === 'loop')).toBe(false);
+    expect(replan(m, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.map((i) => i.id)).toContain('electrical-rough-in-tag-proxy');
+
+    const slower = applySetupEdits(setup, { setup: { trades: { 'elec-rough': { rates: { ea: 10 } } } } });
+    expect(planActivities(m, slower, [], []).find((a) => a.id === rough1.id)?.duration).toBe(7);
+    const savedAllowance = applySetupEdits(setup, { setup: { allowances: { 'elec-rough': allowance(300, 'm²', 50) } } });
+    const replaced = planActivities(m, savedAllowance, [], []);
+    expect(replaced.some((a) => a.id === rough1.id)).toBe(false);
+    expect(replaced.some((a) => a.id === 'allowance:elec-rough:L1')).toBe(true);
+  });
+
   it('offers floor-area proxies only for absent measured trades and never applies them by itself', () => {
     const m = model();
     const setup = defaultSetup(m, [], '2026-11-02');

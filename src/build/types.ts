@@ -76,6 +76,8 @@ export interface BuildElement {
   typeName: string;
   division: string;
   measurementId: string;
+  /** Original takeoff source, so tag-derived planning does not mistake other counts for circuit tags. */
+  measurementSource?: string;
   opening?: { width:number; height:number; sill:number };
   origin?: "takeoff" | "building";
   status?: "existing" | "new" | "demolished";

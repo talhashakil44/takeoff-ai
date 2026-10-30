@@ -47,6 +47,17 @@ export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInp
   const acts = planActivities(model, setup, input.sections, input.facts, input.edits);
   const schedule = planToTarget(acts, setup);
   schedule.issues.push(...planningScopeIssues(model, input.facts, setup));
+  const tagIds = new Set(model.elements.filter((e) => e.measurementSource === 'etags').map((e) => e.id));
+  const tagRough = acts.filter((a) => a.id.startsWith('work:elec-rough:') && a.elements.length > 0 && a.elements.every((id) => tagIds.has(id)));
+  if (tagRough.length) {
+    const points = tagRough.reduce((sum, a) => sum + (a.quantities?.ea ?? 0), 0);
+    const unplaced = tagRough.find((a) => a.level === null)?.quantities?.ea ?? 0;
+    schedule.issues.push({
+      id: 'electrical-rough-in-tag-proxy',
+      severity: 'warning',
+      text: `Electrical rough-in uses ${points} measured device and fixture tags as an assumed point-count proxy at ${setup.trades['elec-rough']?.value.rates.ea ?? '?'} points per crew-day. Cable and conduit routes, circuit complexity and crew output are unverified${unplaced ? `; ${unplaced} tags have no known building level and are planned as unplaced work` : ''}. Confirm scope and production with the electrical trade.`,
+    });
+  }
   if (setup.dryInBeforeFinishes?.value && !acts.some((a) => a.id === 'ms:dry-in') &&
       acts.some((a) => a.kind === 'work' && ['partitions', 'ceilings', 'doors', 'painting', 'flooring', 'finishes', 'specialties'].includes(a.trade ?? '')))
     schedule.issues.push({

@@ -73,7 +73,9 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
     if (t.key === 'site') rates[metric ? 'm³' : 'CY'] = metric ? 50 : 65;
     trades[t.key] = a({ rates, crews: d.crews, leadDays: d.lead }, 'assumed', t.key === 'structure'
       ? 'Planning allowances: 10 members or 8 m³ of foundation concrete per metric crew-day (10 CY imperial); confirm member complexity, forming, reinforcement and crew size with the trade'
-      : 'Typical production and lead time: confirm with the trade');
+      : t.key === 'elec-rough'
+        ? 'Assumed 30 tagged electrical points per crew-day for rough-in, with 15 working days lead time; confirm device complexity, circuits, containment and crew size with the trade'
+        : 'Typical production and lead time: confirm with the trade');
   }
   return {
     start: startFact ? a(start, 'documented', 'Contract start in the specification', startFact.source) : a(start, 'assumed', 'Next working day: set the real start'),
@@ -135,8 +137,14 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     const k = `${e.trade}|${e.level ?? ''}`;
     byTL.set(k, [...(byTL.get(k) ?? []), e]);
   }
+  // Device tags are measured finish points. They also provide a count proxy for
+  // rough-in when no rough-in takeoff exists on that level. A saved user allowance
+  // takes precedence, so old GFA allowances and these counts never stack.
+  const taggedRough = activeAllowances(setup).some(([key]) => key === 'elec-rough') ? [] : model.elements.filter((e) =>
+    e.origin === 'takeoff' && e.status !== 'existing' && e.measurementSource === 'etags' &&
+    e.trade === 'elec-trim' && e.unit === 'ea' && Number.isFinite(e.quantity) && e.quantity > 0);
   const workId = (t: string, l: string | null) => `work:${t}:${l ?? (t === 'site' ? 'site' : 'unplaced')}`;
-  const tradesUsed = TRADES.filter((t) => model.elements.some((e) => e.trade === t.key));
+  const tradesUsed = TRADES.filter((t) => model.elements.some((e) => e.trade === t.key) || (t.key === 'elec-rough' && taggedRough.length > 0));
   const levelName = (l: string | null) => (l ? model.levels.find((x) => x.id === l)?.name ?? l : 'Unplaced (level not known)');
   for (const t of tradesUsed) {
     const setupT = setup.trades[t.key]?.value ?? { rates: {}, crews: 1, leadDays: 0 };
@@ -180,14 +188,17 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     let prevLevel: string | null = null;
     for (const l of levelOrder) {
       const all = byTL.get(`${t.key}|${l ?? ''}`) ?? [];
+      const proxyTags = t.key === 'elec-rough' && !all.length ? taggedRough.filter((e) => e.level === l) : [];
       const groups = t.key === 'site' && l === null ? [
         { id: 'work:site:earthwork', name: 'Site work — Excavation', els: all.filter((e) => /^\s*31\b/.test(e.division)) },
         { id: workId(t.key, l), name: t.name, els: all.filter((e) => !/^\s*31\b/.test(e.division)) },
       ] : [{ id: workId(t.key, l), name: `${t.name} — ${levelName(l)}`, els: all }];
       for (const { id, name, els } of groups) {
-        if (!els.length) continue;
+        const tags = t.key === 'elec-rough' && !els.length ? proxyTags : [];
+        if (!els.length && !tags.length) continue;
+        const workElements = tags.length ? tags : els;
         const quantities: Record<string, number> = {};
-        for (const e of els) {
+        for (const e of workElements) {
           const q = e.production ?? e;
           quantities[q.unit] = (quantities[q.unit] ?? 0) + q.quantity;
         }
@@ -216,16 +227,16 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
           kind: 'work',
           trade: t.key,
           level: l,
-          elements: els.map((e) => e.id),
+          elements: workElements.map((e) => e.id),
           quantities,
           rates,
           crews,
           duration,
-          durationBasis: 'inferred',
-          durationWhy: `${qty} at ${Object.entries(rates)
+          durationBasis: tags.length ? 'assumed' : 'inferred',
+          durationWhy: `${tags.length ? 'Rough-in proxy from measured electrical device tags: ' : ''}${qty} at ${Object.entries(rates)
             .filter(([u]) => quantities[u])
             .map(([u, r]) => `${r} ${u}`)
-            .join(' / ')} per crew-day, ${crews} crew${crews === 1 ? '' : 's'}${missing.length ? ` · no rate for ${missing.join(', ')}` : ''}`,
+            .join(' / ')} per crew-day, ${crews} crew${crews === 1 ? '' : 's'}${tags.length ? ' · rate and device-to-rough-in equivalence assumed; confirm with electrical trade' : ''}${missing.length ? ` · no rate for ${missing.join(', ')}` : ''}`,
           deps,
           specs: specKeys,
           sources: [],

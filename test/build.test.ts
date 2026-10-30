@@ -40,6 +40,16 @@ const sections = [
 ] as unknown as SpecSection[];
 
 describe('build it', () => {
+  it('keeps the electrical tag source on extracted elements for rough-in planning', () => {
+    const p = project();
+    p.sheets = [sheet('e1', 'E2-01', 'LEVEL 1 ELECTRICAL PLAN', 1)];
+    p.types = [type('light', 'Light fixtures (by circuit tag)', 'count', '26 Electrical')];
+    p.measurements = [{ id: 'tag', sheetId: 'e1', typeId: 'light', source: 'etags', points: [[200, 400]], holes: [] }];
+    const model = extractModel({ project: p, sections: [], floorToFloor: 3.6 });
+    expect(model.elements.find((e) => e.id === 'tag')).toMatchObject({ trade: 'elec-trim', level: 'L1', measurementSource: 'etags' });
+    expect(planActivities(model, defaultSetup(model, [], '2026-11-02'), [], []).find((a) => a.id === 'work:elec-rough:L1')?.quantities).toEqual({ ea: 1 });
+  });
+
   it('knows trades and levels', () => {
     expect(tradeOf(type('a', 'P5 – 6" stud partition', 'linear', '09 Finishes'))).toBe('partitions');
     expect(tradeOf(type('a', 'ACT-1 lay-in ceiling', 'area', '09 Finishes'))).toBe('ceilings');
