@@ -956,6 +956,10 @@ function SetupPanel(props: {
             <input type="checkbox" checked={val<boolean>('levelsInParallel', false)} onChange={(e) => set('levelsInParallel', e.target.checked)} />
             <span>A trade may work on more than one level at a time</span>
           </label>
+          <label className="bld-field check">
+            <input type="checkbox" checked={val<boolean>('dryInBeforeFinishes', true)} onChange={(e) => set('dryInBeforeFinishes', e.target.checked)} />
+            <span>Interior finishes wait for the building to be weather-tight (roof and exterior walls)</span>
+          </label>
         </div>
       )}
       {tab === 'trades' && (
