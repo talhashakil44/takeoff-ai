@@ -135,6 +135,7 @@ export function markPlaces(texts: PageText[], marks: FoundationMark[]): Map<stri
   for (const t of texts) {
     const words = t.str.trim().split(/\s*[/,]\s*|\s+/).filter(Boolean);
     if (words.length > 3) continue; // A note naming a footing, not a tag.
+    if (words.some((w) => /^(?:AT|@|SEE|REFER|TO|SIM\.?|SIMILAR)$/i.test(w))) continue; // "TYP. AT MF3": a note pointing at tags.
     for (const w of words) {
       const m = byNorm.get(norm(w));
       if (m) out.set(m, [...(out.get(m) ?? []), [t.cx, t.cy]]);

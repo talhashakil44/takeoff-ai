@@ -47,7 +47,7 @@ describe('foundations', () => {
 
   it('counts tags, stacked tags included, and not notes that name a footing', () => {
     const marks = [{ mark: 'F1', kind: 'pad' as const, says: '', schedule: '' }];
-    const places = markPlaces([txt('F1', 1, 1), txt('F1 / P2', 5, 5), txt('PROVIDE F1 FOOTING AT ALL COLUMNS', 9, 9)], marks);
+    const places = markPlaces([txt('F1', 1, 1), txt('F1 / P2', 5, 5), txt('PROVIDE F1 FOOTING AT ALL COLUMNS', 9, 9), txt('TYP. AT F1', 12, 12)], marks);
     expect(places.get('F1')).toHaveLength(2);
   });
 

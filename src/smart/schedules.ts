@@ -124,7 +124,8 @@ function readOne(title: PageText, texts: PageText[], titles: PageText[], vert: S
   const bottom = next ? next.cy - next.h : title.cy + 2400;
 
   // The mark column: the leftmost column of marks lined up on their left edge (or centred).
-  const marks = texts.filter((t) => level(t) && !used.has(t) && t.cy > top && t.cy < bottom && t.cx > L - 2 && t.cx < R + 2 && MARK.test(t.str.trim()) && !HEAD_WORD.test(t.str.trim()));
+  // A metric bar size (15M, 20M) in a reinforcing column is not a row's mark.
+  const marks = texts.filter((t) => level(t) && !used.has(t) && t.cy > top && t.cy < bottom && t.cx > L - 2 && t.cx < R + 2 && MARK.test(t.str.trim()) && !HEAD_WORD.test(t.str.trim()) && !/^\d{2}M$/.test(t.str.trim()));
   if (marks.length < 1) return null;
   const groups = new Map<string, PageText[]>();
   for (const t of marks) {
