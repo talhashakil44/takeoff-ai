@@ -198,7 +198,7 @@ export function enclosedOutline(runs: Pt[][], metersPerPoint: number, grow = 0):
 }
 
 /** Box filter: grow (any pixel on within r) or shrink (every pixel within r on; past the edge counts as on). */
-function box(d: Uint8Array, w: number, h: number, r: number, shrink: boolean): Uint8Array {
+export function box(d: Uint8Array, w: number, h: number, r: number, shrink: boolean): Uint8Array {
   const sum = new Int32Array((w + 1) * (h + 1));
   for (let y = 0; y < h; y++) {
     let row = 0;
