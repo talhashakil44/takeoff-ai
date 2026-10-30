@@ -1,6 +1,6 @@
 # Build It review fixes — Claude's part (findings 1, 4-header, 6)
 
-Branch `claude/build-it-perf`, based on checkpoint `e5ecd0d` (`codex/build-it-rework`).
+Branch `claude/build-it-perf`, rebased on Codex's `5b0d336` (`codex/build-it-rework`), so it fast-forwards that branch.
 Separate from Codex's branch so the two can be merged without push races. Not merged, not released.
 
 ## Ownership (as agreed)
@@ -41,43 +41,44 @@ Files outside `BuildView.tsx`/`facts.ts` that this branch touches, so concurrent
 
 **Finding 8 (BuildView part).** The side panel's tabs are now `Elements` / `Setup` with tab roles, so there is one control called "Model" (the Model/Construction switch).
 
-## Header data contract (for Codex)
+## Header data contract
 
-The badge reads `schedule.feasibility`:
+Uses Codex's contract from `docs/build-it-review-fixes.md`: `feasibility.baselineFinish` (before recovery),
+`feasibility.earliestFinish` (after), `feasibility.overBy`, `feasibility.changes`. Fits with changes: "Fits only
+with N recovery changes · <finish> · without: <baselineFinish>", the tooltip listing every change. Late: "X working
+days late even with N recovery changes". No changes: no acceleration implied. Codex's `historical-start` issue
+stays in the issues list; the start chip reads `setup.start` directly.
 
-```ts
-interface Feasibility {
-  // existing
-  earliestFinish: string; target: string | null; overBy: number;
-  changes?: string[];                 // recovery changes applied, in order (already provided)
-  // requested — the lean plan before any recovery; omit when no recovery ran
-  baseline?: { earliestFinish: string; overBy: number };
-}
-```
+`MODEL_VERSION` bumped 9 → 10: the stale fingerprint changed, so saved builds are rebuilt once instead of
+showing a false "Documents changed".
 
-If Codex names it differently, only `FeasibilityBadge` in `BuildView.tsx` changes. The historical-start warning can stay a plan issue; the chip doesn't depend on it.
+## Verification (rebased on `5b0d336`, Linux container)
 
-## Verification (this branch, Linux container)
-
-- `npx tsc --noEmit`: clean. `npx vitest run`: 56 files, 393 tests (4 new in `test/buildSources.test.ts`, also passing with `TZ` = UTC, Asia/Karachi, America/Toronto, Pacific/Auckland). `npm run build`: passes, same chunk warning.
-- Real projects, read-only, from the original demo exports (Kelso source SHA `addb1245…`, Frederick `620cc8d3…`, unchanged after the run):
-  - `bench/buildModel.test.ts` (Codex's audit) passes. Results unchanged: Kelso baseline 2027-12-09, Jul 1 target → 2027-09-23, 60 working days late, 7 changes; Frederick baseline 2026-03-24, Oct 31 2025 target → 2025-12-26, 40 late, 12 changes.
-  - New `bench/buildSources.test.ts`: the reduced, slim evidence builds an identical model, schedule times and feasibility to reading every sheet whole (level sheet lists may lose unmeasured notes sheets, which nothing reads); stale hash under 150 ms.
-  - IFC: `scripts/validate-build-ifc.py`: Kelso 322 / Frederick 2658 shapes, 0 schema and 0 geometry errors.
-- Time until the model shows, production build (`vite preview`), headless Chromium with software WebGL, same script for both, from opening the project file to the canvas:
+- `npx tsc --noEmit`: clean. `npx vitest run`: 56 files, 397 tests (4 new in `test/buildSources.test.ts`, also
+  passing with `TZ` = UTC, Asia/Karachi, America/Toronto, Pacific/Auckland). `npm run build`: passes, same chunk warning.
+- Real projects, read-only, from the original demo exports (Kelso source SHA `addb1245…`, Frederick `620cc8d3…`,
+  unchanged after the run):
+  - `bench/buildModel.test.ts` (Codex's audit) passes with Codex's numbers: Kelso baseline 2027-04-30, Jul 1 target
+    2027-04-30, 0 changes; Frederick baseline 2025-08-07, Oct 31 2025 target 2025-08-07, 0 changes.
+  - New `bench/buildSources.test.ts`: the reduced, slim evidence builds an identical model, schedule times and
+    feasibility to reading every sheet whole (level sheet lists may lose unmeasured notes sheets, which nothing
+    reads); stale hash under 150 ms.
+  - IFC: `scripts/validate-build-ifc.py`: Kelso 319 / Frederick 2658 shapes, 0 schema and 0 geometry errors.
+- Time until the model shows, production build (`vite preview`), headless Chromium with software WebGL, same script
+  for both, from opening the project file to the canvas:
 
 | | Checkpoint `e5ecd0d` | This branch |
 |---|---:|---:|
-| Kelso, first open | 31.1 s | 16.3 s |
-| Kelso, reopen (saved build dropped, rebuilt) | 14.6 s | 2.8 s |
-| Frederick, first open | 29.1 s | 14.0 s |
-| Frederick, reopen (rebuilt) | 7.3 s | 2.2 s |
+| Kelso, first open | 31.1 s | 17.4 s |
+| Kelso, reopen (saved build dropped, rebuilt) | 14.6 s | 2.5 s |
+| Frederick, first open | 29.1 s | 14.9 s |
+| Frederick, reopen (rebuilt) | 7.3 s | 2.3 s |
 
-  The earlier 46 s / 44 s figures in the review were from the Vite dev server; these are the production numbers. Not measured on the Mac.
+  The 46 s / 44 s figures in the review were from the Vite dev server; these are production numbers. Not measured on the Mac.
 
 ## Not done here / pending
 
-- Codex: `feasibility.baseline` (above); findings 2, 3, 5 data side; finding 7 (weather in the backward pass).
+- Codex: finding 7 (weather in the backward pass).
 - Finding 8 data side (Codex): every door's "opening host inferred" issue, raw scope names ("mech rough — Level 1"), wall-corner notches in `sceneGeometry.ts`.
 - First open is still mostly PDF text extraction (~10–15 s here on a big set); it is cached afterwards.
 - `cpm.ts`/`plan.ts` date helpers use local noon (`T12:00`) and are safe in every zone within ±12 h; not changed.

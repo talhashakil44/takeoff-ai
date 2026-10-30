@@ -1175,13 +1175,13 @@ function Gantt(props: {
  * (extra crews, overlapped levels: unpriced), and what the finish is without them; a start
  * date already behind us is pointed out rather than silently planned from.
  *
- * Data contract (from the plan, src/build/replanTarget.ts): `feasibility.changes` lists the
- * recovery changes applied; `feasibility.baseline` is the lean plan before any of them
- * ({ earliestFinish, overBy }), absent when no recovery ran.
+ * Data contract (src/build/replanTarget.ts, docs/build-it-review-fixes.md): `feasibility.changes`
+ * lists the recovery changes accepted; `feasibility.baselineFinish` is the target milestone's
+ * date before any recovery (always set by planToTarget).
  */
 function FeasibilityBadge({ feas, start }: { feas: Feasibility; start: Assumption<string> }) {
   const changes = feas.changes ?? [];
-  const baseline = (feas as Feasibility & { baseline?: { earliestFinish: string; overBy: number } }).baseline;
+  const baselineFinish = feas.baselineFinish;
   const n = changes.length;
   const recovery = n ? `${n} recovery change${n === 1 ? '' : 's'}` : '';
   const late = !!feas.target && feas.overBy > 0;
@@ -1194,7 +1194,7 @@ function FeasibilityBadge({ feas, start }: { feas: Feasibility; start: Assumptio
         : `Fits the target · ${fmt(feas.earliestFinish)}`;
   const tip = [
     feas.target ? `Target ${fmt(feas.target)}` : 'No target set',
-    baseline ? `Without recovery: ${fmt(baseline.earliestFinish)}${baseline.overBy ? `, ${baseline.overBy} working days late` : ''}` : '',
+    baselineFinish && changes.length ? `Without recovery: ${fmt(baselineFinish)}` : '',
     ...changes.map((c) => `• ${c}`),
   ]
     .filter(Boolean)
@@ -1204,7 +1204,7 @@ function FeasibilityBadge({ feas, start }: { feas: Feasibility; start: Assumptio
     <>
       <div className={`bld-feas ${!feas.target ? 'none' : late ? 'late' : n ? 'stretched' : 'ok'}`} title={tip}>
         {text}
-        {baseline && n > 0 && <em> · without: {fmt(baseline.earliestFinish)}</em>}
+        {baselineFinish && n > 0 && <em> · without: {fmt(baselineFinish)}</em>}
       </div>
       {past && (
         <div className="bld-feas past" title={`${start.why}. The plan runs from this date; set the real start in Setup if the work hasn't begun.`}>
