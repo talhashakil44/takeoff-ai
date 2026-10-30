@@ -574,7 +574,7 @@
       "evidence": "codex/build-it-frederick-qa@2fc17ca"
     },
     {
-      "status": "review",
+      "status": "done",
       "depends": [
         "T29"
       ],
@@ -592,7 +592,9 @@
       "added": "2026-10-30T11:15:01.332Z",
       "by": "claude",
       "branch": "codex/build-it-frederick-interpret@bacb5be",
-      "updated": "2026-10-30T11:28:22.960Z"
+      "updated": "2026-10-30T11:31:27.242Z",
+      "ref": "claude/integration@26f07dc",
+      "evidence": "claude/integration@26f07dc"
     },
     {
       "status": "done",
