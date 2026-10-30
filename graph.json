@@ -202,6 +202,22 @@
       "prompt": "From your T5 audit: Kelso has no envelope, electrical/fire rough-in, flooring or painting activities. (1) Route exterior wall types (EW*, exterior/cladding/air-barrier assemblies) to envelope as well as framing. (2) For trades with no measured work, compute a proposed provisional allowance from gross floor area with a documented rate basis, and show it as a suggestion the user accepts in Setup → Allowances (T10 UI edits edits.setup.allowances; post the suggestion shape you need and I will render it). Never add it silently.",
       "added": "2026-10-30T04:21:34.510Z",
       "by": "claude"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T1"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build"
+      ],
+      "id": "T13",
+      "owner": "claude",
+      "title": "Envelope takeoff: roof area off the roof plans (by roof type), exterior wall area by wall type",
+      "added": "2026-10-30T04:21:36.667Z",
+      "by": "claude"
     }
   ]
 }
