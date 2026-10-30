@@ -6,6 +6,7 @@ import { readSpecFacts } from '../src/build/facts';
 import { toIfc } from '../src/build/ifc';
 import { ifcClassLabel, ifcGuid } from '../src/build/ifcClass';
 import { geometryOf } from '../src/build/sceneGeometry';
+import { viewportLevels } from '../src/build/viewports';
 import { replan } from '../src/build/run';
 import type { Project, TakeoffType } from '../src/model';
 import type { SpecSection } from '../src/spec/parse';
@@ -69,6 +70,31 @@ describe('build it', () => {
     expect(acts.find((a) => a.id === 'work:envelope:L1')).toMatchObject({ elements: ['ew'] });
     expect(acts.find((a) => a.id === 'work:envelope:L1')?.deps.map((d) => d.from)).toContain('work:structure:L1');
     expect(acts.some((a) => a.id === 'work:partitions:L1')).toBe(false);
+  });
+
+  it('schedules labelled side-by-side plan measurements on their own levels without false XY geometry', () => {
+    const p = project();
+    p.units = 'metric';
+    p.sheets = [{ ...sheet('mechanical', 'M1-02', '', 1), title: undefined }];
+    p.types = [type('pipe', 'Pipe 50 mm SAN', 'linear', '22 Plumbing')];
+    p.measurements = [
+      ...[400, 500, 1200, 1300].map((x, i) => ({ id: `pipe${i}`, sheetId: 'mechanical', typeId: 'pipe', source: 'pipes' as const, points: [[x, 400], [x + 20, 400]] as [number, number][], holes: [] })),
+    ];
+    const drawingTexts = { mechanical: [
+      { str: 'L1-Plumbing', cx: 300, cy: 1600 },
+      { str: 'L2-Plumbing', cx: 1100, cy: 1600 },
+    ] };
+    expect([...viewportLevels(p.sheets[0], drawingTexts.mechanical, p.measurements).values()].map((v) => v.id)).toEqual(['L1', 'L1', 'L2', 'L2']);
+    const crossing = { id: 'cross', sheetId: 'mechanical', typeId: 'pipe', source: 'pipes' as const, points: [[600, 400], [1100, 400]] as [number, number][], holes: [] };
+    expect(viewportLevels(p.sheets[0], drawingTexts.mechanical, [...p.measurements, crossing]).has('cross')).toBe(false);
+    expect(viewportLevels(p.sheets[0], drawingTexts.mechanical.slice(0, 1), p.measurements).size).toBe(0);
+    const model = extractModel({ project: p, sections: [], drawingTexts, floorToFloor: 3.6 });
+    expect(model.elements.map((e) => [e.level, e.shape, e.quantity > 0])).toEqual([
+      ['L1', null, true], ['L1', null, true], ['L2', null, true], ['L2', null, true],
+    ]);
+    expect(model.issues.some((i) => i.id === 'unplaced:viewport alignment')).toBe(true);
+    const acts = planActivities(model, defaultSetup(model, [], '2026-11-02'), [], []);
+    expect(acts.find((a) => a.id === 'work:mech-rough:L2')?.deps.map((d) => d.from)).toContain('work:mech-rough:L1');
   });
 
   it('shows located beam spans as plan axes without exporting invented solids', () => {

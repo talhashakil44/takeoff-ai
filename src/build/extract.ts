@@ -4,6 +4,7 @@ import { quarantineDetachedSheets } from './placementQuality';
 import { recoverRoof, type DrawingLines } from './roof';
 import { simpleRing } from './surface';
 import { drawingFingerprint } from './sources';
+import { viewportLevels, type ViewportLevel } from './viewports';
 import {
   addBuilding,
   cutOpenings,
@@ -25,7 +26,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 16;
+export const MODEL_VERSION = 17;
 
 export interface Trade {
   key: string;
@@ -263,8 +264,14 @@ export function extractModel(input: ExtractInput): BuildModel {
     const id = resolve(p);
     if (id) levelOfSheet.set(sid, { id, basis: p.basis, from: p.from });
   }
+  const viewportOfMeasurement = new Map<string, ViewportLevel>();
+  for (const [sid, ms] of used) {
+    const s = sheets.get(sid);
+    if (!s || edits?.levels?.[sid]) continue;
+    for (const [id, viewport] of viewportLevels(s, input.drawingTexts?.[sid] ?? [], ms)) viewportOfMeasurement.set(id, viewport);
+  }
   // The levels, bottom up, at the floor-to-floor height unless set.
-  const ids = [...new Set([...levelOfSheet.values()].map((x) => x.id))];
+  const ids = [...new Set([...levelOfSheet.values()].map((x) => x.id).concat([...viewportOfMeasurement.values()].map((x) => x.id)))];
   const rank = (id: string) => (id === 'roof' ? 1e3 : id === 'mezz' ? 1.5 : id === 'fdn' ? -1e3 : parseFloat(id.replace(/^L/, '')) || 0);
   ids.sort((a, b) => rank(a) - rank(b));
   const levels: Level[] = [];
@@ -291,7 +298,10 @@ export function extractModel(input: ExtractInput): BuildModel {
       basis: set !== undefined ? 'assumed' : splitLevels.has(id) ? 'inferred' : datums[id] !== undefined
             ? "documented"
             : levels.length ? 'assumed' : 'inferred',
-      sheets: [...levelOfSheet].filter(([, l]) => l.id === id).map(([sid]) => sid),
+      sheets: [...new Set([
+        ...[...levelOfSheet].filter(([, l]) => l.id === id).map(([sid]) => sid),
+        ...[...used].filter(([, ms]) => ms.some((m) => viewportOfMeasurement.get(m.id)?.id === id)).map(([sid]) => sid),
+      ])],
     });
     z = id === 'fdn' ? 0 : elevation + input.floorToFloor;
   }
@@ -323,7 +333,8 @@ export function extractModel(input: ExtractInput): BuildModel {
     if (!s || !type || s.superseded) continue;
     const classifiedTrade = tradeOf(type, m.source);
     const trade = type.kind === 'area' && m.ceilingHeight && classifiedTrade !== 'demolition' ? 'ceilings' : classifiedTrade;
-    const lv = levelOfSheet.get(s.id);
+    const viewport = viewportOfMeasurement.get(m.id);
+    const lv = viewport ? { id: viewport.id, basis: 'inferred' as Basis, from: `viewport title “${viewport.title}”` } : levelOfSheet.get(s.id);
     const level = lv ? levelById.get(lv.id) ?? null : null;
     const vars = measurementVars(m, type, s, units);
     const quantity = vars ? primaryOf(type.kind, vars) : 0;
@@ -340,6 +351,9 @@ export function extractModel(input: ExtractInput): BuildModel {
     } else if (!s.metersPerPoint) {
       elIssues.push(`${s.name} has no scale: its quantity and place are unknown.`);
       unplaced.set(s.id, 'no scale');
+    } else if (viewport) {
+      elIssues.push(`${s.name}: level ${viewport.id} inferred from “${viewport.title}” and the gap between side-by-side plans; this viewport has no verified building XY registration, so its quantity is scheduled on ${viewport.id} but not drawn in 3D.`);
+      unplaced.set(s.id, 'viewport alignment');
     } else if (!isPlan(s)) {
       elIssues.push(`Measured on ${s.name} (${s.title ?? 'not a plan'}): not a plan, so its place on the building is not known.`);
       unplaced.set(s.id, 'not a plan');
@@ -484,6 +498,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     'enlarged plan': 'are enlarged plans: where they sit on the floor isn’t recovered yet, so their takeoffs are counted but not drawn',
     'level unknown': 'don’t say which level they are: set it in Build setup to place their takeoffs',
     'other scale': 'are at another scale than the main plans: not placed with them',
+    'viewport alignment': 'have level-labelled viewports, but their separate XY alignments to the building are unverified; quantities are scheduled on the inferred levels but not drawn',
   };
   for (const [reason, sids] of why)
     issues.push({ id: `unplaced:${reason}`, severity: reason === 'level unknown' ? 'warning' : 'info', text: `${sids.length} sheet${sids.length === 1 ? '' : 's'} (${sids.map(label).join(', ')}) ${say[reason]}.`, refs: sids });
