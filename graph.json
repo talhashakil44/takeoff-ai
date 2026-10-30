@@ -297,7 +297,7 @@
       "updated": "2026-10-30T04:26:32.312Z"
     },
     {
-      "status": "doing",
+      "status": "todo",
       "depends": [],
       "accept": [
         "tsc",
@@ -309,7 +309,10 @@
       "title": "Raster symbol counting: legend symbols matched on plans pasted in as pictures (Kelso E2/E3 devices, fixtures)",
       "added": "2026-10-30T04:28:19.354Z",
       "by": "claude",
-      "updated": "2026-10-30T05:18:14.182Z"
+      "updated": "2026-10-30T05:22:14.168Z",
+      "notes": [
+        "2026-10-30T05:22 claude: still useful for sets without circuit tags; Kelso now covered by T14 text counts"
+      ]
     },
     {
       "status": "blocked",
