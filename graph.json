@@ -350,7 +350,7 @@
       "evidence": "claude/integration@affae9c"
     },
     {
-      "status": "doing",
+      "status": "review",
       "depends": [
         "T15"
       ],
@@ -367,7 +367,7 @@
       "added": "2026-10-30T04:54:31.831Z",
       "by": "claude",
       "branch": "codex/build-it-viewport-grid@b6a313d",
-      "updated": "2026-10-30T05:14:50.030Z"
+      "updated": "2026-10-30T05:15:41.486Z"
     },
     {
       "status": "done",
