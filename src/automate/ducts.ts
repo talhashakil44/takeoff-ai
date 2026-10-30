@@ -194,6 +194,9 @@ export async function automateDucts(p: Project, access: SetAccess): Promise<Duct
           fresh.push(t);
         }
         for (const l of joinRuns(list, pt(0.9), pt(0.1))) {
+          // A run hardly longer than the duct is wide is a box (a riser or plenum drawn with an X), not duct.
+          const along = l.slice(1).reduce((n, q, x) => n + Math.hypot(q[0] - l[x][0], q[1] - l[x][1]), 0);
+          if (along < 1.5 * Math.max(z.w, z.h ?? 0) * unit) continue;
           added.push({ id: newId(), sheetId: s.id, typeId: t.id, points: l, holes: [], source: 'ducts', label: text });
           const len = l.slice(1).reduce((n, q, x) => n + Math.hypot(q[0] - l[x][0], q[1] - l[x][1]), 0) * mpp;
           totals.set(name, (totals.get(name) ?? 0) + len);
