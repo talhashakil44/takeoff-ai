@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { doorSheets, drawingFingerprint, markPolylineArcs, needsLines, needsText, packLines, slimLines, unpackLines } from '../src/build/sources';
+import { doorSheets, drawingFingerprint, linePlans, structuralSheets, markPolylineArcs, needsLines, needsText, packLines, slimLines, unpackLines } from '../src/build/sources';
 import { sourceHashOf } from '../src/build/extract';
 import { writtenDate } from '../src/build/facts';
 import type { Segment } from '../src/fill/vectors';
@@ -33,6 +33,17 @@ describe('Build It drawing evidence', () => {
     expect(needsLines({ id: 'p3', title: 'GROUND FLOOR PLAN' }, doors)).toBe(false);
   });
 
+  it('reads the linework of measured structural plans (lintel and beam strokes), not M/E/P foundation plans', () => {
+    const sheet = (id: string, name: string, title: string) => ({ id, name, title }) as Project['sheets'][number];
+    const project = {
+      sheets: [sheet('s1', 'S2.0', 'FRAMING PLAN'), sheet('s2', 'A2.0', 'FOUNDATION PLAN'), sheet('s3', 'M1-01', 'FOUNDATION PLAN'), sheet('s4', 'S3.0', 'PLAN'), sheet('s5', 'A2.1', 'FLOOR PLAN')],
+      measurements: ['s1', 's2', 's3', 's5'].map((sheetId, i) => ({ id: `${i}`, sheetId, typeId: 't', points: [], holes: [] })) as Project['measurements'],
+    };
+    expect([...structuralSheets(project)].sort()).toEqual(['s1', 's2']);
+    const plans = linePlans({ ...project, types: [{ id: 't', name: 'Doors', kind: 'count' } as Project['types'][number]] });
+    expect(plans.has('s5') && plans.has('s1') && !plans.has('s4')).toBe(true);
+  });
+
   it('marks a door swing drawn as straight chords as curve pieces, not a rectangle or a short bend', () => {
     const chain = (pts: number[][], sub: number): Segment[] =>
       pts.slice(1).map((p, i) => ({ x1: pts[i][0], y1: pts[i][1], x2: p[0], y2: p[1], width: 0.5, filled: false, sub }));
@@ -44,11 +55,13 @@ describe('Build It drawing evidence', () => {
     expect(out.slice(8).some((l) => l.curve)).toBe(false);
   });
 
-  it('keeps every line exactly, without the fields the model never reads', () => {
-    const lines = [seg(1), seg(2, { curve: true }), seg(3, { dashed: true, filled: true })];
+  it('keeps every line exactly, with its ink, without the fields the model never reads', () => {
+    const lines = [seg(1), seg(2, { curve: true }), seg(3, { dashed: true, filled: true, color: '#ff8000' }), seg(4, { color: undefined })];
     const slim = slimLines(lines);
-    expect(slim[1]).toEqual({ x1: 2, y1: 4, x2: 12.123456789, y2: 6, width: 0.5, filled: false, curve: true });
-    expect(slim.every((l) => !('color' in l) && !('layer' in l))).toBe(true);
+    expect(slim[1]).toEqual({ x1: 2, y1: 4, x2: 12.123456789, y2: 6, width: 0.5, filled: false, curve: true, color: '#000000' });
+    expect(slim[2].color).toBe('#ff8000');
+    expect('color' in slim[3]).toBe(false);
+    expect(slim.every((l) => !('layer' in l) && !('sub' in l))).toBe(true);
     expect(unpackLines(packLines(slim))).toEqual(slim);
   });
 
