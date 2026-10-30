@@ -85,7 +85,7 @@
     {
       "id": "T6",
       "owner": "claude",
-      "status": "todo",
+      "status": "doing",
       "title": "Ductwork on plans without CAD layers (double-line ducts, sized by label 300x300 S/A)",
       "depends": [
         "T2"
@@ -94,7 +94,8 @@
         "tsc",
         "test",
         "build"
-      ]
+      ],
+      "updated": "2026-10-30T04:11:50.237Z"
     },
     {
       "id": "T7",
