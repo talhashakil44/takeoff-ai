@@ -79,6 +79,15 @@ export function planningScopeIssues(model: BuildModel, facts: SpecFact[], setup:
       refs: matches.map((e) => e.id), sources: matches.map((e) => e.sources[0]),
     });
   }
+  if (excluded.some((e) => e.planningExcluded === 'unverified-demo-type')) {
+    const shiftedNotes = model.elements.filter((e) => e.origin === 'takeoff' && e.measurementSource === 'demolition' &&
+      /^A20[1-4]$/i.test(e.sources[0]?.label ?? '') && /^demo\s*\d+\s*:/i.test(e.typeName));
+    if (shiftedNotes.length) issues.push({
+      id: 'takeoff-review:shifted-demo-keynotes', severity: 'warning',
+      text: `${shiftedNotes.length} saved A201–A204 demolition markers use note-numbered type labels from an extraction that shifted some keynote text by one line. Their marked positions remain in the source takeoff, but the specific removal types, units and production basis need drawing review; the other note-numbered quantities remain provisional in demolition work.`,
+      refs: shiftedNotes.map((e) => e.id), sources: shiftedNotes.map((e) => e.sources[0]),
+    });
+  }
   const entries = setup.allowances?.value;
   if (entries && typeof entries === 'object' && !Array.isArray(entries))
     for (const [key, value] of Object.entries(entries)) {

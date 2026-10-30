@@ -338,6 +338,7 @@ export function extractModel(input: ExtractInput): BuildModel {
   const missingSec = new Map(sections.filter((s) => s.missing).map((s) => [s.key, `${s.number} ${s.title}`]));
   const codedStatusNoted = new Set<string>();
   const roofViews = roofViewEvidence(project);
+  const shiftedDemoNotes = project.types.some((t) => /^demo\s*0\s*:/i.test(t.name));
   const elements: BuildElement[] = [];
   const gridCountsWithoutPlace = new Map<string, string[]>();
   let minX = Infinity;
@@ -364,6 +365,8 @@ export function extractModel(input: ExtractInput): BuildModel {
     const box: [number, number, number, number] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
     const src: SourceRef = { kind: 'sheet', id: s.id, page: s.page, label: s.name, box };
     const elIssues: string[] = [];
+    if (shiftedDemoNotes && m.source === 'demolition' && /^A20[1-4]$/i.test(s.name) && /^demo\s*\d+\s*:/i.test(type.name))
+      elIssues.push('Saved demolition keynote labels on A201–A204 may be shifted by one note; the measured marker remains, but its removal type and production basis need drawing review.');
     if (inferredRoofView) elIssues.push('Roof level inferred from multiple coincident equipment marks on a separately titled roof plan; confirm the unpaired marks on this sheet.');
     const gridCount = trade === 'structure' && type.kind === 'count' && /\b(?:footing|pier|base\s*plate|column)\b/i.test(type.name);
     let shape: ElementShape | null = null;

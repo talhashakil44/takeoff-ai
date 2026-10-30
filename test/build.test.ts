@@ -57,6 +57,7 @@ describe('build it', () => {
     p.types = [
       type('wall', 'Demo: other walls and partitions shown dashed', 'linear', '02 Existing Conditions'),
       type('demo0', 'Demo 0: Floor Types, see A000 series Sheets Roof Types', 'count', '02 Existing Conditions'),
+      type('note14', 'Demo 14: Remove toilet partitions, and dispose', 'count', '02 Existing Conditions'),
       type('room', 'Rooms', 'area', '09 Finishes'),
       type('window', 'Windows', 'count', '08 Openings'),
       type('open', 'Ceiling – open / none shown (untagged)', 'area', '09 Finishes'),
@@ -68,6 +69,7 @@ describe('build it', () => {
       m('egress-wall', 'egress', 'wall', 'demolition', [[10, 10], [20, 10]]),
       m('real-demo', 'demo', 'wall', 'demolition', [[10, 10], [20, 10]]),
       m('demo-zero', 'demo', 'demo0', 'demolition', [[30, 30]]),
+      m('note-shift', 'demo', 'note14', 'demolition', [[50, 30]]),
       { ...m('room-area', 'floor', 'room', 'rooms', [[10, 10], [20, 10], [20, 20], [10, 20]]), ceilingHeight: 3 },
       m('plan-window', 'floor', 'window', 'windows', [[40, 40]]),
       m('elevation-window', 'elevation', 'window', 'windows', [[40, 40]]),
@@ -88,6 +90,7 @@ describe('build it', () => {
     expect(byId('room-area')).toMatchObject({ trade: 'other', planningExcluded: 'room-context', shape: null });
     expect(byId('elevation-window')).toMatchObject({ level: null, planningExcluded: 'elevation-window', shape: null });
     expect(byId('exist-equip').status).toBe('existing');
+    expect(byId('note-shift').issues.some((s) => s.includes('shifted by one note'))).toBe(true);
     for (const id of ['egress-wall', 'demo-zero', 'open-ceiling', 'bad-ceiling', 'plumbing-0', 'plumbing-1', 'plumbing-2'])
       expect(byId(id).planningExcluded).toBeTruthy();
     for (const id of ['real-demo', 'plan-window', 'roof-0', 'roof-1', 'roof-2'])
@@ -96,11 +99,12 @@ describe('build it', () => {
     const setup = defaultSetup(model, [], '2026-11-02');
     const acts = planActivities(model, setup, [], []);
     const work = acts.filter((a) => a.kind === 'work');
-    expect(work.flatMap((a) => a.elements).sort()).toEqual(['plan-window', 'real-demo', 'roof-0', 'roof-1', 'roof-2'].sort());
+    expect(work.flatMap((a) => a.elements).sort()).toEqual(['note-shift', 'plan-window', 'real-demo', 'roof-0', 'roof-1', 'roof-2'].sort());
     expect(work.find((a) => a.id === 'work:mech-trim:roof')?.quantities?.ea).toBe(3);
     const schedule = replan(model, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule;
     expect(schedule.issues.map((i) => i.id)).toEqual(expect.arrayContaining([
       'takeoff-review:egress-demolition', 'takeoff-review:unverified-demo-type',
+      'takeoff-review:shifted-demo-keynotes',
       'takeoff-review:open-ceiling', 'takeoff-review:unverified-ceiling-type',
     ]));
   });
