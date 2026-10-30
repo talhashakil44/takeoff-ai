@@ -28,7 +28,7 @@ export function suggestScopeAllowances(model: BuildModel, setup: PlanSetup): Sco
     const name = tradeByKey.get(key)?.name ?? key;
     return [{
       key,
-      allowance: { quantity, unit, rate, provisional: true },
+      allowance: { quantity, unit, rate, provisional: true, ...(key === 'envelope' ? {} : { distribution: 'gfa-by-level' as const }) },
       referenceAreaM2,
       areaBasis: 'inferred',
       rateBasis: 'assumed',

@@ -188,6 +188,8 @@ export interface ScopeAllowance {
   /** Quantity installed by one crew in one working day. */
   rate: number;
   provisional: boolean;
+  /** Accepted gross-floor-area proxy: plan each level's share as a separate work package. */
+  distribution?: 'gfa-by-level';
 }
 
 /** An optional planning proxy, shown for user review before it enters setup. */
@@ -215,6 +217,8 @@ export interface PlanSetup {
   floorToFloor: Assumption;
   /** Different trades may work on one level at once; the same trade's crews go level by level. */
   levelsInParallel: Assumption<boolean>;
+  /** Require a provisional weather-tight milestone before interior finish work. */
+  dryInBeforeFinishes: Assumption<boolean>;
   testingDays: Assumption;
   commissioningDays: Assumption;
   closeoutDays: Assumption;

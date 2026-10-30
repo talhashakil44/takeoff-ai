@@ -47,7 +47,7 @@ describe('Build It unmeasured scope allowances', () => {
     expect(setup.allowances.value).toEqual({});
     expect(planActivities(m, setup, [], []).some((a) => a.id === 'allowance:elec-rough')).toBe(false);
     const accepted = applySetupEdits(setup, { setup: { allowances: { 'elec-rough': suggestions.find((s) => s.key === 'elec-rough')!.allowance } } });
-    expect(planActivities(m, accepted, [], []).find((a) => a.id === 'allowance:elec-rough')).toMatchObject({ duration: 2, elements: [] });
+    expect(planActivities(m, accepted, [], []).find((a) => a.id === 'allowance:elec-rough:L1')).toMatchObject({ duration: 2, elements: [], level: 'L1' });
     expect(suggestScopeAllowances(m, accepted).some((s) => s.key === 'elec-rough')).toBe(false);
     expect(replan(m, accepted, { sections: [], facts: [], today: '2026-11-02' }).scopeSuggestions.some((s) => s.key === 'elec-rough')).toBe(false);
     m.floorAreas = {};
@@ -68,6 +68,39 @@ describe('Build It unmeasured scope allowances', () => {
     m.elements.pop();
     m.floorAreas = {};
     expect(suggestScopeAllowances(m, setup).map((s) => s.key)).toEqual(['envelope']);
+  });
+  it('splits accepted GFA proxies by floor and gates finishes on an assumed dry-in milestone', () => {
+    const m = model();
+    m.levels.push({ id: 'L2', name: 'Level 2', elevation: 3.6, basis: 'inferred', sheets: [] }, { id: 'roof', name: 'Roof', elevation: 7.2, basis: 'inferred', sheets: [] });
+    m.floorAreas = { L1: 100, L2: 200 };
+    m.elements.push(
+      element('wall', 'envelope', 'L1', '07 Envelope', 'm', 30),
+      { ...element('roof', 'envelope', 'roof', '07 Envelope', 'm²', 300), typeName: 'Roof membrane' },
+      element('partition', 'partitions', 'L2', '09 Finishes', 'm', 20),
+    );
+    const base = defaultSetup(m, [], '2026-11-02');
+    const suggestions = suggestScopeAllowances(m, base);
+    const entries = Object.fromEntries(suggestions.filter((s) => ['elec-rough', 'painting', 'flooring'].includes(s.key)).map((s) => [s.key, s.allowance]));
+    const setup = applySetupEdits(base, { setup: { allowances: entries } });
+    const acts = planActivities(m, setup, [], []);
+    const byId = new Map(acts.map((a) => [a.id, a]));
+    const deps = (id: string) => byId.get(id)!.deps.map((d) => d.from);
+    expect(byId.get('allowance:elec-rough:L1')?.quantities?.['m²']).toBeCloseTo(100);
+    expect(byId.get('allowance:elec-rough:L2')?.quantities?.['m²']).toBeCloseTo(200);
+    expect(deps('allowance:elec-rough:L2')).toContain('allowance:elec-rough:L1');
+    expect(deps('allowance:flooring:L1')).toContain('allowance:painting:L1');
+    expect(deps('allowance:flooring:L2')).toContain('allowance:painting:L2');
+    expect(deps('allowance:flooring:L2')).toContain('allowance:flooring:L1');
+    expect(deps('ms:dry-in')).toEqual(expect.arrayContaining(['work:envelope:L1', 'work:envelope:roof']));
+    expect(deps('work:partitions:L2')).toContain('ms:dry-in');
+    expect(deps('allowance:painting:L1')).toContain('ms:dry-in');
+    expect(schedule(acts, setup).issues.some((i) => i.id === 'loop')).toBe(false);
+    const disabled = applySetupEdits(setup, { setup: { dryInBeforeFinishes: false } });
+    expect(planActivities(m, disabled, [], []).some((a) => a.id === 'ms:dry-in')).toBe(false);
+    expect(planActivities(m, disabled, [], []).find((a) => a.id === 'allowance:flooring:L2')?.deps.some((d) => d.from === 'ms:dry-in')).toBe(false);
+    m.elements = m.elements.filter((e) => e.id !== 'roof');
+    expect(planActivities(m, setup, [], []).some((a) => a.id === 'ms:dry-in')).toBe(false);
+    expect(replan(m, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.map((i) => i.id)).toContain('dry-in-evidence-missing');
   });
   it('has no quantity or work activity until the user enters one', () => {
     const m = model();

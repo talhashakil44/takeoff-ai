@@ -47,6 +47,13 @@ export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInp
   const acts = planActivities(model, setup, input.sections, input.facts, input.edits);
   const schedule = planToTarget(acts, setup);
   schedule.issues.push(...planningScopeIssues(model, input.facts, setup));
+  if (setup.dryInBeforeFinishes?.value && !acts.some((a) => a.id === 'ms:dry-in') &&
+      acts.some((a) => a.kind === 'work' && ['partitions', 'ceilings', 'doors', 'painting', 'flooring', 'finishes', 'specialties'].includes(a.trade ?? '')))
+    schedule.issues.push({
+      id: 'dry-in-evidence-missing',
+      severity: 'warning',
+      text: 'The dry-in gate is on, but roof covering and exterior wall evidence is incomplete. Finish work remains sequenced by its other prerequisites; confirm the enclosure and set a weather-tight milestone before relying on its dates.',
+    });
   const structureRates = setup.trades.structure?.value.rates;
   const structureRateRefs = model.elements.filter((e) => e.trade === 'structure' && (
     (e.unit === 'ea' && structureRates?.ea === 10) ||

@@ -88,6 +88,7 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
     resubmitReviewDays: review ? a(reviewDays, 'documented', `Same review period (${review.source.label})`, review.source) : a(10, 'assumed', 'Same as the first review'),
     floorToFloor: a(metric ? 3.6 : 12, 'assumed', 'Typical floor-to-floor height'),
     levelsInParallel: a(false, 'assumed', 'One crew per trade, going level by level'),
+    dryInBeforeFinishes: a(true, 'assumed', 'Interior finishes start after an assumed weather-tight milestone; confirm enclosure and timing on site'),
     testingDays: a(3, 'assumed', 'Field testing and inspection per trade'),
     commissioningDays: a(10, 'assumed', 'Commissioning of building systems'),
     closeoutDays: a(15, 'assumed', 'Closeout documents, O&M manuals, as-builts'),
@@ -257,46 +258,73 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
   const allowanceEntries = activeAllowances(setup).sort(([a], [b]) =>
     (a === 'site' ? 0 : a === 'foundations' ? 1 : a === 'structure' ? 2 : 3) -
     (b === 'site' ? 0 : b === 'foundations' ? 1 : b === 'structure' ? 2 : 3));
-  const allowanceIds = new Set(allowanceEntries.map(([key]) => `allowance:${key}`));
+  const areaLevels = model.levels.filter((l) => l.id !== 'roof' && l.id !== 'fdn' && (model.floorAreas?.[l.id] ?? 0) > 0);
+  const totalFloorArea = areaLevels.reduce((sum, l) => sum + model.floorAreas![l.id], 0);
+  const unit = model.units === 'metric' ? 'm²' : 'SF';
+  const allowancePackages = new Map<string, { id: string; level: string | null; quantity: number }[]>();
   for (const [key, value] of allowanceEntries) {
-    const predecessors = new Set<string>();
-    if (key === 'site') {
-      predecessors.add('mobilize');
-    } else if (key === 'foundations') {
-      predecessors.add(has.has('work:structure:fdn') ? 'work:structure:fdn' : has.has('work:site:earthwork') ? 'work:site:earthwork' : 'mobilize');
-      if (!has.has('work:structure:fdn') && has.has('proc:structure')) predecessors.add('proc:structure');
-    } else if (key === 'structure') {
-      predecessors.add(lastMeasured('structure') ?? (has.has('work:site:earthwork') ? 'work:site:earthwork' : 'mobilize'));
-      if (allowanceIds.has('allowance:foundations')) predecessors.add('allowance:foundations');
-    } else {
-      predecessors.add(lastMeasured(key) ?? 'mobilize');
-      if (!lastMeasured(key)) {
-        for (const prior of AFTER[key] ?? []) {
-          const work = lastMeasured(prior);
-          if (work) predecessors.add(work);
+    const expected = model.units === 'metric' ? totalFloorArea : totalFloorArea / 0.09290304;
+    const legacyProxy = value.provisional && Math.abs(value.quantity - expected) <= Math.max(0.2, expected * 0.001);
+    const split = key !== 'envelope' && key !== 'site' && key !== 'foundations' && key !== 'structure' &&
+      value.unit === unit && areaLevels.length > 0 && (value.distribution === 'gfa-by-level' || legacyProxy);
+    const packages = split
+      ? areaLevels.map((l) => ({ id: `allowance:${key}:${l.id}`, level: l.id, quantity: value.quantity * model.floorAreas![l.id] / totalFloorArea }))
+      : [{ id: `allowance:${key}`, level: null, quantity: value.quantity }];
+    allowancePackages.set(key, packages);
+  }
+  const allowanceIds = new Set([...allowancePackages.values()].flat().map((p) => p.id));
+  const allowanceBefore = (key: string, level: string | null): string | undefined => {
+    const packages = allowancePackages.get(key);
+    return packages?.find((p) => p.level === level)?.id ?? packages?.find((p) => p.level === null)?.id ?? packages?.at(-1)?.id;
+  };
+  for (const [key, value] of allowanceEntries) {
+    const packages = allowancePackages.get(key)!;
+    for (const [index, pack] of packages.entries()) {
+      const predecessors = new Set<string>();
+      if (key === 'site') {
+        predecessors.add('mobilize');
+      } else if (key === 'foundations') {
+        predecessors.add(has.has('work:structure:fdn') ? 'work:structure:fdn' : has.has('work:site:earthwork') ? 'work:site:earthwork' : 'mobilize');
+        if (!has.has('work:structure:fdn') && has.has('proc:structure')) predecessors.add('proc:structure');
+      } else if (key === 'structure') {
+        predecessors.add(lastMeasured('structure') ?? (has.has('work:site:earthwork') ? 'work:site:earthwork' : 'mobilize'));
+        const foundation = allowanceBefore('foundations', null);
+        if (foundation) predecessors.add(foundation);
+      } else {
+        const own = measuredWork.filter((x) => x.trade === key && x.level === pack.level).at(-1)?.id ?? lastMeasured(key);
+        predecessors.add(own ?? 'mobilize');
+        if (!own) {
+          for (const prior of AFTER[key] ?? []) {
+            const work = measuredWork.find((x) => x.id === workId(prior, pack.level))?.id ?? lastMeasured(prior);
+            if (work) predecessors.add(work);
+          }
         }
       }
+      if (index > 0 && !setup.levelsInParallel.value) predecessors.add(packages[index - 1].id);
+      if (key !== 'foundations')
+        for (const [prior] of allowanceEntries)
+          if (prior !== key && follows(key, prior)) {
+            const id = allowanceBefore(prior, pack.level);
+            if (id && allowanceIds.has(id)) predecessors.add(id);
+          }
+      add({
+        id: pack.id,
+        name: `${key === 'foundations' ? 'Foundations' : tradeByKey.get(key)?.name ?? key} — unmeasured scope allowance${pack.level ? ` — ${levelName(pack.level)}` : ''}`,
+        kind: 'work',
+        trade: key === 'foundations' ? 'structure' : key,
+        level: pack.level,
+        elements: [],
+        quantities: { [value.unit]: pack.quantity },
+        rates: { [value.unit]: value.rate },
+        crews: 1,
+        duration: Math.max(1, Math.ceil(pack.quantity / value.rate)),
+        durationBasis: 'assumed',
+        durationWhy: `${Math.round(pack.quantity * 10) / 10} ${value.unit} at ${value.rate} ${value.unit} per crew-day · ${value.provisional ? 'provisional' : 'confirmed by you'} unmeasured scope${pack.level ? `, allocated by ${levelName(pack.level)} gross floor area` : ''}, entered in Build setup`,
+        deps: [...predecessors].map((from) => dep(from, 'Scope allowance after prerequisite work')),
+        specs: [],
+        sources: [],
+      });
     }
-    if (key !== 'foundations')
-      for (const [prior] of allowanceEntries)
-        if (prior !== key && allowanceIds.has(`allowance:${prior}`) && follows(key, prior)) predecessors.add(`allowance:${prior}`);
-    add({
-      id: `allowance:${key}`,
-      name: `${key === 'foundations' ? 'Foundations' : tradeByKey.get(key)?.name ?? key} — unmeasured scope allowance`,
-      kind: 'work',
-      trade: key === 'foundations' ? 'structure' : key,
-      level: null,
-      elements: [],
-      quantities: { [value.unit]: value.quantity },
-      rates: { [value.unit]: value.rate },
-      crews: 1,
-      duration: Math.max(1, Math.ceil(value.quantity / value.rate)),
-      durationBasis: 'assumed',
-      durationWhy: `${value.quantity} ${value.unit} at ${value.rate} ${value.unit} per crew-day · ${value.provisional ? 'provisional' : 'confirmed by you'} unmeasured scope, entered in Build setup`,
-      deps: [...predecessors].map((from) => dep(from, 'Scope allowance after prerequisite work')),
-      specs: [],
-      sources: [],
-    });
   }
   for (const x of measuredWork) {
     for (const [key] of allowanceEntries) {
@@ -304,8 +332,21 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
       const required = key === 'foundations'
         ? (x.trade === 'structure' && x.level !== 'fdn') || follows(x.trade!, 'structure')
         : x.trade !== key && follows(x.trade!, key);
-      if (required && !x.deps.some((d) => d.from === `allowance:${key}`))
-        x.deps.push(dep(`allowance:${key}`, `Unmeasured ${key} scope before this work`));
+      const prior = allowanceBefore(key, x.level);
+      if (required && prior && !x.deps.some((d) => d.from === prior))
+        x.deps.push(dep(prior, `Unmeasured ${key} scope before this work`));
+    }
+  }
+
+  if (setup.dryInBeforeFinishes?.value) {
+    const envelope = acts.filter((x) => x.kind === 'work' && x.trade === 'envelope');
+    const roofEvidence = model.elements.some((e) => e.trade === 'envelope' && /roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF')) || allowanceIds.has('allowance:envelope');
+    const wallEvidence = model.elements.some((e) => e.trade === 'envelope' && e.level !== 'roof');
+    if (envelope.length && roofEvidence && wallEvidence) {
+      const dryIn = add({ id: 'ms:dry-in', name: 'Weather-tight / dry-in (assumed)', kind: 'milestone', trade: null, level: null, elements: [], duration: 0, durationBasis: setup.dryInBeforeFinishes.basis, durationWhy: setup.dryInBeforeFinishes.why, deps: envelope.map((x) => dep(x.id, 'Envelope work before dry-in', 'assumed')), specs: [], sources: [] });
+      const finishTrades = new Set(['partitions', 'ceilings', 'doors', 'painting', 'flooring', 'finishes', 'specialties']);
+      for (const x of acts) if (x.kind === 'work' && finishTrades.has(x.trade ?? ''))
+        x.deps.push(dep(dryIn.id, 'Interior finish after assumed dry-in', 'assumed'));
     }
   }
 
