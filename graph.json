@@ -443,7 +443,7 @@
       "evidence": "claude/integration@2bcc703"
     },
     {
-      "status": "todo",
+      "status": "done",
       "depends": [
         "T22"
       ],
@@ -460,7 +460,9 @@
       "notes": [
         "2026-10-30T05:44 claude: footing XY moved to T25 (Build It, grid intersections); misses remain"
       ],
-      "updated": "2026-10-30T05:44:01.220Z"
+      "updated": "2026-10-30T08:06:51.684Z",
+      "branch": "claude/integration@1f3b60d",
+      "evidence": "claude/integration@1f3b60d"
     },
     {
       "status": "done",
