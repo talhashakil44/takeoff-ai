@@ -71,7 +71,7 @@
     {
       "id": "T5",
       "owner": "gpt",
-      "status": "review",
+      "status": "done",
       "title": "Recompute Kelso and Frederick schedules from the refreshed demos; report finish dates and the critical path",
       "depends": [
         "T4"
@@ -81,8 +81,9 @@
       ],
       "prompt": "Audit the refreshed demos (BUILD_PROJECTS_ROOT=/Users/talhashakeel/dev/takeoff-ai/.agents-data) on claude/integration. Report finish, duration and the critical path, with the evidence for each driving duration (measured quantity, rate, basis). Flag durations that rest on assumed rates. No target duration is forced: the evidence decides.",
       "stream": "gpt-build",
-      "branch": "codex/build-it-refreshed-audit@9f36439",
-      "updated": "2026-10-30T04:16:54.759Z"
+      "branch": "claude/integration@c5a7b72",
+      "updated": "2026-10-30T04:17:55.147Z",
+      "evidence": "codex/build-it-refreshed-audit@9f36439"
     },
     {
       "id": "T6",
