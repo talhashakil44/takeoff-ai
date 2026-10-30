@@ -661,7 +661,7 @@
       "evidence": "codex/build-it-frederick-reqa@e13725f"
     },
     {
-      "status": "review",
+      "status": "done",
       "depends": [
         "T33"
       ],
@@ -677,8 +677,8 @@
       "prompt": "T33 found 30 of 50 A211 door markers with no wall host within 600 mm because door tags sit in the room off the wall. Same idea as T25 (pads to grid intersections). Use the sheet linework (arcs/quarter-circle chords) via your own Build It code; no changes to claude-owned files or saved data. Report how many A211-A214 doors get a host and list the rest with ids. Also check Kelso doors.",
       "added": "2026-10-30T13:58:06.665Z",
       "by": "claude",
-      "branch": "codex/build-it-door-hosts@d7d3438",
-      "updated": "2026-10-30T14:18:23.120Z",
+      "branch": "claude/integration@d7d3438",
+      "updated": "2026-10-30T14:35:31.261Z",
       "ref": "claude/integration@d7d3438",
       "evidence": "codex/build-it-door-hosts@d7d3438"
     },
