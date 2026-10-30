@@ -709,7 +709,7 @@
       "evidence": "codex/build-it-polyline-door-hosts@a3dfd08"
     },
     {
-      "status": "todo",
+      "status": "blocked",
       "depends": [],
       "accept": [
         "tsc",
@@ -722,7 +722,8 @@
       "title": "Roof system takeoff (R1/R2/R3 tags on framing plans): area per roof system and purlins/joists from the roof assembly schedule spacing (Kelso S2.1 R2: 175x342 glulam purlins @1200 o.c.)",
       "prompt": "Engine coverage gap found by gpt-explore T11: roof system tags R1-R3 on Kelso S2.1 reference the ROOF ASSEMBLY SCHEDULE (decking, purlins at spacing, span arrows). Take off roof-system areas and derived purlin count/length. Blocked: S2.1 has no scale (several noted, user must confirm).",
       "added": "2026-10-30T18:29:41.806Z",
-      "by": "claude"
+      "by": "claude",
+      "updated": "2026-10-30T18:29:43.990Z"
     }
   ]
 }
