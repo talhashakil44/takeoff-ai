@@ -1,7 +1,7 @@
+import { geometryOf } from '../build/sceneGeometry';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { BuildElement, BuildModel } from '../build/types';
 
 /**
@@ -13,7 +13,7 @@ import type { BuildElement, BuildModel } from '../build/types';
  * parameter, seen from preset views.
  */
 
-export type ElementState = 'todo' | 'doing' | 'done' | 'existing' | 'removing' | 'gone';
+export type ElementState = | 'todo' | 'doing' | 'done' | 'existing' | 'removing' | 'gone';
 /**
  * Where the camera goes to show a box filling the view, looking along -dir: far enough that
  * every corner of the box is inside the frustum (both ways), with a little margin.
@@ -80,39 +80,6 @@ interface Props {
   onHover: (id: string | null) => void;
 }
 
-function geometryOf(e: BuildElement): THREE.BufferGeometry | null {
-  const s = e.shape;
-  if (!s) return null;
-  if (s.type === 'run') {
-    const parts: THREE.BufferGeometry[] = [];
-    for (let i = 1; i < s.points.length; i++) {
-      const [x1, y1] = s.points[i - 1];
-      const [x2, y2] = s.points[i];
-      const len = Math.hypot(x2 - x1, y2 - y1);
-      if (len < 0.02) continue;
-      const g = new THREE.BoxGeometry(len + s.thickness * 0.5, s.height, s.thickness);
-      g.rotateY(-Math.atan2(y2 - y1, x2 - x1));
-      g.translate((x1 + x2) / 2, s.z0 + s.height / 2, (y1 + y2) / 2);
-      parts.push(g);
-    }
-    if (!parts.length) return null;
-    const g = parts.length === 1 ? parts[0] : mergeGeometries(parts);
-    if (parts.length > 1) for (const p of parts) p.dispose();
-    return g;
-  }
-  if (s.type === 'surface') {
-    if (s.ring.length < 3) return null;
-    const shape = new THREE.Shape(s.ring.map(([x, y]) => new THREE.Vector2(x, -y)));
-    for (const h of s.holes) if (h.length >= 3) shape.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, -y))));
-    const g = new THREE.ExtrudeGeometry(shape, { depth: s.thickness, bevelEnabled: false });
-    g.rotateX(-Math.PI / 2);
-    g.translate(0, s.z, 0);
-    return g;
-  }
-  const g = new THREE.BoxGeometry(s.size[0], s.size[2], s.size[1]);
-  g.translate(s.at[0], s.z + s.size[2] / 2, s.at[1]);
-  return g;
-}
 
 interface Item {
   mesh: THREE.Mesh;
@@ -165,15 +132,16 @@ export function BuildScene(props: Props) {
     sky.height = 256;
     const sx = sky.getContext('2d')!;
     const grad = sx.createLinearGradient(0, 0, 0, 256);
-    grad.addColorStop(0, '#070a14');
-    grad.addColorStop(0.65, '#0d1324');
-    grad.addColorStop(1, '#1a2238');
+    grad.addColorStop(0, '#202b36');
+    grad.addColorStop(0.65, '#293642');
+    grad.addColorStop(1, '#3a4854');
     sx.fillStyle = grad;
     sx.fillRect(0, 0, 2, 256);
     s.background = new THREE.CanvasTexture(sky);
     const [x0, y0, x1, y1] = model.extent;
     const span = Math.max(20, x1 - x0, y1 - y0);
-    s.fog = new THREE.Fog('#0d1324', span * 3, span * 9);
+    const centerX = (x0 + x1) / 2, centerY = (y0 + y1) / 2;
+    s.fog = new THREE.Fog('#293642', span * 3, span * 9);
     const camera = new THREE.PerspectiveCamera(38, el.clientWidth / el.clientHeight, 0.3, span * 20);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -182,7 +150,9 @@ export function BuildScene(props: Props) {
     controls.maxPolarAngle = Math.PI * 0.495;
     s.add(new THREE.HemisphereLight('#e6eeff', '#1c2233', 0.9));
     const sun = new THREE.DirectionalLight('#fff4e6', 1.8);
-    sun.position.set(span * 0.6, span * 1.2, span * 0.4);
+    sun.position.set(centerX + span * 0.6, span * 1.2, centerY + span * 0.4);
+    sun.target.position.set(centerX, 0, centerY);
+    s.add(sun.target);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     const sc = sun.shadow.camera as THREE.OrthographicCamera;
@@ -199,11 +169,12 @@ export function BuildScene(props: Props) {
     // Ground: a shadow catcher and a fine grid.
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(span * 6, span * 6), new THREE.ShadowMaterial({ opacity: 0.35 }));
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.03;
+    ground.position.set(centerX, -0.03, centerY);
     ground.receiveShadow = true;
     s.add(ground);
-    const grid = new THREE.GridHelper(Math.ceil(span * 3), Math.ceil((span * 3) / 2), '#24304d', '#151c2d');
-    grid.position.y = -0.04;
+    const grid = new THREE.GridHelper(Math.ceil(span * 3), Math.ceil((span * 3) / 2), '#45515c', '#303d48');
+    grid.position.set(centerX, -0.04, centerY);
+    for (const material of Array.isArray(grid.material) ? grid.material : [grid.material]) { material.transparent=true; material.opacity=.18; }
     s.add(grid);
 
     // The section plane (keeps what is below it) and its materials.
@@ -216,7 +187,7 @@ export function BuildScene(props: Props) {
       const c = new THREE.Color(colour);
       if (st === 'todo') m = new THREE.MeshBasicMaterial({ color: '#8fa3d6', transparent: true, opacity: 0.05, depthWrite: false });
       else if (st === 'doing') m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.55, roughness: 0.45 });
-      else if (st === 'existing') m = new THREE.MeshStandardMaterial({ color: '#d0b3b3', transparent: true, opacity: 0.3, roughness: 0.9, depthWrite: false });
+      else if (st === 'existing') m = new THREE.MeshStandardMaterial({ color: "#aeb5bf", transparent: true, opacity: 1, roughness: 0.9, depthWrite: true });
       else if (st === 'removing') m = new THREE.MeshStandardMaterial({ color: '#ff6b6b', emissive: '#ff3b30', emissiveIntensity: 0.7, transparent: true, opacity: 0.85 });
       else m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.72, metalness: 0.04 });
       m.clippingPlanes = [plane];
@@ -227,6 +198,7 @@ export function BuildScene(props: Props) {
     // The cut's cap: a faint red glass at the section height.
     const cutCap = new THREE.Mesh(new THREE.PlaneGeometry(span * 1.6, span * 1.6), new THREE.MeshBasicMaterial({ color: '#ff5f57', transparent: true, opacity: 0.06, depthWrite: false, side: THREE.DoubleSide }));
     cutCap.rotation.x = -Math.PI / 2;
+    cutCap.position.set(centerX, 0, centerY);
     cutCap.visible = false;
     s.add(cutCap);
     const outline = new THREE.Group();
@@ -252,7 +224,8 @@ export function BuildScene(props: Props) {
     {
       // Start on the whole building, filling the view, from the usual three-quarter angle.
       const box = new THREE.Box3();
-      for (const x of items.current.values()) box.expandByObject(x.mesh);
+      const context=[...items.current.values()].filter(x=>x.el.origin==='building');
+      for (const x of context.length ? context : items.current.values()) box.expandByObject(x.mesh);
       if (box.isEmpty()) box.set(new THREE.Vector3(-span / 2, 0, -span / 2), new THREE.Vector3(span / 2, top, span / 2));
       const to = fitCamera(camera, box, new THREE.Vector3(0.62, 0.62, 0.8).normalize());
       camera.position.copy(to.position);
@@ -335,8 +308,20 @@ export function BuildScene(props: Props) {
       cancelAnimationFrame(raf);
       ro.disconnect();
       controls.dispose();
-      for (const { mesh } of items.current.values()) mesh.geometry.dispose();
-      for (const m of cache.values()) m.dispose();
+      fly.current = null;
+      const geometries = new Set<THREE.BufferGeometry>();
+      const materials = new Set<THREE.Material>(cache.values());
+      s.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
+          geometries.add(object.geometry);
+          for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
+        }
+      });
+      for (const geometry of geometries) geometry.dispose();
+      for (const material of materials) material.dispose();
+      if (s.background instanceof THREE.Texture) s.background.dispose();
+      sun.shadow.dispose();
+      items.current.clear();
       renderer.dispose();
       el.removeChild(renderer.domElement);
       scene.current = null;
@@ -403,6 +388,8 @@ export function BuildScene(props: Props) {
     for (const c of [...sc.outline.children]) {
       sc.outline.remove(c);
       (c as THREE.LineSegments).geometry.dispose();
+      const material = (c as THREE.LineSegments).material;
+      for (const m of Array.isArray(material) ? material : [material]) m.dispose();
     }
     const ids = new Set<string>([...(highlight ?? []), ...(selected ? [selected] : [])]);
     const mat = new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthTest: false });
@@ -416,6 +403,8 @@ export function BuildScene(props: Props) {
       edges.renderOrder = 20;
       sc.outline.add(edges);
     }
+    if (!sc.outline.children.some(c => (c as THREE.LineSegments).material === mat)) mat.dispose();
+    if (!sc.outline.children.some(c => (c as THREE.LineSegments).material === selMat)) selMat.dispose();
     sc.invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stateKey, selected, highlight, isolate, hidden, showGhosts, explode, explodeSystems, cut, model]);
@@ -429,13 +418,13 @@ export function BuildScene(props: Props) {
   };
   return (
     <div className="bld-scene" ref={host}>
-      <button className="bld-compass" ref={compass} onClick={toTop} title="Plan north is up the sheet. Click for the plan view.">
+      <button className="bld-compass" ref={compass} onClick={toTop} aria-label="View plan with sheet top up" title="Sheet top — drawing north may differ. Click for plan view.">
         <svg viewBox="-22 -22 44 44" width="46" height="46">
           <circle r="20" className="ring" />
           <g className="needle">
             <path d="M0 -11 L4 1 L0 -1.5 L-4 1 Z" className="n" />
             <path d="M0 11 L4 1 L0 3.5 L-4 1 Z" className="s" />
-            <text y="-15.5" textAnchor="middle" dominantBaseline="central">N</text>
+            <text y="-15.5" textAnchor="middle" dominantBaseline="central">UP</text>
           </g>
         </svg>
       </button>

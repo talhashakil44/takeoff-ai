@@ -1,11 +1,18 @@
 /// <reference lib="webworker" />
-import { buildAll, type BuildInput } from './run';
-
-// Building the model and the plan, off the window's thread.
-self.onmessage = (e: MessageEvent<{ id: number; input: BuildInput }>) => {
+import { buildAll, replan, type BuildInput, type BuildOutput } from './run';
+import type { PlanSetup } from './types';
+type Request =
+  | { id: number; kind?: 'build'; input: BuildInput }
+  | { id: number; kind: 'replan'; output: BuildOutput; setup: PlanSetup; input: Pick<BuildInput, 'sections' | 'facts' | 'edits'> };
+self.onmessage = (e: MessageEvent<Request>) => {
+  const request = e.data;
   try {
-    (self as unknown as Worker).postMessage({ id: e.data.id, output: buildAll(e.data.input) });
+    const output =
+      request.kind === 'replan'
+        ? { ...request.output, setup: request.setup, ...replan(request.output.model, request.setup, request.input) }
+        : buildAll(request.input);
+    (self as unknown as Worker).postMessage({ id: request.id, output });
   } catch (err) {
-    (self as unknown as Worker).postMessage({ id: e.data.id, error: err instanceof Error ? err.message : String(err) });
+    (self as unknown as Worker).postMessage({ id: request.id, error: err instanceof Error ? err.message : String(err) });
   }
 };

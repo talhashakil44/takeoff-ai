@@ -6,6 +6,17 @@ nothing is uploaded anywhere.
 
 ## Status
 
+**Build It development checkpoint (2026-10-29):** the
+`codex/build-it-rework` branch adds a building-model workspace, drawing-derived
+geometry, construction planning and shared IFC export geometry. It remains an
+inferred model requiring architectural review, not coordinated BIM.
+
+- Start here: [Build It / Claude handoff](docs/build-it-handoff.md).
+- Implemented work and limitations: [quality report](docs/build-it-quality-pass.md).
+- Future direction, not implemented: [Explore Drawing](docs/explore-drawing-concept.md),
+  linking the original PDF to an interactive walkthrough using the same model.
+
+
 **Interface:** a light, Mac-style window: segmented tools, a scale picker with
 metric and imperial scales on every sheet, a Takeoffs list for quick deletes,
 undo/redo, and an activity log of every change.

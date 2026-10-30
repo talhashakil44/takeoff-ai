@@ -376,6 +376,12 @@ export function App() {
     if (!sh || !pdf) throw new Error('The drawing is not on this computer.');
     return renderRegion(await pdf.getPage(sh.page), sh, projectRef.current!, box, scale, true);
   }, []);
+  const buildSheetLines = useCallback(async (sheetId: string) => {
+    const sh = projectRef.current?.sheets.find(s => s.id === sheetId);
+    const pdf = sh ? pdfsRef.current.get(sh.docId) : undefined;
+    if (!sh || !pdf) return [];
+    return segmentsOf(await pdf.getPage(sh.page));
+  }, []);
   const sheetTextOf = useCallback(async (sheetId: string) => {
     const sh = projectRef.current?.sheets.find((x) => x.id === sheetId);
     const pdf = sh ? pdfsRef.current.get(sh.docId) : undefined;
@@ -3557,6 +3563,7 @@ export function App() {
               sections={buildSections}
               specText={specTextOf}
               sheetText={sheetTextOf}
+              sheetLines={buildSheetLines}
               onEdits={(build) => commit((p) => ({ ...p, build }), 'Build It setup', 'build-edits')}
               onOpenSpec={(docId, page, key) => {
                 setSpecTarget({ docId, page, key, n: Date.now() });

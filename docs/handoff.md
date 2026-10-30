@@ -2,6 +2,14 @@
 
 Where the project stands, for picking it up in a new session.
 
+## Latest Build It checkpoint — 2026-10-29
+
+Read [Build It / Claude handoff](build-it-handoff.md) first for work on
+`codex/build-it-rework`. It records the current implementation, verification,
+remaining geometry gaps and the separate Explore Drawing proposal. Older notes
+below remain context for other subsystems; they are not acceptance evidence for
+the new building model.
+
 ## Status
 
 - **MCP / Connect AI (desktop, 2026-10-21):** the desktop app serves MCP on 127.0.0.1:47821

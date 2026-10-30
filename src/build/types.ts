@@ -39,11 +39,20 @@ export interface Level {
 
 export type ElementShape =
   /** A run (wall, duct, pipe): a polyline extruded to a height. */
-  | { type: 'run'; points: [number, number][]; z0: number; height: number; thickness: number }
+  | { type: 'run'; points: [number, number][]; z0: number; height: number; thickness: number; topPlane?: [number, number, number];
+      openings?: {
+        elementId: string;
+        segment: number;
+        offset: number;
+        width: number;
+        sill: number;
+        height: number;
+      }[];
+    }
   /** A surface (floor, ceiling, slab): a polygon at a height. */
-  | { type: 'surface'; ring: [number, number][]; holes: [number, number][][]; z: number; thickness: number }
+  | { type: 'surface'; ring: [number, number][]; holes: [number, number][][]; z: number; thickness: number; slope?: [number, number] }
   /** A counted thing (door, fixture, device): a box at a point. */
-  | { type: 'point'; at: [number, number]; z: number; size: [number, number, number] };
+  | { type: 'point'; at: [number, number]; z: number; size: [number, number, number]; rotation?: number };
 
 export interface BuildElement {
   /** Stable: the measurement's id. */
@@ -61,6 +70,9 @@ export interface BuildElement {
   typeName: string;
   division: string;
   measurementId: string;
+  opening?: { width:number; height:number; sill:number };
+  origin?: "takeoff" | "building";
+  status?: "existing" | "new" | "demolished";
   sheetId: string;
   /** Spec sections it is governed by (keys), with how they were linked. */
   specs: { key: string; basis: Basis }[];
@@ -71,6 +83,8 @@ export interface BuildElement {
 
 export interface BuildModel {
   version: number;
+  projectType?: "new" | "renovation";
+  floorAreas?: Record<string, number>;
   /** Hash of the project data it was made from (sheets, takeoffs, specs, settings). */
   sourceHash: string;
   units: 'metric' | 'imperial';
@@ -93,14 +107,16 @@ export interface Issue {
 
 /** A fact read from the specification that the plan uses (a review period, a completion date). */
 export interface SpecFact {
-  key: 'reviewDays' | 'resubmitReviewDays' | 'substantialDate' | 'durationWeeks' | 'closeoutDays' | 'commissioningRequired';
+  key: | "startDate"
+    | "phaseDate"
+    | 'reviewDays' | 'resubmitReviewDays' | 'substantialDate' | 'durationWeeks' | 'closeoutDays' | 'commissioningRequired';
   value: number | string | boolean;
   /** For a duration: working or calendar days. */
   unit?: 'working days' | 'calendar days' | 'weeks' | 'date';
   source: SourceRef;
 }
 
-export type ActivityKind = 'milestone' | 'mobilize' | 'submittal' | 'review' | 'resubmittal' | 'procurement' | 'work' | 'testing' | 'commissioning' | 'closeout';
+export type ActivityKind = | 'milestone' | 'mobilize' | 'submittal' | 'review' | 'resubmittal' | 'procurement' | 'work' | 'testing' | 'commissioning' | 'closeout';
 
 export interface Dependency {
   /** Predecessor activity id. */
@@ -127,6 +143,10 @@ export interface Activity {
   /** Production per crew per day, by unit (work). */
   rates?: Record<string, number>;
   crews?: number;
+  requiredBy?: string;
+  minimumDays?: number;
+  allowanceCrewDays?: number;
+  weather?: "site" | "structure" | "roof";
   /** Working days. */
   duration: number;
   /** How the duration was set: from quantity and rate, a documented period, an assumption, or by hand. */
@@ -206,6 +226,7 @@ export interface Scheduled {
 }
 
 export interface Feasibility {
+  changes?: string[];
   earliestFinish: string;
   target: string | null;
   /** Working days past the target (0 when it fits). */

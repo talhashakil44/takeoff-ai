@@ -55,6 +55,12 @@ export class Calendar {
 }
 
 export function schedule(acts: Activity[], setup: PlanSetup): Schedule {
+  acts = structuredClone(acts);
+  const cal = new Calendar(
+    setup.start.value,
+    setup.workDays.value,
+    setup.holidays.value,
+  );
   const issues: Issue[] = [];
   const byId = new Map(acts.map((x) => [x.id, x]));
   const succ = new Map<string, string[]>();
@@ -92,6 +98,20 @@ export function schedule(acts: Activity[], setup: PlanSetup): Schedule {
         drv = d.from;
       }
     }
+    if (x.weather && x.duration > 0) {
+      const production = x.duration;
+      let earned = 0, elapsed = 0;
+      while (earned < production) {
+        const month = Number(cal.date(start + elapsed).slice(5, 7));
+        // Ontario planning assumption, not a forecast: roof work pauses in
+        // Dec–Feb; site/structure use winter protection at 60% output.
+        const winter = month === 12 || month <= 2;
+        earned += winter ? (x.weather === 'roof' ? 0 : 0.6) : (month === 3 || month === 11 ? 0.85 : 1);
+        elapsed++;
+      }
+      x.duration = elapsed;
+      if (elapsed > production) x.durationWhy += ` · Ontario weather allowance: ${elapsed - production} working days; winter protection/site access assumption`;
+    }
     es.set(x.id, start);
     ef.set(x.id, start + x.duration);
     driver.set(x.id, drv);
@@ -113,7 +133,6 @@ export function schedule(acts: Activity[], setup: PlanSetup): Schedule {
     ls.set(x.id, late - x.duration);
   }
 
-  const cal = new Calendar(setup.start.value, setup.workDays.value, setup.holidays.value);
   const target = setup.target.value;
   const targetFor = byId.has(setup.targetFor) ? setup.targetFor : 'ms:finish';
   const targetIdx = target ? cal.workingDaysTo(target) : null;
@@ -199,6 +218,16 @@ export function schedule(acts: Activity[], setup: PlanSetup): Schedule {
       refs: chain.map((c) => c.id),
     });
   for (const x of acts) if (x.kind === 'work' && x.durationWhy.includes('no rate for')) issues.push({ id: `rate:${x.id}`, severity: 'warning', text: `${x.name}: ${x.durationWhy.split(' · ')[1]} — its duration leaves that quantity out.`, refs: [x.id] });
+
+  for (const a of acts)
+    if (a.requiredBy && times[a.id].ef > cal.workingDaysTo(a.requiredBy))
+      issues.push({
+        id: `deadline:${a.id}`,
+        severity: "conflict",
+        text: `${a.name} misses its documented ${a.requiredBy} milestone by ${times[a.id].ef - cal.workingDaysTo(a.requiredBy)} working days.`,
+        refs: [a.id],
+        sources: a.sources,
+      });
 
   return {
     activities: acts,

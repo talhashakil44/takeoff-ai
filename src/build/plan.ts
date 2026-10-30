@@ -1,4 +1,5 @@
 import type { SpecSection } from '../spec/parse';
+import { completeScope } from './scope';
 import { TRADES, tradeByKey } from './extract';
 import type { Activity, Assumption, Basis, BuildEdits, BuildModel, Dependency, PlanSetup, SourceRef, SpecFact, TradeSetup } from './types';
 
@@ -63,7 +64,8 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
   const reviewDays = review ? (review.unit === 'calendar days' ? Math.ceil(((review.value as number) * 5) / 7) : (review.value as number)) : 10;
   const sub = fact('substantialDate');
   const weeks = fact('durationWeeks');
-  const start = nextWorkday(today);
+  const startFact = fact('startDate');
+  const start = startFact ? String(startFact.value) : nextWorkday(today);
   const target = sub ? a<string | null>(sub.value as string, 'documented', 'Substantial performance date in the specification', sub.source) : weeks ? a<string | null>(addCalendarDays(start, Math.round((weeks.value as number) * 7)), 'documented', `Contract time of ${weeks.value} weeks in the specification`, weeks.source) : a<string | null>(null, 'unknown', 'No completion date found in the documents: set one to check the plan against it');
   const trades: Record<string, Assumption<TradeSetup>> = {};
   for (const t of TRADES) {
@@ -72,7 +74,7 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
     trades[t.key] = a({ rates, crews: d.crews, leadDays: d.lead }, 'assumed', 'Typical production and lead time: confirm with the trade');
   }
   return {
-    start: a(start, 'assumed', 'Next working day: set the real start'),
+    start: startFact ? a(start, 'documented', 'Contract start in the specification', startFact.source) : a(start, 'assumed', 'Next working day: set the real start'),
     target,
     targetFor: sub ? 'ms:substantial' : 'ms:finish',
     workDays: a([1, 2, 3, 4, 5], 'assumed', 'Monday to Friday'),
@@ -97,6 +99,7 @@ export function applySetupEdits(setup: PlanSetup, edits?: BuildEdits): PlanSetup
   const e = edits?.setup ?? {};
   for (const [k, v] of Object.entries(e)) {
     if (k === 'trades' || v === undefined) continue;
+    if (k === 'targetFor') { out.targetFor = v as PlanSetup['targetFor']; continue; }
     const cur = (out as unknown as Record<string, Assumption<unknown>>)[k];
     if (cur) (out as unknown as Record<string, Assumption<unknown>>)[k] = { value: v, basis: 'assumed', why: cur.basis === 'documented' ? `Set by you (the documents say ${JSON.stringify(cur.value)})` : 'Set by you' };
   }
@@ -124,7 +127,7 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
   // The work, by trade and level.
   const levelOrder = [...model.levels.map((l) => l.id), null];
   const byTL = new Map<string, typeof model.elements>();
-  for (const e of model.elements) {
+  for (const e of model.elements.filter(e => e.origin !== 'building' && e.status !== 'existing')) {
     const k = `${e.trade}|${e.level ?? ''}`;
     byTL.set(k, [...(byTL.get(k) ?? []), e]);
   }
@@ -213,6 +216,7 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     }
   }
   // The usual order of trades on a level: a trade waits for the ones before it (skipping trades with no work there).
+  completeScope(model, acts, setup, facts);
   const has = new Set(acts.map((x) => x.id));
   const waitsFor = (t: string, l: string | null, seen = new Set<string>()): string[] =>
     (AFTER[t] ?? []).flatMap((p) => {
@@ -286,7 +290,9 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
   const sp = add({ id: 'ms:substantial', name: 'Substantial performance', kind: 'milestone', trade: null, level: null, elements: [], duration: 0, durationBasis: 'inferred', durationWhy: 'When all work, testing and commissioning are done', deps: [...works, ...tests, ...cx].map((id) => dep(id, 'Work complete')), specs: [], sources: setup.target.basis === 'documented' && setup.targetFor === 'ms:substantial' && setup.target.source ? [setup.target.source] : [] });
   const closeSec = sections.find((s) => /^01/.test(s.key) && /CLOSE-?OUT|PROJECT RECORD|OPERATION AND MAINTENANCE/i.test(s.title));
   const close = add({ id: 'closeout', name: 'Closeout: deficiencies, O&M manuals, as-builts, warranties', kind: 'closeout', trade: null, level: null, elements: [], duration: days(setup.closeoutDays), durationBasis: setup.closeoutDays.basis, durationWhy: `${setup.closeoutDays.why}${closeSec ? ` · required by ${closeSec.number}` : ''}`, deps: [dep(sp.id, 'After substantial performance')], specs: closeSec ? [closeSec.key] : [], sources: closeSec ? [specRef(closeSec)] : [] });
-  add({ id: 'ms:finish', name: 'Project complete', kind: 'milestone', trade: null, level: null, elements: [], duration: 0, durationBasis: 'inferred', durationWhy: 'After closeout', deps: [dep(close.id, 'Closeout done')], specs: [], sources: [] });
+  const closeFact = facts.find(f => f.key === 'closeoutDays');
+  const substantialFact = facts.find(f => f.key === 'substantialDate');
+  add({ id: 'ms:finish', name: 'Project complete', requiredBy: closeFact && substantialFact ? addCalendarDays(String(substantialFact.value), Number(closeFact.value)) : undefined, kind: 'milestone', trade: null, level: null, elements: [], duration: 0, durationBasis: 'inferred', durationWhy: 'After closeout', deps: [dep(close.id, 'Closeout done')], specs: [], sources: [] });
 
   // The user's edits: durations, crews, links.
   const byId = new Map(acts.map((x) => [x.id, x]));
@@ -296,6 +302,7 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     if (ed.crews && x.kind === 'work' && x.quantities && x.rates) {
       let crewDays = 0;
       for (const [u, q] of Object.entries(x.quantities)) if (x.rates[u]) crewDays += q / x.rates[u];
+      crewDays = Math.max(crewDays, x.allowanceCrewDays ?? 0);
       x.crews = ed.crews;
       x.duration = Math.max(1, Math.ceil(crewDays / ed.crews));
       x.durationWhy = x.durationWhy.replace(/\d+ crews?/, `${ed.crews} crew${ed.crews === 1 ? '' : 's'} (set by you)`);

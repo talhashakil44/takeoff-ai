@@ -1,5 +1,7 @@
+import type { PlanSetup } from './types';
+import { MODEL_VERSION } from './extract';
 import { get, set } from 'idb-keyval';
-import { buildAll, type BuildInput, type BuildOutput } from './run';
+import { buildAll, replan, type BuildInput, type BuildOutput } from './run';
 
 /** Builds in a worker (inline where workers aren't available); one build at a time, the latest wins. */
 let worker: Worker | null = null;
@@ -45,5 +47,17 @@ export interface SavedBuild {
   output: BuildOutput;
 }
 const key = (projectId: string) => `build:${projectId}`;
-export const loadBuild = (projectId: string) => get<SavedBuild>(key(projectId)).catch(() => undefined);
+export const loadBuild = (projectId: string) => get<SavedBuild>(key(projectId)).then(b => b?.output.model.version === MODEL_VERSION ? b : undefined).catch(() => undefined);
 export const saveBuild = (projectId: string, output: BuildOutput) => set(key(projectId), { savedAt: new Date().toISOString(), output } satisfies SavedBuild).catch(() => undefined);
+
+/** Keep target recovery off the UI thread; callers reject superseded responses. */
+export function runReplan(output: BuildOutput, setup: PlanSetup, input: Pick<BuildInput,'sections'|'facts'|'edits'>): Promise<BuildOutput> {
+  const w=start();
+  const inline=()=>({...output,setup,...replan(output.model,setup,input)});
+  if(!w)return Promise.resolve().then(inline);
+  return new Promise<BuildOutput>((ok,fail)=>{
+    const id=next++;
+    waiting.set(id,{ok,fail});
+    w.postMessage({id,kind:'replan',output,setup,input});
+  }).catch(inline);
+}

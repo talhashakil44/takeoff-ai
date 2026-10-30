@@ -36,11 +36,12 @@ export function ModelTree(props: { model: BuildModel; hidden: Set<string>; onHid
   const { model, hidden, onHidden, onPick, onIsolate, picked } = props;
   const [open, setOpen] = useState<Set<string>>(() => new Set(model.levels.slice(0, 1).map((l) => `L:${l.id}`)));
   const [q, setQ] = useState('');
+  const [placement,setPlacement] = useState<'all'|'placed'|'unplaced'>('all');
   const tree = useMemo(() => {
-    const lv = [...model.levels.map((l) => ({ id: l.id, name: l.name })), { id: '', name: 'Not placed' }];
+    const lv = [...model.levels.map((l) => ({ id: l.id, name: l.name })), { id: '', name: 'Unassigned level' }];
     return lv
       .map((l) => {
-        const els = model.elements.filter((e) => (e.level ?? '') === l.id && (!q || `${e.name} ${e.typeName}`.toLowerCase().includes(q.toLowerCase())));
+        const els = model.elements.filter((e) => (e.level ?? '') === l.id && (placement==='all' || (placement==='placed' ? !!e.shape : !e.shape)) && (!q || `${e.name} ${e.typeName}`.toLowerCase().includes(q.toLowerCase())));
         const trades = TRADES.map((t) => {
           const te = els.filter((e) => e.trade === t.key);
           const types = new Map<string, BuildElement[]>();
@@ -50,7 +51,7 @@ export function ModelTree(props: { model: BuildModel; hidden: Set<string>; onHid
         return { l, els, trades };
       })
       .filter((x) => x.els.length);
-  }, [model, q]);
+  }, [model, q, placement]);
   const toggle = (k: string) => {
     const n = new Set(open);
     if (n.has(k)) n.delete(k);
@@ -87,13 +88,18 @@ export function ModelTree(props: { model: BuildModel; hidden: Set<string>; onHid
     <div className="bld-tree">
       <div className="bld-tree-search">
         <Icon name="search" size={13} />
-        <input placeholder="Find an element or type…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input aria-label="Search model elements" placeholder="Find an element or type…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      <select className="bld-placement-filter" aria-label="Geometry placement" value={placement} onChange={e=>setPlacement(e.target.value as typeof placement)}>
+        <option value="all">All elements · {model.elements.length}</option>
+        <option value="placed">With geometry · {model.elements.filter(e=>e.shape).length}</option>
+        <option value="unplaced">Needs placement · {model.elements.filter(e=>!e.shape).length}</option>
+      </select>
       {tree.map(({ l, els, trades }) => {
         const lk = `L:${l.id}`;
         return (
           <div key={lk} className="bld-tree-node">
-            <div className={`bld-tree-row lvl ${picked === lk ? 'on' : ''}`} onClick={() => (toggle(lk), onPick({ kind: 'level', key: lk, ids: els.map((e) => e.id), label: l.name }))} onDoubleClick={() => onIsolate(els.map((e) => e.id))}>
+            <div tabIndex={0} role="button" aria-expanded={open.has(lk)} onKeyDown={ev => { if(ev.target===ev.currentTarget && (ev.key==='Enter'||ev.key===' ')){ev.preventDefault();ev.currentTarget.click();} }} className={`bld-tree-row lvl ${picked === lk ? 'on' : ''}`} onClick={() => (toggle(lk), onPick({ kind: 'level', key: lk, ids: els.map((e) => e.id), label: l.name }))} onDoubleClick={() => onIsolate(els.map((e) => e.id))}>
               <span className={`caret ${open.has(lk) ? 'open' : ''}`}>▸</span>
               <b>{l.name}</b>
               <em>{els.length}</em>
@@ -104,7 +110,7 @@ export function ModelTree(props: { model: BuildModel; hidden: Set<string>; onHid
                 const tk = `${lk}|T:${t.key}`;
                 return (
                   <div key={tk}>
-                    <div className={`bld-tree-row trade ${picked === tk ? 'on' : ''}`} onClick={() => (toggle(tk), onPick({ kind: 'trade', key: tk, ids: te.map((e) => e.id), label: `${t.name} · ${l.name}` }))} onDoubleClick={() => onIsolate(te.map((e) => e.id))}>
+                    <div tabIndex={0} role="button" aria-expanded={open.has(tk)} onKeyDown={ev => { if(ev.target===ev.currentTarget && (ev.key==='Enter'||ev.key===' ')){ev.preventDefault();ev.currentTarget.click();} }} className={`bld-tree-row trade ${picked === tk ? 'on' : ''}`} onClick={() => (toggle(tk), onPick({ kind: 'trade', key: tk, ids: te.map((e) => e.id), label: `${t.name} · ${l.name}` }))} onDoubleClick={() => onIsolate(te.map((e) => e.id))}>
                       <span className={`caret ${open.has(tk) ? 'open' : ''}`}>▸</span>
                       <i style={{ background: t.colour }} />
                       <span className="nm">{t.name}</span>
@@ -115,7 +121,7 @@ export function ModelTree(props: { model: BuildModel; hidden: Set<string>; onHid
                       types.map((ty) => {
                         const yk = `${tk}|Y:${ty[0].typeId}`;
                         return (
-                          <div key={yk} className={`bld-tree-row type ${picked === yk ? 'on' : ''}`} onClick={() => onPick({ kind: 'type', key: yk, ids: ty.map((e) => e.id), label: ty[0].typeName })} onDoubleClick={() => onIsolate(ty.map((e) => e.id))} title={`${ty[0].typeName} — double-click to isolate`}>
+                          <div key={yk} tabIndex={0} role="button" onKeyDown={ev => { if(ev.target===ev.currentTarget && (ev.key==='Enter'||ev.key===' ')){ev.preventDefault();ev.currentTarget.click();} }} className={`bld-tree-row type ${picked === yk ? 'on' : ''}`} onClick={() => onPick({ kind: 'type', key: yk, ids: ty.map((e) => e.id), label: ty[0].typeName })} onDoubleClick={() => onIsolate(ty.map((e) => e.id))} title={`${ty[0].typeName} — double-click to isolate`}>
                             <span className="nm">{ty[0].typeName}</span>
                             <em>{qty(ty)}</em>
                             {eye(ty.map((e) => e.id))}
@@ -248,6 +254,7 @@ export function ElementProperties(props: {
           {trade?.name}
         </span>
         <h3>{e.name}</h3>
+        {e.origin === 'building' && <p>Building context allowance — excluded from measured takeoff totals.</p>}
         <p className="bld-big">
           {fmtN(e.quantity)} {e.unit}
           <span className={`bld-state ${state}`}>{STATE[state]}</span>
@@ -512,7 +519,7 @@ export function QuantitySchedule(props: { model: BuildModel; onPick: (s: TreeSel
   const levels = model.levels;
   const rows = useMemo(() => {
     const by = new Map<string, BuildElement[]>();
-    for (const e of model.elements) by.set(e.typeId, [...(by.get(e.typeId) ?? []), e]);
+    for (const e of model.elements.filter(e => e.origin !== 'building')) by.set(e.typeId, [...(by.get(e.typeId) ?? []), e]);
     return [...by.values()]
       .map((els) => ({
         typeId: els[0].typeId,

@@ -1,3 +1,15 @@
+import { recoverFacadeOpenings, rejectUnsupportedCurtainWalls } from './facades';
+import { imperialDatumEvidence } from './datumEvidence';
+import { quarantineDetachedSheets } from './placementQuality';
+import { recoverRoof, type DrawingLines } from './roof';
+import { simpleRing } from './surface';
+import {
+  addBuilding,
+  cutOpenings,
+  registerSheets,
+  levelDatums,
+  type DrawingTexts,
+} from "./building";
 import type { Measurement, Project, Sheet, TakeoffType } from '../model';
 import { measurementVars, primaryOf, primaryUnit } from '../quantities';
 import { wordsOf, type SpecSection } from '../spec/parse';
@@ -10,7 +22,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 1;
+export const MODEL_VERSION = 8;
 
 export interface Trade {
   key: string;
@@ -104,6 +116,8 @@ export interface ExtractInput {
   sections: SpecSection[];
   /** Words from a sheet's title block, for sheets whose title doesn't say the level. */
   levelHints?: Record<string, string>;
+  drawingTexts?: DrawingTexts;
+  drawingLines?: DrawingLines;
   edits?: BuildEdits;
   /** Metres between floors (a planning assumption unless documented). */
   floorToFloor: number;
@@ -122,13 +136,16 @@ export function sourceHashOf(input: ExtractInput): string {
   const p = input.project;
   const parts = [
     MODEL_VERSION,
+    JSON.stringify(p.sheets),
+    JSON.stringify(p.types),
+    JSON.stringify(p.measurements),
+    JSON.stringify(input.sections),
+    JSON.stringify(input.edits?.levels),
+    JSON.stringify(input.edits?.elevations),
+    JSON.stringify(input.levelHints),
+    JSON.stringify(input.drawingTexts),
+    JSON.stringify(input.drawingLines),
     p.units,
-    p.sheets.map((s) => `${s.id}:${s.name}:${s.title ?? ''}:${s.metersPerPoint ?? ''}:${s.superseded ? 1 : 0}`).join(','),
-    p.types.map((t) => `${t.id}:${t.name}:${t.kind}:${t.height}:${t.division ?? ''}`).join(','),
-    p.measurements.map((m) => `${m.id}:${m.typeId}:${m.points.length}:${m.points[0]?.join('/') ?? ''}`).join(','),
-    input.sections.map((s) => `${s.key}:${s.pages.length}`).join(','),
-    JSON.stringify(input.edits?.levels ?? {}),
-    JSON.stringify(input.edits?.elevations ?? {}),
     input.floorToFloor,
   ];
   return hashOf(parts.join('|'));
@@ -198,9 +215,12 @@ export function extractModel(input: ExtractInput): BuildModel {
 
   // Levels: from each measured plan sheet's title (or title block), numbers and words resolved together.
   const parsed = new Map<string, { num?: number; word?: string; basis: Basis; from: string }>();
-  for (const sid of used.keys()) {
+  for (const sid of new Set([
+    ...used.keys(),
+    ...Object.keys(input.drawingTexts ?? {}),
+  ])) {
     const s = sheets.get(sid);
-    if (!s || s.superseded) continue;
+    if (!s || s.superseded || (!used.has(sid) && (!isPlan(s) || isEnlarged(s)))) continue;
     const byHand = edits?.levels?.[sid];
     if (byHand) {
       parsed.set(sid, { word: `id:${byHand}`, basis: 'assumed', from: 'set by you' });
@@ -213,7 +233,7 @@ export function extractModel(input: ExtractInput): BuildModel {
   }
   // "LEVEL 1 (LOWER)" says what LOWER means on this job.
   const alias = new Map<string, number>();
-  for (const p of parsed.values()) if (p.num !== undefined && p.word && !p.word.startsWith('id:')) alias.set(p.word, p.num);
+  for (const p of parsed.values()) if (p.from.startsWith('sheet title') && p.num !== undefined && p.word && ["main", "lower", "mezzanine"].includes(p.word)) alias.set(p.word, p.num);
   const resolve = (p: { num?: number; word?: string }): string | null => {
     if (p.word?.startsWith('id:')) return p.word.slice(3);
     if (p.word === 'roof') return 'roof';
@@ -236,16 +256,29 @@ export function extractModel(input: ExtractInput): BuildModel {
   const rank = (id: string) => (id === 'roof' ? 1e3 : id === 'mezz' ? 1.5 : id === 'fdn' ? -1e3 : parseFloat(id.replace(/^L/, '')) || 0);
   ids.sort((a, b) => rank(a) - rank(b));
   const levels: Level[] = [];
+  const datums = levelDatums(project, input.drawingTexts ?? {});
+  const wingDatums = imperialDatumEvidence(project, input.drawingTexts ?? {});
+  const splitLevels = new Set<string>();
+  for (const id of new Set(wingDatums.map(d=>d.level))) {
+    const evidence=wingDatums.filter(d=>d.level===id).sort((a,b)=>b.count-a.count);
+    datums[id]=evidence[0].elevation;
+    if(evidence.some(d=>Math.abs(d.elevation-evidence[0].elevation)>.05)) {
+      splitLevels.add(id);
+      issues.push({id:`split-datum:${id}`,severity:'warning',text:`${id}: split-level evidence — ${evidence.map(d=>`${d.zone} ${d.elevation.toFixed(3)} m`).join('; ')}. Using ${evidence[0].zone} as the reference storey; wing boundaries must be mapped before claiming coordinated geometry.`,sources:evidence.flatMap(d=>d.sources)});
+    }
+  }
   let z = 0;
   for (const id of ids) {
     const set = edits?.elevations?.[id];
     // Foundations sit just under the lowest floor; it stays at 0.
-    const elevation = set ?? (id === 'fdn' ? -1.2 : z);
+    const elevation = set ?? datums[id] ?? (id === 'fdn' ? -1.2 : z);
     levels.push({
       id,
       name: id === 'roof' ? 'Roof' : id === 'mezz' ? 'Mezzanine' : id === 'fdn' ? 'Foundation' : `Level ${id.slice(1)}`,
       elevation,
-      basis: set !== undefined ? 'assumed' : levels.length ? 'assumed' : 'inferred',
+      basis: set !== undefined ? 'assumed' : splitLevels.has(id) ? 'inferred' : datums[id] !== undefined
+            ? "documented"
+            : levels.length ? 'assumed' : 'inferred',
       sheets: [...levelOfSheet].filter(([, l]) => l.id === id).map(([sid]) => sid),
     });
     z = id === 'fdn' ? 0 : elevation + input.floorToFloor;
@@ -260,7 +293,8 @@ export function extractModel(input: ExtractInput): BuildModel {
     if (s?.metersPerPoint && isPlan(s) && !isEnlarged(s)) scales.set(Math.round(s.metersPerPoint * 1e5), (scales.get(Math.round(s.metersPerPoint * 1e5)) ?? 0) + ms.length);
   }
   const mainScale = [...scales].sort((a, b) => b[1] - a[1])[0]?.[0];
-  const placeable = (s: Sheet) => !!s.metersPerPoint && isPlan(s) && !isEnlarged(s) && Math.round(s.metersPerPoint * 1e5) === mainScale && levelOfSheet.has(s.id);
+  const registration = registerSheets(project, input.drawingTexts ?? {});
+  const placeable = (s: Sheet) => !!s.metersPerPoint && isPlan(s) && !isEnlarged(s) && (Math.round(s.metersPerPoint * 1e5) === mainScale || !!registration[s.id]) && levelOfSheet.has(s.id);
   const unplaced = new Map<string, string>();
 
   const specCache = new Map<string, { key: string; basis: Basis }[]>();
@@ -274,7 +308,8 @@ export function extractModel(input: ExtractInput): BuildModel {
     const s = sheets.get(m.sheetId);
     const type = types.get(m.typeId);
     if (!s || !type || s.superseded) continue;
-    const trade = tradeOf(type);
+    const classifiedTrade = tradeOf(type);
+    const trade = type.kind === 'area' && m.ceilingHeight && classifiedTrade !== 'demolition' ? 'ceilings' : classifiedTrade;
     const lv = levelOfSheet.get(s.id);
     const level = lv ? levelById.get(lv.id) ?? null : null;
     const vars = measurementVars(m, type, s, units);
@@ -304,17 +339,29 @@ export function extractModel(input: ExtractInput): BuildModel {
     } else {
       placement = 'inferred';
       const k = s.metersPerPoint;
-      const pts = m.points.map((p) => [p[0] * k, p[1] * k] as [number, number]);
-      const ceil = level.elevation + Math.max(2.4, input.floorToFloor - 0.6);
+      const reg = registration[s.id];
+      const transform = (p: [number, number]): [number, number] => [
+        (p[0] * Math.cos(reg?.rotation ?? 0) - p[1] * Math.sin(reg?.rotation ?? 0)) * k - (reg?.x ?? 0),
+        (p[0] * Math.sin(reg?.rotation ?? 0) + p[1] * Math.cos(reg?.rotation ?? 0)) * k - (reg?.y ?? 0),
+      ];
+      const pts = m.points.map(transform);
+      const ceil = level.elevation + (m.ceilingHeight ? toM(m.ceilingHeight) : Math.max(2.4, input.floorToFloor - 0.6));
+      const storeyHeight =
+        (levels.find((l) => l.elevation > level.elevation)?.elevation ??
+          level.elevation + input.floorToFloor) - level.elevation;
       const typeH = type.height > 0 ? toM(type.height) : 0;
       if (type.kind === 'linear') {
         if (trade === 'mech-rough') shape = { type: 'run', points: pts, z0: ceil - 0.05, height: 0.3, thickness: 0.3 };
         else if (trade === 'fire-rough') shape = { type: 'run', points: pts, z0: ceil + 0.2, height: 0.1, thickness: 0.1 };
         else if (trade === 'elec-rough') shape = { type: 'run', points: pts, z0: ceil + 0.1, height: 0.06, thickness: 0.06 };
-        else shape = { type: 'run', points: pts, z0: level.elevation, height: typeH > 0 ? Math.min(typeH, input.floorToFloor) : input.floorToFloor - 0.3, thickness: 0.15 };
+        else shape = { type: 'run', points: pts, z0: level.elevation, height: /to ceiling/i.test(type.description ?? "")
+              ? ceil - level.elevation
+              : storeyHeight, thickness: type.thickness ? toM(type.thickness) : 0.15 };
       } else if (type.kind === 'area') {
-        const holes = m.holes.map((h) => h.map((p) => [p[0] * k, p[1] * k] as [number, number]));
-        const zz = trade === 'ceilings' ? level.elevation + (typeH > 0 && typeH < input.floorToFloor ? typeH : Math.max(2.4, input.floorToFloor - 0.6)) : level.elevation + 0.02;
+        const holes = m.holes.map((h) => h.map(transform));
+        const zz = trade === 'ceilings' ? m.ceilingHeight
+              ? level.elevation + toM(m.ceilingHeight)
+              : level.elevation + (typeH > 0 && typeH < input.floorToFloor ? typeH : Math.max(2.4, input.floorToFloor - 0.6)) : level.elevation + 0.02;
         shape = { type: 'surface', ring: pts, holes, z: zz, thickness: trade === 'structure' ? 0.2 : 0.04 };
       } else {
         const at = pts[0];
@@ -333,12 +380,23 @@ export function extractModel(input: ExtractInput): BuildModel {
         maxY = Math.max(maxY, p[1]);
       }
     }
+    if (trade === 'structure' && type.kind === 'count' && /\bPLY\b|DENOTES SPAN|\bWT-?\d/i.test(type.name)) {
+      shape=null;placement='unknown';
+      elIssues.push('Structural tag quantity retained; member span, direction and section must be established before generating physical geometry.');
+    }
+    if (shape?.type === 'surface' && (!simpleRing(shape.ring) || shape.holes.some(h => !simpleRing(h)))) {
+      shape = null; placement = 'unknown';
+      elIssues.push('Self-intersecting or degenerate polygon: retained in takeoff quantities, omitted from 3D/IFC geometry pending drawing review.');
+      issues.push({id:`invalid-surface:${m.id}`,severity:'warning',text:`${type.name}: invalid polygon retained as an unplaced element. Repair its source outline only after review.`,refs:[m.id],sources:[src]});
+    }
     if (!specCache.has(type.id)) specCache.set(type.id, specsFor(type, sections));
     const specs = specCache.get(type.id)!;
     if (!specs.length) elIssues.push(`No spec section found for ${type.name}.`);
     for (const sp of specs) if (missingSec.has(sp.key)) elIssues.push(`Spec section ${missingSec.get(sp.key)} is listed in the table of contents but not issued.`);
     elements.push({
       id: m.id,
+      origin: "takeoff",
+      status: trade === 'demolition' ? 'demolished' : /(?:^|\s[–-]\s)Existing\b|\b(?:frx|fwx|px|wx|cx)\d/i.test(type.name) ? 'existing' : 'new',
       name: m.label ? `${type.name} · ${m.label}` : type.name,
       trade,
       level: level?.id ?? null,
@@ -357,6 +415,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     });
   }
 
+  const modelOrigin: [number,number] = Number.isFinite(minX) ? [(minX+maxX)/2,(minY+maxY)/2] : [0,0];
   // Centre what is drawn on the origin.
   if (Number.isFinite(minX)) {
     const cx = (minX + maxX) / 2;
@@ -383,7 +442,7 @@ export function extractModel(input: ExtractInput): BuildModel {
   const label = (sid: string) => sheets.get(sid)?.name ?? sid;
   const say: Record<string, string> = {
     'no scale': 'have no scale, so their takeoffs have no size or place',
-    'not a plan': 'are not plans (elevations, sections, details): their takeoffs are counted but not placed',
+    'not a plan': 'are not plans (elevations, sections, details): their takeoffs are counted; only openings supported by elevation grids and dimensioned details are placed',
     'enlarged plan': 'are enlarged plans: where they sit on the floor isn’t recovered yet, so their takeoffs are counted but not drawn',
     'level unknown': 'don’t say which level they are: set it in Build setup to place their takeoffs',
     'other scale': 'are at another scale than the main plans: not placed with them',
@@ -394,7 +453,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     issues.push({
       id: 'placement',
       severity: 'info',
-      text: 'Plans are lined up by their position on the sheet (same scale, same sheet size), not checked against grid lines. Floors are stacked at the floor-to-floor height in Build setup.',
+      text: `${Object.keys(registration).length} sheets registered by matching grid labels on both axes. Other sheets fall back to sheet position; verify their alignment. Heights use setup unless a level datum is available.`,
     });
   const noSpec = new Set(elements.filter((e) => !e.specs.length).map((e) => e.typeName));
   if (noSpec.size) issues.push({ id: 'nospec', severity: 'info', text: `${noSpec.size} takeoff type${noSpec.size === 1 ? '' : 's'} have no spec section linked (${[...noSpec].slice(0, 4).join('; ')}${noSpec.size > 4 ? '; …' : ''}).` });
@@ -402,7 +461,7 @@ export function extractModel(input: ExtractInput): BuildModel {
   if (notIssued.length) issues.push({ id: 'notissued', severity: 'warning', text: `Takeoffs are governed by spec sections listed but not issued: ${notIssued.join('; ')}. Their submittal, testing and lead-time requirements are unknown.` });
   if (!sections.length) issues.push({ id: 'nospecbook', severity: 'warning', text: 'No specification in this project: submittal, testing, commissioning and closeout requirements can’t be read, so those activities rest on assumptions.' });
 
-  return {
+  const model: BuildModel = {
     version: MODEL_VERSION,
     sourceHash: sourceHashOf(input),
     units,
@@ -411,4 +470,17 @@ export function extractModel(input: ExtractInput): BuildModel {
     issues,
     extent: Number.isFinite(minX) ? [minX, minY, maxX, maxY] : [0, 0, 0, 0],
   };
+  addBuilding(model, project, input.floorToFloor);
+  quarantineDetachedSheets(model, new Set(Object.keys(registration)));
+  recoverRoof(model, project, input.drawingTexts ?? {}, input.drawingLines ?? {}, modelOrigin);
+  if (model.elements.some((e) => e.origin === "building"))
+    model.issues.push({
+      id: "building-review",
+      severity: "warning",
+      text: "Building context is not yet verified against elevations: roof slopes/overhangs, slab openings, structural member sizes, and split wing datums need review. Do not use the shell as a coordinated BIM deliverable.",
+    });
+  recoverFacadeOpenings(model, project, input.drawingTexts ?? {}, input.drawingLines ?? {}, modelOrigin);
+  rejectUnsupportedCurtainWalls(model);
+  cutOpenings(model);
+  return model;
 }

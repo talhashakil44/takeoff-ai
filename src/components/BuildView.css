@@ -1,0 +1,308 @@
+/* Build workspace: the model is the primary canvas; detail appears on demand. */
+.bld-workspace {
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  background: #10151d;
+}
+.bld-workspace.bld-mode-model {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.bld-workspace .bld-bar {
+  padding: 12px 16px;
+  gap: 16px;
+  background: #141b25;
+  flex-wrap: wrap;
+}
+.bld-workspace .bld-title {
+  min-width: 0;
+}
+.bld-workspace .bld-title strong {
+  text-transform: none;
+  letter-spacing: -0.025em;
+  font-size: 18px;
+}
+.bld-workspace .bld-sub {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bld-workspace-switch {
+  display: flex;
+  padding: 3px;
+  border: 1px solid #344253;
+  border-radius: 9px;
+  background: #0c121a;
+}
+.bld-workspace-switch button {
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 15px;
+  color: #aebdcc;
+  background: transparent;
+  cursor: pointer;
+}
+.bld-workspace-switch button[aria-pressed='true'] {
+  background: #33475b;
+  color: #fff;
+  box-shadow: 0 1px 3px #0005;
+}
+.bld-workspace .bld-feas {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.bld-workspace .bld-actions {
+  align-items: center;
+}
+.bld-workspace .bld-actions > button {
+  min-height: 34px;
+  border-color: #344253;
+  border-radius: 7px;
+}
+.bld-workspace :is(button, input, select, summary):focus-visible {
+  outline: 2px solid #8bc8ff !important;
+  outline-offset: 3px;
+}
+.bld-export {
+  position: relative;
+}
+.bld-export summary {
+  cursor: pointer;
+  padding: 7px 12px;
+  border: 1px solid #344253;
+  border-radius: 7px;
+  color: #dfe5fb;
+}
+.bld-export > div {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 180px;
+  padding: 6px;
+  background: #1b2633;
+  border: 1px solid #405268;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px #0008;
+  z-index: 50;
+}
+.bld-export button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px;
+  background: transparent;
+  color: #e5edf7;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.bld-export button:hover {
+  background: #32465c;
+}
+.bld-workspace .bld-left,
+.bld-workspace .bld-setup {
+  width: 280px;
+  background: #141c27;
+}
+.bld-workspace .bld-inspect {
+  width: 310px;
+  background: #141c27;
+}
+.bld-workspace .bld-toolbar {
+  left: 16px;
+  right: 80px;
+  top: 16px;
+  transform: none;
+  max-width: none;
+  width: fit-content;
+  flex-wrap: wrap;
+  overflow: visible;
+  background: #17222eeb;
+  border-color: #405268;
+  border-radius: 10px;
+  box-shadow: 0 6px 22px #0003;
+}
+.bld-workspace .bld-toolbar .bld-advanced {
+  display: none;
+}
+.bld-workspace .bld-toolbar.expanded .bld-advanced {
+  display: flex;
+}
+.bld-workspace .bld-tools-toggle {
+  background: #293c50;
+  color: #e4effb;
+  border: 1px solid #405268;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.bld-workspace .bld-tg button {
+  min-height: 30px !important;
+  font-family: inherit !important;
+  font-size: 11px !important;
+}
+.bld-workspace .bld-tg {
+  letter-spacing: 0;
+  text-transform: none;
+}
+.bld-workspace .bld-day {
+  background: #17222ee8;
+  border: 1px solid #405268;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+.bld-workspace .bld-day b {
+  font-size: 17px;
+  font-weight: 550;
+  letter-spacing: -0.02em;
+}
+.bld-workspace .bld-day span {
+  color: #b3c3d5;
+}
+.bld-workspace .bld-legend2 {
+  max-width: 65%;
+  font-size: 11px;
+}
+.bld-workspace .bld-controls {
+  padding: 10px 14px;
+  background: #17212d;
+}
+.bld-workspace .bld-card {
+  padding: 20px;
+}
+.bld-workspace .bld-card h3 {
+  font-size: 17px;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+.bld-workspace .bld-card p {
+  line-height: 1.65;
+}
+.bld-workspace .bld-close {
+  min-width: 34px;
+}
+@media (max-width: 1100px) {
+  .bld-workspace .bld-bar {
+    gap: 8px;
+  }
+  .bld-workspace .bld-feas {
+    order: 3;
+    width: 100%;
+    border-radius: 5px;
+  }
+  .bld-workspace .bld-inspect {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    box-shadow: -12px 0 30px #0005;
+  }
+  .bld-workspace .bld-sub {
+    max-width: 130px;
+  }
+}
+@media (max-width: 760px) {
+  .bld-workspace .bld-bar {
+    padding: 8px;
+  }
+  .bld-workspace .bld-title {
+    flex: 1;
+  }
+  .bld-workspace .bld-actions {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+  .bld-workspace .bld-left,
+  .bld-workspace .bld-setup {
+    position: absolute;
+    top: 38px;
+    bottom: 0;
+    left: 0;
+    z-index: 5;
+    width: min(280px, 85vw);
+    box-shadow: 12px 0 30px #0005;
+  }
+  .bld-workspace .bld-left-tabs {
+    z-index: 6;
+  }
+  .bld-workspace .bld-legend2 {
+    display: none;
+  }
+  .bld-workspace .bld-toolbar {
+    top: 44px;
+  }
+  .bld-workspace .bld-controls {
+    flex-wrap: wrap;
+  }
+  .bld-workspace .bld-controls input[type='range'] {
+    min-width: 120px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bld-workspace * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
+
+.bld-live-status,
+.bld-live-error {
+  order: 10;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  background: #293c50;
+  color: #dceeff;
+}
+.bld-live-error {
+  background: #4a252a;
+  color: #ffd4d0;
+}
+.bld-workspace [role='button']:focus-visible {
+  outline: 2px solid #8bc8ff;
+  outline-offset: -2px;
+}
+
+.bld-issue-filters {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #344253;
+}
+.bld-issue-filters button {
+  padding: 6px 10px;
+  border: 1px solid #405268;
+  border-radius: 6px;
+  background: transparent;
+  color: #bbccdd;
+  cursor: pointer;
+}
+.bld-issue-filters button[aria-pressed='true'] {
+  background: #33475b;
+  color: white;
+}
+.bld-issue-evidence {
+  margin-top: 8px;
+}
+.bld-issue-evidence summary {
+  cursor: pointer;
+  color: #a4c7ec;
+}
+.bld-issue-evidence button {
+  display: block;
+  text-align: left;
+  margin: 6px 0;
+  line-height: 1.6;
+}
+
+.bld-placement-filter { width:calc(100% - 24px); margin:0 12px 10px; padding:8px; border:1px solid #344253; border-radius:6px; color:#d8e4f2; background:#1a2634; font:inherit; }

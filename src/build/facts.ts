@@ -47,6 +47,32 @@ export async function readSpecFacts(sections: SpecSection[], text: (docId: strin
         if (!Number.isNaN(d.getTime())) add({ key: 'substantialDate', value: d.toISOString().slice(0, 10), unit: 'date', source: src(at(date.index, date[0].length)) });
       }
       // A contract time: "complete the Work within 26 weeks of the date of award".
+      const dated =
+        /\bBy\s+(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+)?((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+20\d\d),?\s+([^.;]{0,500})/gi;
+      for (const match of t.matchAll(dated)) {
+        const iso = new Date(match[1]).toISOString().slice(0, 10),
+          clause = match[2];
+        const key = /Substantial Performance/i.test(clause)
+          ? "substantialDate"
+          : /mobilization.{0,50}start/i.test(clause)
+            ? "startDate"
+            : /Occupancy/i.test(clause)
+              ? "phaseDate"
+              : null;
+        if (key) add({ key, value: iso, unit: "date", source: src(match[0]) });
+      }
+      const close =
+        /Completion of the Contract[^.;]{0,120}?within\s+(\d+)\s*(?:\([^)]+\))?\s*days of Substantial/i.exec(
+          t,
+        );
+      if (close)
+        add({
+          key: "closeoutDays",
+          value: Number(close[1]),
+          unit: "calendar days",
+          source: src(close[0]),
+        });
+      // A contract time: "complete the Work within 26 weeks of the date of award".
       const time = new RegExp(`(?:complete|completion|perform)[^.;]{0,80}?\\bwithin\\s+${NUMBER}\\s*(?:\\(\\d+\\)\\s*)?(weeks|working days|calendar days|months)\\s+(?:of|from|after)`, 'i').exec(t);
       if (time) {
         const n = num(time[1]);
