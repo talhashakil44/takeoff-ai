@@ -422,7 +422,7 @@
       "evidence": "claude/integration@d70ac18"
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [
         "T14"
       ],
@@ -437,7 +437,9 @@
       "stream": "gpt-build",
       "title": "Electrical rough-in from measured device counts (etags): per-device rough-in rate, basis assumed, per level",
       "added": "2026-10-30T05:29:56.427Z",
-      "by": "claude"
+      "by": "claude",
+      "branch": "codex/build-it-electrical-rough",
+      "updated": "2026-10-30T05:34:10.751Z"
     },
     {
       "status": "todo",
