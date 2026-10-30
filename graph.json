@@ -328,7 +328,7 @@
       ]
     },
     {
-      "status": "doing",
+      "status": "review",
       "depends": [
         "T12"
       ],
@@ -345,8 +345,8 @@
       "prompt": "Evidence first: compare each activity duration to a documented production rate (RSMeans-style or trade norms) and report which rates drive the gap. Do not force a target. Allowances could be split per level and follow the measured trade sequence (envelope after structure per level, finishes after partitions per level).",
       "added": "2026-10-30T04:41:42.232Z",
       "by": "claude",
-      "branch": "codex/build-it-duration-realism",
-      "updated": "2026-10-30T04:58:41.506Z"
+      "branch": "codex/build-it-duration-realism@affae9c",
+      "updated": "2026-10-30T05:03:30.358Z"
     },
     {
       "status": "todo",
