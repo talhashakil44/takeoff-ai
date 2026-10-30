@@ -64,11 +64,16 @@ describe('Build It drawing evidence', () => {
   it('keeps every line exactly, with its ink, without the fields the model never reads', () => {
     const lines = [seg(1), seg(2, { curve: true }), seg(3, { dashed: true, filled: true, color: '#ff8000' }), seg(4, { color: undefined })];
     const slim = slimLines(lines);
-    expect(slim[1]).toEqual({ x1: 2, y1: 4, x2: 12.123456789, y2: 6, width: 0.5, filled: false, curve: true, color: '#000000' });
+    expect(slim[1]).toEqual({ x1: 2, y1: 4, x2: 12.123456789, y2: 6, width: 0.5, filled: false, curve: true, color: '#000000', sub: 2 });
     expect(slim[2].color).toBe('#ff8000');
     expect('color' in slim[3]).toBe(false);
-    expect(slim.every((l) => !('layer' in l) && !('sub' in l))).toBe(true);
+    expect(slim.every((l) => !('layer' in l))).toBe(true);
     expect(unpackLines(packLines(slim))).toEqual(slim);
+    // The shape a line belongs to survives the cache: a filled arrowhead's three sides stay one shape.
+    const tri = [seg(5, { filled: true, sub: 7 }), seg(6, { filled: true, sub: 7 }), seg(7, { filled: true, sub: 7 }), seg(8, { sub: undefined })];
+    const back = unpackLines(packLines(slimLines(tri)));
+    expect(back.map((l) => l.sub)).toEqual([7, 7, 7, undefined]);
+    expect('sub' in back[3]).toBe(false);
   });
 
   it('keeps a text\'s size and angle where the PDF gave them, and invents none', () => {
