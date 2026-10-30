@@ -1,5 +1,9 @@
 # Build It checkpoint — handoff for Claude and Codex
 
+**Update (2026-10-29):** [Review fixes and current verification](build-it-review-fixes.md)
+supersede the scheduling claims and dates below. This file describes the
+original `e5ecd0d` checkpoint for comparison.
+
 Date: 2026-10-29. Branch: `codex/build-it-rework`.
 
 This is a development checkpoint, not a production release or a claim of complete

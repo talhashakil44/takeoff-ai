@@ -44,7 +44,9 @@ interface Props {
   pins?: { id: string; sheetId: string; at: Pt; label: string }[];
 }
 const palette = (e: BuildElement) =>
-  /window|glaz/i.test(e.name)
+  e.shape?.type === "axis" || e.shape?.type === "locator"
+    ? "#b47620"
+    : /window|glaz/i.test(e.name)
     ? "#a4b6b0"
     : /roof/i.test(e.name)
       ? "#626d64"
@@ -196,7 +198,7 @@ export function ExploreScene(props: Props) {
     const footprints = new THREE.Group();
     for (const e of floorEls.filter(e => e.origin !== "building" && e.sheetId === props.sheet.id)) {
       const shape = e.shape;
-      const paths: Pt[][] = shape?.type === "run" ? [shape.points]
+      const paths: Pt[][] = (shape?.type === "run" || shape?.type === "axis") ? [shape.points]
         : shape?.type === "surface" ? [shape.ring, ...(shape.holes ?? [])].map(r => [...r, r[0]]) : [];
       for (const path of paths) {
         if (path.length < 2) continue;

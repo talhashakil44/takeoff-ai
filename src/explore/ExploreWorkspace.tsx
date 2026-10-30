@@ -390,7 +390,7 @@ export function ExploreWorkspace({
       : [];
   const selectedShape = element?.shape;
   const memberSpan =
-    selectedShape?.type === "run"
+    (selectedShape?.type === "run" || selectedShape?.type === "axis")
       ? selectedShape.points
           .slice(1)
           .reduce(
@@ -629,7 +629,7 @@ export function ExploreWorkspace({
                     <span>{e.name}</span>
                     <small>
                       {num(e.quantity)} {e.unit}
-                      {!e.shape ? " · unplaced" : ""}
+                      {!e.shape ? " · unplaced" : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : ""}
                     </small>
                   </button>
                 ))
@@ -817,13 +817,13 @@ export function ExploreWorkspace({
                             {l.reason} ·{" "}
                             {
                               l.elements.filter(
-                                (e) =>
-                                  structuralModel.elements.find(
-                                    (v) => v.id === e.id,
-                                  )?.shape,
+                                (e) => {
+                                  const shape = structuralModel.elements.find(v => v.id === e.id)?.shape;
+                                  return shape && shape.type !== "axis" && shape.type !== "locator";
+                                },
                               ).length
                             }
-                            /{l.elements.length} modelled
+                            /{l.elements.length} physical shapes
                           </small>
                           <button onClick={() => setSourceView(l.sheet)}>
                             Open original ↗
@@ -1015,7 +1015,7 @@ export function ExploreWorkspace({
               <dl className="ex-facts">
                 <div>
                   <dt>Geometry</dt>
-                  <dd>{element.shape ? element.placement : "Unplaced"}</dd>
+                  <dd>{element.shape?.type === "axis" ? "Plan axis · section and height unverified" : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : "Unplaced"}</dd>
                 </div>
                 <div>
                   <dt>Source</dt>
@@ -1098,7 +1098,9 @@ export function ExploreWorkspace({
                     Isolate structural members
                   </label>
                   <p>
-                    {element.shape
+                    {element.shape?.type === "axis" ? "Measured span only — framing elevation and section still need evidence"
+                      : element.shape?.type === "locator" ? "Inferred grid location only — physical dimensions still need evidence"
+                      : element.shape
                       ? "Connected to measured takeoff"
                       : "Placement needs review"}
                   </p>

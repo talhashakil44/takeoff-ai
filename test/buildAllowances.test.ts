@@ -1,0 +1,234 @@
+import { describe, expect, it } from 'vitest';
+import { schedule } from '../src/build/cpm';
+import { applySetupEdits, defaultSetup, planActivities } from '../src/build/plan';
+import { planningScopeIssues, suggestScopeAllowances } from '../src/build/scope';
+import { replan } from '../src/build/run';
+import type { BuildElement, BuildModel, ScopeAllowance } from '../src/build/types';
+
+const element = (id: string, trade: string, level: string | null, division: string, unit: string, quantity: number): BuildElement => ({
+  id, name: id, trade, level, division, unit, quantity,
+  shape: null, typeId: id, typeName: id, measurementId: id, sheetId: id,
+  origin: 'takeoff', status: 'new', specs: [], sources: [], placement: 'unknown', issues: [],
+});
+
+function model(): BuildModel {
+  return {
+    version: 15, sourceHash: 'test', units: 'metric',
+    levels: [
+      { id: 'fdn', name: 'Foundation', elevation: -1.2, basis: 'inferred', sheets: [] },
+      { id: 'L1', name: 'Level 1', elevation: 0, basis: 'inferred', sheets: [] },
+    ],
+    elements: [
+      element('dig', 'site', null, '31 Earthwork', 'm³', 40),
+      element('pad', 'structure', 'fdn', '03 Concrete', 'm³', 12),
+      element('beam', 'structure', 'L1', '06 Wood', 'ea', 10),
+      element('pipe', 'mech-rough', 'L1', '22 Plumbing', 'm', 30),
+      element('ceiling', 'ceilings', 'L1', '09 Finishes', 'm²', 50),
+    ],
+    issues: [], extent: [0, 0, 0, 0], floorAreas: { L1: 100 },
+  };
+}
+
+const allowance = (quantity: number, unit: string, rate: number, provisional = true): ScopeAllowance =>
+  ({ quantity, unit, rate, provisional });
+
+describe('Build It unmeasured scope allowances', () => {
+  it('plans electrical rough-in from measured circuit tags by level without a second area allowance', () => {
+    const m = model();
+    m.levels.push({ id: 'L2', name: 'Level 2', elevation: 3.6, basis: 'inferred', sheets: [] });
+    m.floorAreas = { L1: 100, L2: 200 };
+    m.elements.push(
+      ...Array.from({ length: 65 }, (_, i) => ({ ...element(`tag-l1-${i}`, 'elec-trim', 'L1', '26 Electrical', 'ea', 1), measurementSource: 'etags' })),
+      ...Array.from({ length: 15 }, (_, i) => ({ ...element(`tag-l2-${i}`, 'elec-trim', 'L2', '26 Electrical', 'ea', 1), measurementSource: 'etags' })),
+      element('manual-device', 'elec-trim', 'L1', '26 Electrical', 'ea', 4),
+    );
+    const setup = defaultSetup(m, [], '2026-11-02');
+    const acts = planActivities(m, setup, [], []);
+    const rough1 = acts.find((a) => a.id === 'work:elec-rough:L1')!;
+    const rough2 = acts.find((a) => a.id === 'work:elec-rough:L2')!;
+    expect(rough1).toMatchObject({ level: 'L1', quantities: { ea: 65 }, rates: { ea: 30 }, duration: 3, durationBasis: 'assumed' });
+    expect(rough2).toMatchObject({ level: 'L2', quantities: { ea: 15 }, duration: 1 });
+    expect(rough1.elements).toHaveLength(65);
+    expect(rough1.durationWhy).toContain('device-to-rough-in equivalence assumed');
+    expect(rough2.deps.map((d) => d.from)).toContain(rough1.id);
+    expect(acts.find((a) => a.id === 'work:ceilings:L1')?.deps.map((d) => d.from)).toContain(rough1.id);
+    expect(acts.find((a) => a.id === 'work:elec-trim:L2')?.deps.map((d) => d.from)).toContain(rough2.id);
+    expect(suggestScopeAllowances(m, setup).some((s) => s.key === 'elec-rough')).toBe(false);
+    expect(schedule(acts, setup).issues.some((i) => i.id === 'loop')).toBe(false);
+    expect(replan(m, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.map((i) => i.id)).toContain('electrical-rough-in-tag-proxy');
+
+    const slower = applySetupEdits(setup, { setup: { trades: { 'elec-rough': { rates: { ea: 10 } } } } });
+    expect(planActivities(m, slower, [], []).find((a) => a.id === rough1.id)?.duration).toBe(7);
+    const savedAllowance = applySetupEdits(setup, { setup: { allowances: { 'elec-rough': allowance(300, 'm²', 50) } } });
+    const replaced = planActivities(m, savedAllowance, [], []);
+    expect(replaced.some((a) => a.id === rough1.id)).toBe(false);
+    expect(replaced.some((a) => a.id === 'allowance:elec-rough:L1')).toBe(true);
+  });
+
+  it('offers floor-area proxies only for absent measured trades and never applies them by itself', () => {
+    const m = model();
+    const setup = defaultSetup(m, [], '2026-11-02');
+    const suggestions = suggestScopeAllowances(m, setup);
+    expect(suggestions.map((s) => s.key)).toEqual(expect.arrayContaining(['elec-rough', 'fire-rough', 'painting', 'flooring']));
+    expect(suggestions.some((s) => s.key === 'mech-rough' || s.key === 'ceilings')).toBe(false);
+    expect(suggestions.some((s) => s.key === 'site' || s.key === 'doors')).toBe(false);
+    expect(suggestions.find((s) => s.key === 'elec-rough')).toMatchObject({
+      allowance: { quantity: 100, unit: 'm²', rate: 56, provisional: true },
+      areaBasis: 'inferred', rateBasis: 'assumed',
+    });
+    expect(setup.allowances.value).toEqual({});
+    expect(planActivities(m, setup, [], []).some((a) => a.id === 'allowance:elec-rough')).toBe(false);
+    const accepted = applySetupEdits(setup, { setup: { allowances: { 'elec-rough': suggestions.find((s) => s.key === 'elec-rough')!.allowance } } });
+    expect(planActivities(m, accepted, [], []).find((a) => a.id === 'allowance:elec-rough:L1')).toMatchObject({ duration: 2, elements: [], level: 'L1' });
+    expect(suggestScopeAllowances(m, accepted).some((s) => s.key === 'elec-rough')).toBe(false);
+    expect(replan(m, accepted, { sections: [], facts: [], today: '2026-11-02' }).scopeSuggestions.some((s) => s.key === 'elec-rough')).toBe(false);
+    m.floorAreas = {};
+    expect(suggestScopeAllowances(m, setup)).toEqual([]);
+  });
+  it('uses the measured slab footprint for a provisional roof/envelope proposal', () => {
+    const m = model();
+    m.elements.push({ ...element('slab', 'structure', 'fdn', '03 Concrete', 'm²', 702.065), typeName: 'Slab on grade' });
+    const setup = defaultSetup(m, [], '2026-11-02');
+    expect(suggestScopeAllowances(m, setup).find((s) => s.key === 'envelope')).toMatchObject({
+      allowance: { quantity: 702.1, unit: 'm²', rate: 74, provisional: true },
+      referenceAreaM2: 702.065,
+    });
+    m.elements.push({ ...element('ew', 'envelope', 'L1', '07 Envelope', 'm', 30), typeName: 'EW1 exterior wall' });
+    expect(suggestScopeAllowances(m, setup).some((s) => s.key === 'envelope')).toBe(true);
+    m.elements.push({ ...element('roof', 'envelope', 'roof', '07 Envelope', 'm²', 700), typeName: 'Roof membrane' });
+    expect(suggestScopeAllowances(m, setup).some((s) => s.key === 'envelope')).toBe(false);
+    m.elements.pop();
+    m.floorAreas = {};
+    expect(suggestScopeAllowances(m, setup).map((s) => s.key)).toEqual(['envelope']);
+  });
+  it('uses a registered roof-plan area for covering, with measured work and saved allowances taking precedence', () => {
+    const m = model();
+    m.levels.push({ id: 'roof', name: 'Roof', elevation: 7.2, basis: 'inferred', sheets: [] });
+    m.elements.push(element('wall', 'envelope', 'L1', '07 Envelope', 'm', 30));
+    m.roofPlan = {
+      areaM2: 984.35, basis: 'inferred',
+      source: { kind: 'sheet', id: 'roof-sheet', page: 11, label: 'A2.3' },
+      why: 'Outer roof grids; roof edge unverified.',
+    };
+    const setup = defaultSetup(m, [], '2026-11-02');
+    const acts = planActivities(m, setup, [], []);
+    const covering = acts.find((a) => a.id === 'work:envelope:roof-covering')!;
+    expect(covering).toMatchObject({ level: 'roof', quantities: { 'm²': 984.35 }, duration: 14, durationBasis: 'inferred', elements: [] });
+    expect(covering.sources[0].label).toBe('A2.3');
+    expect(acts.find((a) => a.id === 'ms:dry-in')?.deps.some((d) => d.from === covering.id)).toBe(true);
+    expect(suggestScopeAllowances(m, setup).some((s) => s.key === 'envelope')).toBe(false);
+    const slower = applySetupEdits(setup, { setup: { trades: { envelope: { rates: { 'm²': 50 } } } } });
+    expect(planActivities(m, slower, [], []).find((a) => a.id === covering.id)?.duration).toBe(20);
+    const accepted = applySetupEdits(setup, { setup: { allowances: { envelope: allowance(900, 'm²', 60) } } });
+    expect(planActivities(m, accepted, [], []).some((a) => a.id === covering.id)).toBe(false);
+    expect(planActivities(m, accepted, [], []).some((a) => a.id === 'allowance:envelope')).toBe(true);
+    m.elements.push({ ...element('measured-roof', 'envelope', 'roof', '07 Envelope', 'm²', 800), typeName: 'Roof membrane' });
+    expect(planActivities(m, setup, [], []).some((a) => a.id === covering.id)).toBe(false);
+    expect(planActivities(m, setup, [], []).find((a) => a.id === 'work:envelope:roof')?.quantities?.['m²']).toBe(800);
+  });
+  it('splits accepted GFA proxies by floor and gates finishes on an assumed dry-in milestone', () => {
+    const m = model();
+    m.levels.push({ id: 'L2', name: 'Level 2', elevation: 3.6, basis: 'inferred', sheets: [] }, { id: 'roof', name: 'Roof', elevation: 7.2, basis: 'inferred', sheets: [] });
+    m.floorAreas = { L1: 100, L2: 200 };
+    m.elements.push(
+      element('wall', 'envelope', 'L1', '07 Envelope', 'm', 30),
+      { ...element('roof', 'envelope', 'roof', '07 Envelope', 'm²', 300), typeName: 'Roof membrane' },
+      element('partition', 'partitions', 'L2', '09 Finishes', 'm', 20),
+    );
+    const base = defaultSetup(m, [], '2026-11-02');
+    const suggestions = suggestScopeAllowances(m, base);
+    const entries = Object.fromEntries(suggestions.filter((s) => ['elec-rough', 'painting', 'flooring'].includes(s.key)).map((s) => [s.key, s.allowance]));
+    const setup = applySetupEdits(base, { setup: { allowances: entries } });
+    const acts = planActivities(m, setup, [], []);
+    const byId = new Map(acts.map((a) => [a.id, a]));
+    const deps = (id: string) => byId.get(id)!.deps.map((d) => d.from);
+    expect(byId.get('allowance:elec-rough:L1')?.quantities?.['m²']).toBeCloseTo(100);
+    expect(byId.get('allowance:elec-rough:L2')?.quantities?.['m²']).toBeCloseTo(200);
+    expect(deps('allowance:elec-rough:L2')).toContain('allowance:elec-rough:L1');
+    expect(deps('allowance:flooring:L1')).toContain('allowance:painting:L1');
+    expect(deps('allowance:flooring:L2')).toContain('allowance:painting:L2');
+    expect(deps('allowance:flooring:L2')).toContain('allowance:flooring:L1');
+    expect(deps('ms:dry-in')).toEqual(expect.arrayContaining(['work:envelope:L1', 'work:envelope:roof']));
+    expect(deps('work:partitions:L2')).toContain('ms:dry-in');
+    expect(deps('allowance:painting:L1')).toContain('ms:dry-in');
+    expect(schedule(acts, setup).issues.some((i) => i.id === 'loop')).toBe(false);
+    const disabled = applySetupEdits(setup, { setup: { dryInBeforeFinishes: false } });
+    expect(planActivities(m, disabled, [], []).some((a) => a.id === 'ms:dry-in')).toBe(false);
+    expect(planActivities(m, disabled, [], []).find((a) => a.id === 'allowance:flooring:L2')?.deps.some((d) => d.from === 'ms:dry-in')).toBe(false);
+    m.elements = m.elements.filter((e) => e.id !== 'roof');
+    expect(planActivities(m, setup, [], []).some((a) => a.id === 'ms:dry-in')).toBe(false);
+    expect(replan(m, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.map((i) => i.id)).toContain('dry-in-evidence-missing');
+  });
+  it('has no quantity or work activity until the user enters one', () => {
+    const m = model();
+    const setup = defaultSetup(m, [], '2026-11-02');
+    expect(setup.allowances.value).toEqual({});
+    expect(planActivities(m, setup, [], []).some((a) => a.id.startsWith('allowance:'))).toBe(false);
+  });
+
+  it('adds separate user-entered work in the graph without changing measured elements', () => {
+    const m = model();
+    const before = JSON.stringify(m.elements);
+    const base = defaultSetup(m, [], '2026-11-02');
+    const setup = applySetupEdits(base, { setup: { allowances: {
+      site: allowance(100, 'm²', 20),
+      foundations: allowance(60, 'm³', 6),
+      structure: allowance(20, 'ea', 4, false),
+      'mech-rough': allowance(50, 'm', 10),
+    } } });
+    const acts = planActivities(m, setup, [], []);
+    const byId = new Map(acts.map((a) => [a.id, a]));
+    const deps = (id: string) => byId.get(id)!.deps.map((d) => d.from);
+    expect(byId.get('allowance:foundations')).toMatchObject({
+      quantities: { 'm³': 60 }, rates: { 'm³': 6 }, duration: 10, elements: [], level: null,
+    });
+    expect(deps('allowance:site')).toEqual(['mobilize']);
+    expect(deps('allowance:foundations')).toContain('work:structure:fdn');
+    expect(deps('work:structure:L1')).toContain('allowance:foundations');
+    expect(deps('allowance:structure')).toContain('work:structure:L1');
+    expect(deps('work:mech-rough:L1')).toContain('allowance:structure');
+    expect(deps('allowance:mech-rough')).toContain('work:mech-rough:L1');
+    expect(deps('work:ceilings:L1')).toContain('allowance:mech-rough');
+    expect(deps('work:structure:fdn')).not.toContain('allowance:site');
+    expect(JSON.stringify(m.elements)).toBe(before);
+    const baseline = schedule(planActivities(m, base, [], []), base);
+    const extended = schedule(acts, setup);
+    expect(extended.issues.some((i) => i.id === 'loop')).toBe(false);
+    expect(extended.feasibility.earliestFinish > baseline.feasibility.earliestFinish).toBe(true);
+    expect(planningScopeIssues(m, [], setup).map((i) => i.id)).toContain('scope-allowance-provisional:foundations');
+    expect(planningScopeIssues(m, [], setup).map((i) => i.id)).not.toContain('scope-allowance-provisional:structure');
+  });
+
+  it('rejects incomplete entries and treats zero quantity as an inactive draft', () => {
+    const m = model();
+    const setup = applySetupEdits(defaultSetup(m, [], '2026-11-02'), { setup: { allowances: {
+      site: allowance(0, 'm²', 20),
+      foundations: allowance(60, 'm³', 0),
+      bogus: allowance(10, 'ea', 2),
+    } } });
+    expect(planActivities(m, setup, [], []).some((a) => a.id.startsWith('allowance:'))).toBe(false);
+    expect(planningScopeIssues(m, [], setup).map((i) => i.id)).toEqual(expect.arrayContaining([
+      'scope-allowance-invalid:foundations', 'scope-allowance-invalid:bogus',
+    ]));
+    expect(planningScopeIssues(m, [], setup).some((i) => i.id === 'scope-allowance-invalid:site')).toBe(false);
+  });
+
+  it('plans an allowance-only structural and mechanical path without inventing takeoffs', () => {
+    const m = model();
+    m.elements = m.elements.filter((e) => e.trade === 'site' || e.trade === 'ceilings');
+    const setup = applySetupEdits(defaultSetup(m, [], '2026-11-02'), { setup: { allowances: {
+      foundations: allowance(30, 'm³', 5),
+      structure: allowance(12, 'ea', 3),
+      'mech-rough': allowance(80, 'm', 10),
+    } } });
+    const acts = planActivities(m, setup, [], []);
+    const deps = (id: string) => acts.find((a) => a.id === id)!.deps.map((d) => d.from);
+    expect(deps('allowance:foundations')).toContain('work:site:earthwork');
+    expect(deps('allowance:structure')).toContain('allowance:foundations');
+    expect(deps('allowance:mech-rough')).toContain('allowance:structure');
+    expect(deps('work:ceilings:L1')).toContain('allowance:mech-rough');
+    expect(deps('cx:mech')).toContain('allowance:mech-rough');
+    expect(schedule(acts, setup).issues.some((i) => i.id === 'loop')).toBe(false);
+    expect(m.elements.some((e) => e.trade === 'structure' || e.trade === 'mech-rough')).toBe(false);
+  });
+});

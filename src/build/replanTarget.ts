@@ -5,6 +5,8 @@ import type { Activity, PlanSetup, Schedule } from './types';
 export function planToTarget(baseline: Activity[], setup: PlanSetup): Schedule {
   let activities = structuredClone(baseline);
   let result = schedule(activities, setup);
+  const baselineFinish = result.feasibility.earliestFinish;
+  result.feasibility.baselineFinish = baselineFinish;
   const changes: string[] = [];
   if (!setup.target.value || result.issues.some((i) => i.id === 'loop')) return result;
   // Bounded resource levelling: at most three crews per package. Fixed dates, procurement,
@@ -107,6 +109,7 @@ export function planToTarget(baseline: Activity[], setup: PlanSetup): Schedule {
     changes.push(chosen.change);
   }
   result.feasibility.changes = changes;
+  result.feasibility.baselineFinish = baselineFinish;
   if (changes.length)
     result.issues.push({
       id: 'target-recovery',

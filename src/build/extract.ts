@@ -3,15 +3,23 @@ import { imperialDatumEvidence } from './datumEvidence';
 import { quarantineDetachedSheets } from './placementQuality';
 import { recoverRoof, type DrawingLines } from './roof';
 import { simpleRing } from './surface';
+import { nearestGridIntersection } from './gridCounts';
+import { existingEquipmentNote, planningExclusion, roofViewEvidence } from './interpret';
+import { doorHostHints, doorSwings, type DoorHostHint, type DoorSwing } from './doorSwings';
+import { drawingFingerprint } from './sources';
+import { registerViewportMeasurements, viewportLevels, type ViewportLevel } from './viewports';
 import {
   addBuilding,
   cutOpenings,
+  gridAxes,
+  sealWallCorners,
   registerSheets,
   levelDatums,
   type DrawingTexts,
 } from "./building";
 import type { Measurement, Project, Sheet, TakeoffType } from '../model';
-import { measurementVars, primaryOf, primaryUnit } from '../quantities';
+import { formulaVars, measurementVars, primaryOf, primaryUnit } from '../quantities';
+import { evaluate } from '../formula';
 import { wordsOf, type SpecSection } from '../spec/parse';
 import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, Level, SourceRef } from './types';
 
@@ -22,7 +30,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 8;
+export const MODEL_VERSION = 25;
 
 export interface Trade {
   key: string;
@@ -58,11 +66,16 @@ export const tradeByKey = new Map(TRADES.map((t) => [t.key, t]));
 const divNum = (division?: string) => parseInt(/^\s*(\d{1,2})/.exec(division ?? '')?.[1] ?? '', 10);
 
 /** Which work package a takeoff type belongs to, from its division, kind and name. */
-export function tradeOf(type: TakeoffType): string {
+export function tradeOf(type: TakeoffType, source?: Measurement['source']): string {
   const d = divNum(type.division);
   const name = `${type.name} ${type.assemblyTitle ?? ''}`.toLowerCase();
   if (d === 2) return 'demolition';
   if (/\bdemo(lition|lish)?\b|\bremove\b|\bexisting to be removed\b/.test(name)) return 'demolition';
+  if (d === 31) return 'site';
+  if (source === 'structure' || source === 'foundations') return 'structure';
+  if (source === 'site') return 'site';
+  if (/^ew[\s-]?\d+[a-z]?\b|\bexterior\s+wall\b|\bcladding\b|\bair[ -]?barrier\b/.test(name)) return 'envelope';
+  if (/\b(?:beam|column|lintel|brace|post|base\s*plate|structural\s*wall|shear\s*wall|glulam)\b/.test(name)) return 'structure';
   if (d === 3 || d === 4 || d === 5) return 'structure';
   if (d === 7) return /roof|membrane|flashing|eaves|soffit|siding|cladding|air barrier|vapour/.test(name) ? 'envelope' : 'finishes';
   if (d === 8) return 'doors';
@@ -71,7 +84,7 @@ export function tradeOf(type: TakeoffType): string {
   if (d >= 26 && d <= 28) return type.kind === 'count' ? 'elec-trim' : 'elec-rough';
   if (d >= 31 && d <= 33) return 'site';
   if (d === 10 || d === 11 || d === 12) return 'specialties';
-  if (!d && type.kind === 'linear' && !/duct|pipe|conduit|cable|tray|sprinkler/.test(name)) return /\bfw|foundation|footing|grade beam/.test(name) ? 'structure' : 'partitions';
+  if (!d && type.kind === 'linear' && !/duct|pipe|conduit|cable|tray|sprinkler/.test(name)) return /foundation|footing|grade beam|structural wall|bearing wall/.test(name) ? 'structure' : 'partitions';
   if (d === 6 || d === 9 || !d) {
     if (/ceil|\bact\b|t-bar|bulkhead|acoustic(al)? (tile|panel)/.test(name)) return 'ceilings';
     if (/paint|coating|stain/.test(name)) return 'painting';
@@ -143,8 +156,8 @@ export function sourceHashOf(input: ExtractInput): string {
     JSON.stringify(input.edits?.levels),
     JSON.stringify(input.edits?.elevations),
     JSON.stringify(input.levelHints),
-    JSON.stringify(input.drawingTexts),
-    JSON.stringify(input.drawingLines),
+    // Drawing evidence by fingerprint: stringifying the linework (tens of MB) froze the window.
+    drawingFingerprint(input.drawingTexts, input.drawingLines),
     p.units,
     input.floorToFloor,
   ];
@@ -221,6 +234,10 @@ export function extractModel(input: ExtractInput): BuildModel {
   ])) {
     const s = sheets.get(sid);
     if (!s || s.superseded || (!used.has(sid) && (!isPlan(s) || isEnlarged(s)))) continue;
+    if (used.has(sid) && used.get(sid)!.every((m) => {
+      const type = types.get(m.typeId);
+      return type && tradeOf(type, m.source) === 'site';
+    })) continue;
     const byHand = edits?.levels?.[sid];
     if (byHand) {
       parsed.set(sid, { word: `id:${byHand}`, basis: 'assumed', from: 'set by you' });
@@ -251,8 +268,14 @@ export function extractModel(input: ExtractInput): BuildModel {
     const id = resolve(p);
     if (id) levelOfSheet.set(sid, { id, basis: p.basis, from: p.from });
   }
+  const viewportOfMeasurement = new Map<string, ViewportLevel>();
+  for (const [sid, ms] of used) {
+    const s = sheets.get(sid);
+    if (!s || edits?.levels?.[sid]) continue;
+    for (const [id, viewport] of viewportLevels(s, input.drawingTexts?.[sid] ?? [], ms)) viewportOfMeasurement.set(id, viewport);
+  }
   // The levels, bottom up, at the floor-to-floor height unless set.
-  const ids = [...new Set([...levelOfSheet.values()].map((x) => x.id))];
+  const ids = [...new Set([...levelOfSheet.values()].map((x) => x.id).concat([...viewportOfMeasurement.values()].map((x) => x.id)))];
   const rank = (id: string) => (id === 'roof' ? 1e3 : id === 'mezz' ? 1.5 : id === 'fdn' ? -1e3 : parseFloat(id.replace(/^L/, '')) || 0);
   ids.sort((a, b) => rank(a) - rank(b));
   const levels: Level[] = [];
@@ -279,7 +302,10 @@ export function extractModel(input: ExtractInput): BuildModel {
       basis: set !== undefined ? 'assumed' : splitLevels.has(id) ? 'inferred' : datums[id] !== undefined
             ? "documented"
             : levels.length ? 'assumed' : 'inferred',
-      sheets: [...levelOfSheet].filter(([, l]) => l.id === id).map(([sid]) => sid),
+      sheets: [...new Set([
+        ...[...levelOfSheet].filter(([, l]) => l.id === id).map(([sid]) => sid),
+        ...[...used].filter(([, ms]) => ms.some((m) => viewportOfMeasurement.get(m.id)?.id === id)).map(([sid]) => sid),
+      ])],
     });
     z = id === 'fdn' ? 0 : elevation + input.floorToFloor;
   }
@@ -294,12 +320,30 @@ export function extractModel(input: ExtractInput): BuildModel {
   }
   const mainScale = [...scales].sort((a, b) => b[1] - a[1])[0]?.[0];
   const registration = registerSheets(project, input.drawingTexts ?? {});
+  const gridAxesBySheet = new Map<string, ReturnType<typeof gridAxes>>();
+  const axesFor = (s: Sheet) => {
+    const cached = gridAxesBySheet.get(s.id);
+    if (cached) return cached;
+    const points = project.measurements.filter((m) => m.sheetId === s.id).flatMap((m) => m.points);
+    const median = (axis: number) => points.map((p) => p[axis]).sort((a, b) => a - b)[Math.floor(points.length / 2)];
+    const focus: [number, number] | undefined = points.length ? [median(0), median(1)] : undefined;
+    const axes = gridAxes(input.drawingTexts?.[s.id] ?? [], s.width, s.height, focus);
+    gridAxesBySheet.set(s.id, axes);
+    return axes;
+  };
+  const viewportRegistration = registerViewportMeasurements(project, input.drawingTexts ?? {}, viewportOfMeasurement);
   const placeable = (s: Sheet) => !!s.metersPerPoint && isPlan(s) && !isEnlarged(s) && (Math.round(s.metersPerPoint * 1e5) === mainScale || !!registration[s.id]) && levelOfSheet.has(s.id);
   const unplaced = new Map<string, string>();
 
   const specCache = new Map<string, { key: string; basis: Basis }[]>();
   const missingSec = new Map(sections.filter((s) => s.missing).map((s) => [s.key, `${s.number} ${s.title}`]));
+  const codedStatusNoted = new Set<string>();
+  const roofViews = roofViewEvidence(project);
+  const shiftedDemoNotes = project.types.some((t) => /^demo\s*0\s*:/i.test(t.name));
+  const swingsBySheet = new Map<string, DoorSwing[]>();
+  const doorHints = new Map<string, DoorHostHint[]>();
   const elements: BuildElement[] = [];
+  const gridCountsWithoutPlace = new Map<string, string[]>();
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -308,9 +352,14 @@ export function extractModel(input: ExtractInput): BuildModel {
     const s = sheets.get(m.sheetId);
     const type = types.get(m.typeId);
     if (!s || !type || s.superseded) continue;
-    const classifiedTrade = tradeOf(type);
-    const trade = type.kind === 'area' && m.ceilingHeight && classifiedTrade !== 'demolition' ? 'ceilings' : classifiedTrade;
-    const lv = levelOfSheet.get(s.id);
+    const exclusion = planningExclusion(m, type, s, roofViews.duplicates);
+    const classifiedTrade = tradeOf(type, m.source);
+    const trade = exclusion === 'room-context' ? 'other' : type.kind === 'area' && m.ceilingHeight && classifiedTrade !== 'demolition' ? 'ceilings' : classifiedTrade;
+    const viewport = viewportOfMeasurement.get(m.id);
+    const inferredRoofView = m.source === 'trades' && type.kind === 'count' && /^equipment identification\b/i.test(type.name) && roofViews.inferredRoofSheets.has(s.id);
+    const lv = exclusion === 'elevation-window' ? undefined : inferredRoofView
+      ? { id: 'roof', basis: 'inferred' as Basis, from: 'matching equipment marks on a labelled roof plan' }
+      : viewport ? { id: viewport.id, basis: 'inferred' as Basis, from: `viewport title “${viewport.title}”` } : levelOfSheet.get(s.id);
     const level = lv ? levelById.get(lv.id) ?? null : null;
     const vars = measurementVars(m, type, s, units);
     const quantity = vars ? primaryOf(type.kind, vars) : 0;
@@ -319,11 +368,37 @@ export function extractModel(input: ExtractInput): BuildModel {
     const box: [number, number, number, number] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
     const src: SourceRef = { kind: 'sheet', id: s.id, page: s.page, label: s.name, box };
     const elIssues: string[] = [];
+    if (type.kind === 'count' && trade === 'doors' && /\bdoors?\b/i.test(type.name) && s.metersPerPoint && input.drawingLines?.[s.id]?.length && m.points.length === 1) {
+      if (!swingsBySheet.has(s.id)) swingsBySheet.set(s.id, doorSwings(input.drawingLines[s.id], s.metersPerPoint));
+      const reg = viewportRegistration.get(m.id) ?? registration[s.id];
+      doorHints.set(m.id, doorHostHints(swingsBySheet.get(s.id)!, m.points[0], s.metersPerPoint, reg?.rotation ?? 0));
+    }
+    if (shiftedDemoNotes && m.source === 'demolition' && /^A20[1-4]$/i.test(s.name) && /^demo\s*\d+\s*:/i.test(type.name))
+      elIssues.push('Saved demolition keynote labels on A201–A204 may be shifted by one note; the measured marker remains, but its removal type and production basis need drawing review.');
+    if (inferredRoofView) elIssues.push('Roof level inferred from multiple coincident equipment marks on a separately titled roof plan; confirm the unpaired marks on this sheet.');
+    const gridCount = trade === 'structure' && type.kind === 'count' && /\b(?:footing|pier|base\s*plate|column)\b/i.test(type.name);
     let shape: ElementShape | null = null;
     let placement: Basis = 'unknown';
-    if (!s.metersPerPoint) {
+    if (exclusion) {
+      const reason: Record<NonNullable<typeof exclusion>, string> = {
+        'egress-demolition': 'Egress diagram line is not evidence of demolition work.',
+        'unverified-demo-type': 'Numbered demolition label is empty or names drawing reference text, not a verified removal type.',
+        'room-context': 'Generic room area is spatial context, not a ceiling or floor finish quantity.',
+        'elevation-window': 'Elevation window marks may show the same assemblies as plan marks; opening count and level need reconciliation.',
+        'open-ceiling': 'Open or unshown ceiling is not evidence of a new ceiling.',
+        'unverified-ceiling-type': 'Concatenated ceiling legend text is not a verified new ceiling type.',
+        'duplicate-roof-view': 'Coincident generic equipment mark is retained on the roof plan; this view adds no second count.',
+      };
+      elIssues.push(`${reason[exclusion]} Excluded from new work pending drawing review.`);
+    } else if (trade === 'site') {
+      elIssues.push(`Site work is scheduled without a building level. Its plan route is not coordinated to the building model${m.statedLength !== undefined ? '; the length comes from the drawing label' : ''}.`);
+      if (!vars) elIssues.push(`${s.name} has no scale or stated length: its quantity is unknown.`);
+    } else if (!s.metersPerPoint) {
       elIssues.push(`${s.name} has no scale: its quantity and place are unknown.`);
       unplaced.set(s.id, 'no scale');
+    } else if (viewport && !viewportRegistration.has(m.id)) {
+      elIssues.push(`${s.name}: level ${viewport.id} inferred from “${viewport.title}” and the gap between side-by-side plans; this viewport has no verified building XY registration, so its quantity is scheduled on ${viewport.id} but not drawn in 3D.`);
+      unplaced.set(s.id, 'viewport alignment');
     } else if (!isPlan(s)) {
       elIssues.push(`Measured on ${s.name} (${s.title ?? 'not a plan'}): not a plan, so its place on the building is not known.`);
       unplaced.set(s.id, 'not a plan');
@@ -333,13 +408,15 @@ export function extractModel(input: ExtractInput): BuildModel {
     } else if (!level) {
       elIssues.push(`The level of ${s.name} (${s.title ?? ''}) isn't known: set it in Build setup.`);
       unplaced.set(s.id, 'level unknown');
-    } else if (!placeable(s)) {
+    } else if (!placeable(s) && !viewportRegistration.has(m.id)) {
       elIssues.push(`${s.name} is at another scale than the main plans: not placed with them.`);
       unplaced.set(s.id, 'other scale');
     } else {
       placement = 'inferred';
       const k = s.metersPerPoint;
-      const reg = registration[s.id];
+      const reg = viewportRegistration.get(m.id) ?? registration[s.id];
+      if (viewport && reg)
+        elIssues.push(`${s.name}: ${viewport.title} located in building plan by ${reg.grids.length} matching letter/number grid bubbles in its own viewport; service elevation and cross-section remain assumed.`);
       const transform = (p: [number, number]): [number, number] => [
         (p[0] * Math.cos(reg?.rotation ?? 0) - p[1] * Math.sin(reg?.rotation ?? 0)) * k - (reg?.x ?? 0),
         (p[0] * Math.sin(reg?.rotation ?? 0) + p[1] * Math.cos(reg?.rotation ?? 0)) * k - (reg?.y ?? 0),
@@ -351,7 +428,11 @@ export function extractModel(input: ExtractInput): BuildModel {
           level.elevation + input.floorToFloor) - level.elevation;
       const typeH = type.height > 0 ? toM(type.height) : 0;
       if (type.kind === 'linear') {
-        if (trade === 'mech-rough') shape = { type: 'run', points: pts, z0: ceil - 0.05, height: 0.3, thickness: 0.3 };
+        if (trade === 'structure' && m.source === 'structure' && /\bbeam\b/i.test(type.name)) {
+          shape = { type: 'axis', points: pts, z: level.elevation };
+          elIssues.push('Beam span is positioned in plan only. Its framing elevation and physical section need verification; the 3D line is a diagrammatic axis, not an IFC solid.');
+        }
+        else if (trade === 'mech-rough') shape = { type: 'run', points: pts, z0: ceil - 0.05, height: 0.3, thickness: 0.3 };
         else if (trade === 'fire-rough') shape = { type: 'run', points: pts, z0: ceil + 0.2, height: 0.1, thickness: 0.1 };
         else if (trade === 'elec-rough') shape = { type: 'run', points: pts, z0: ceil + 0.1, height: 0.06, thickness: 0.06 };
         else shape = { type: 'run', points: pts, z0: level.elevation, height: /to ceiling/i.test(type.description ?? "")
@@ -365,7 +446,17 @@ export function extractModel(input: ExtractInput): BuildModel {
         shape = { type: 'surface', ring: pts, holes, z: zz, thickness: trade === 'structure' ? 0.2 : 0.04 };
       } else {
         const at = pts[0];
-        if (trade === 'doors') shape = { type: 'point', at, z: level.elevation, size: [0.95, 0.12, 2.1] };
+        if (gridCount) {
+          const reg = registration[s.id];
+          const snap = reg && nearestGridIntersection(axesFor(s), reg.grids, m.points[0], k);
+          if (snap) {
+            shape = { type: 'locator', at: transform(snap.point), z: level.elevation };
+            elIssues.push(`Symbolic 3D location inferred at structural grid ${snap.labels.join('/')} (${snap.distanceM.toFixed(2)} m from the original tag). The tag point remains in the source box; member section and height are not inferred.`);
+          } else {
+            elIssues.push(`No registered structural grid intersection within 2.5 m of the tag${reg ? '' : ' on this sheet'}; count retained without 3D placement.`);
+          }
+        }
+        else if (trade === 'doors') shape = { type: 'point', at, z: level.elevation, size: [0.95, 0.12, 2.1] };
         else if (trade === 'elec-trim' && /light|luminaire|fixture|exit/i.test(type.name)) shape = { type: 'point', at, z: ceil - 0.1, size: [0.6, 0.6, 0.1] };
         else if (trade === 'elec-trim') shape = { type: 'point', at, z: level.elevation + 0.45, size: [0.12, 0.12, 0.12] };
         else if (trade === 'fire-heads') shape = { type: 'point', at, z: ceil - 0.05, size: [0.15, 0.15, 0.12] };
@@ -373,17 +464,31 @@ export function extractModel(input: ExtractInput): BuildModel {
         else if (trade === 'mech-trim') shape = { type: 'point', at, z: level.elevation, size: [0.5, 0.5, 0.8] };
         else shape = { type: 'point', at, z: level.elevation, size: [0.4, 0.4, 0.4] };
       }
-      for (const p of pts) {
+      for (const p of shape?.type === 'locator' ? [shape.at] : pts) {
         minX = Math.min(minX, p[0]);
         minY = Math.min(minY, p[1]);
         maxX = Math.max(maxX, p[0]);
         maxY = Math.max(maxY, p[1]);
       }
     }
-    if (trade === 'structure' && type.kind === 'count' && /\bPLY\b|DENOTES SPAN|\bWT-?\d/i.test(type.name)) {
+    if (trade === 'structure' && type.kind === 'count' && shape?.type !== 'locator') {
       shape=null;placement='unknown';
-      elIssues.push('Structural tag quantity retained; member span, direction and section must be established before generating physical geometry.');
+      if (gridCount) gridCountsWithoutPlace.set(s.name, [...(gridCountsWithoutPlace.get(s.name) ?? []), m.id]);
+      elIssues.push(gridCount
+        ? 'Counted footing, pier, base plate or column retained; its grid position is unverified, so no 3D marker or physical geometry is generated.'
+        : 'Counted structural item retained; member position, span and section must be established before generating physical geometry.');
     }
+    let productionItem: TakeoffType['items'][number] | undefined;
+    if (vars && trade === 'site' && divNum(type.division) === 31)
+      productionItem = type.items.find((item) => /^excavation\s*\(bank\)$/i.test(item.name) && (item.unit === 'm³' || item.unit === 'CY'));
+    else if (vars && m.source === 'foundations' && trade === 'structure')
+      productionItem = type.items.find((item) => /^concrete\b/i.test(item.name) && (item.unit === 'm³' || item.unit === 'CY'));
+    else if (vars && trade === 'site' && divNum(type.division) === 32)
+      productionItem = type.items.find((item) => /^road area$/i.test(item.name) && (item.unit === 'm²' || item.unit === 'SF'));
+    const productionResult = productionItem && vars ? evaluate(productionItem.formula, formulaVars(vars, type)) : undefined;
+    const production = productionItem && productionResult?.ok && productionResult.value > 0
+      ? { quantity: productionResult.value, unit: productionItem.unit } : undefined;
+    if (productionItem && !production) elIssues.push('Assembly production quantity cannot be calculated from the available dimensions; review its production allowance.');
     if (shape?.type === 'surface' && (!simpleRing(shape.ring) || shape.holes.some(h => !simpleRing(h)))) {
       shape = null; placement = 'unknown';
       elIssues.push('Self-intersecting or degenerate polygon: retained in takeoff quantities, omitted from 3D/IFC geometry pending drawing review.');
@@ -393,20 +498,31 @@ export function extractModel(input: ExtractInput): BuildModel {
     const specs = specCache.get(type.id)!;
     if (!specs.length) elIssues.push(`No spec section found for ${type.name}.`);
     for (const sp of specs) if (missingSec.has(sp.key)) elIssues.push(`Spec section ${missingSec.get(sp.key)} is listed in the table of contents but not issued.`);
+    const existingNote = existingEquipmentNote(m, type, s, input.drawingTexts);
+    if (existingNote) elIssues.push('Existing equipment status inferred from a nearby X-coded tag and “as exist” note; confirm on the drawing.');
+    const explicitExisting = /\b(?:EXISTING|EXST|EXIST|TO REMAIN)\b/i.test(type.name);
+    const codedExisting = /\b[A-Z]{1,4}X\d/i.test(type.name);
+    if (codedExisting && !explicitExisting && !/\bNEW\b/i.test(type.name) && !codedStatusNoted.has(type.id)) {
+      codedStatusNoted.add(type.id);
+      issues.push({ id: `status:${type.id}`, severity: 'warning', text: `${type.name}: existing status inferred from an X-coded type mark; confirm against the drawing legend.`, sources: [src] });
+    }
     elements.push({
       id: m.id,
       origin: "takeoff",
-      status: trade === 'demolition' ? 'demolished' : /(?:^|\s[–-]\s)Existing\b|\b(?:frx|fwx|px|wx|cx)\d/i.test(type.name) ? 'existing' : 'new',
+      status: trade === 'demolition' ? 'demolished' : (explicitExisting || codedExisting || existingNote) && !/\bNEW\b/i.test(type.name) ? 'existing' : 'new',
+      ...(exclusion ? { planningExcluded: exclusion } : {}),
       name: m.label ? `${type.name} · ${m.label}` : type.name,
       trade,
-      level: level?.id ?? null,
+      level: trade === 'site' ? null : level?.id ?? null,
       shape,
       quantity,
       unit: primaryUnit(type.kind, units),
+      ...(production ? { production } : {}),
       typeId: type.id,
       typeName: type.name,
       division: type.division ?? '',
       measurementId: m.id,
+      measurementSource: m.source,
       sheetId: s.id,
       specs,
       sources: [src],
@@ -414,6 +530,14 @@ export function extractModel(input: ExtractInput): BuildModel {
       issues: elIssues,
     });
   }
+
+  if (gridCountsWithoutPlace.size)
+    issues.push({
+      id: 'grid-counts-unplaced',
+      severity: 'warning',
+      text: `${[...gridCountsWithoutPlace].map(([sheet, ids]) => `${sheet}: ${ids.length}`).join('; ')} counted footings, piers, base plates or columns have no verified structural-grid location within 2.5 m or lack a calibrated, registered plan. They remain in quantities without 3D markers.`,
+      refs: [...gridCountsWithoutPlace.values()].flat(),
+    });
 
   const modelOrigin: [number,number] = Number.isFinite(minX) ? [(minX+maxX)/2,(minY+maxY)/2] : [0,0];
   // Centre what is drawn on the origin.
@@ -424,7 +548,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     for (const e of elements) {
       const sh = e.shape;
       if (!sh) continue;
-      if (sh.type === 'run') sh.points = sh.points.map(shift);
+      if (sh.type === 'run' || sh.type === 'axis') sh.points = sh.points.map(shift);
       else if (sh.type === 'surface') {
         sh.ring = sh.ring.map(shift);
         sh.holes = sh.holes.map((h) => h.map(shift));
@@ -446,9 +570,12 @@ export function extractModel(input: ExtractInput): BuildModel {
     'enlarged plan': 'are enlarged plans: where they sit on the floor isn’t recovered yet, so their takeoffs are counted but not drawn',
     'level unknown': 'don’t say which level they are: set it in Build setup to place their takeoffs',
     'other scale': 'are at another scale than the main plans: not placed with them',
+    'viewport alignment': 'have level-labelled viewports, but their separate XY alignments to the building are unverified; quantities are scheduled on the inferred levels but not drawn',
   };
   for (const [reason, sids] of why)
     issues.push({ id: `unplaced:${reason}`, severity: reason === 'level unknown' ? 'warning' : 'info', text: `${sids.length} sheet${sids.length === 1 ? '' : 's'} (${sids.map(label).join(', ')}) ${say[reason]}.`, refs: sids });
+  if (viewportRegistration.size)
+    issues.push({ id: 'viewport-registration', severity: 'info', text: `${viewportRegistration.size} takeoffs placed from separate level viewports using matching letter and number grid bubbles; service elevation and cross-section remain assumed.`, refs: [...viewportRegistration.keys()] });
   if (levels.length > 1)
     issues.push({
       id: 'placement',
@@ -471,7 +598,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     extent: Number.isFinite(minX) ? [minX, minY, maxX, maxY] : [0, 0, 0, 0],
   };
   addBuilding(model, project, input.floorToFloor);
-  quarantineDetachedSheets(model, new Set(Object.keys(registration)));
+  quarantineDetachedSheets(model, new Set([...Object.keys(registration), ...[...viewportRegistration.keys()].map((id) => project.measurements.find((m) => m.id === id)!.sheetId)]));
   recoverRoof(model, project, input.drawingTexts ?? {}, input.drawingLines ?? {}, modelOrigin);
   if (model.elements.some((e) => e.origin === "building"))
     model.issues.push({
@@ -481,6 +608,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     });
   recoverFacadeOpenings(model, project, input.drawingTexts ?? {}, input.drawingLines ?? {}, modelOrigin);
   rejectUnsupportedCurtainWalls(model);
-  cutOpenings(model);
+  cutOpenings(model, doorHints, new Set(Object.keys(input.drawingLines ?? {})));
+  sealWallCorners(model);
   return model;
 }

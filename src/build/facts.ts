@@ -43,15 +43,16 @@ export async function readSpecFacts(sections: SpecSection[], text: (docId: strin
       // A completion date: "Substantial Performance … by June 30, 2027".
       const date = /substantial(?:ly)?\s+(?:performance|completion|complete)[^.;]{0,160}?(?:by|on or before|no later than|not later than)\s+((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+20\d\d)/i.exec(t);
       if (date) {
-        const d = new Date(date[1].replace(/\./, ''));
-        if (!Number.isNaN(d.getTime())) add({ key: 'substantialDate', value: d.toISOString().slice(0, 10), unit: 'date', source: src(at(date.index, date[0].length)) });
+        const iso = writtenDate(date[1]);
+        if (iso) add({ key: 'substantialDate', value: iso, unit: 'date', source: src(at(date.index, date[0].length)) });
       }
       // A contract time: "complete the Work within 26 weeks of the date of award".
       const dated =
         /\bBy\s+(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+)?((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+20\d\d),?\s+([^.;]{0,500})/gi;
       for (const match of t.matchAll(dated)) {
-        const iso = new Date(match[1]).toISOString().slice(0, 10),
+        const iso = writtenDate(match[1]),
           clause = match[2];
+        if (!iso) continue;
         const key = /Substantial Performance/i.test(clause)
           ? "substantialDate"
           : /mobilization.{0,50}start/i.test(clause)
@@ -83,4 +84,23 @@ export async function readSpecFacts(sections: SpecSection[], text: (docId: strin
     }
   }
   return facts;
+}
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/**
+ * A written date ("February 24, 2025", "Oct. 31 2025") as an ISO day, read from its words, not
+ * through a Date: converting a local midnight to UTC moved it a day early east of Greenwich
+ * (Pakistan read "February 24" as the 23rd). Impossible days ("February 30") are refused.
+ */
+export function writtenDate(text: string): string | null {
+  const m = /^\s*([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\s*$/i.exec(text);
+  if (!m) return null;
+  const month = MONTHS.indexOf(m[1].toLowerCase());
+  const day = Number(m[2]);
+  const year = Number(m[3]);
+  if (month < 0 || day < 1) return null;
+  const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  if (day > last) return null;
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }

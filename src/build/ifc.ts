@@ -98,7 +98,7 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
   };
   const shapeOf = (e: BuildElement, zBase: number): string | null => {
     const s = e.shape;
-    if (!s) return null;
+    if (!s || s.type === 'axis' || s.type === 'locator') return null;
     const items: string[] = [];
     if ((s.type==='surface' && s.slope) || (s.type==='run' && s.topPlane)) {
         const geometry = geometryOf(e)!;
@@ -152,11 +152,14 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
   for (const e of model.elements) {
     const lv = e.level ? storeys.get(e.level) : undefined;
     const shape = e.shape && lv ? shapeOf(e, lv.elevation) : null;
-    const pl = add(`IFCLOCALPLACEMENT(${shape && lv ? lv.pl : bldPl},${add(`IFCAXIS2PLACEMENT3D(${origin},$,$)`)})`);
+    const locator = e.shape?.type === 'locator' && lv ? e.shape : null;
+    const pl = locator
+      ? placeAt(lv!.pl, locator.at[0], -locator.at[1], locator.z - lv!.elevation)
+      : add(`IFCLOCALPLACEMENT(${shape && lv ? lv.pl : bldPl},${add(`IFCAXIS2PLACEMENT3D(${origin},$,$)`)})`);
     const { cls, tail } = classOf(e);
     const ref = add(`${cls}('${ifcGuid(e.id)}',${owner},${str(e.name)},${str(e.typeName)},${str(tradeByKey.get(e.trade)?.name ?? e.trade)},${pl},${shape ?? '$'},${str(e.id.slice(0, 8))}${tail})`);
     refOf.set(e.id, ref);
-    if (shape && lv) lv.members.push(ref);
+    if ((shape || locator) && lv) lv.members.push(ref);
     else loose.push(ref);
     // Properties: what it is, where it came from, what governs it, when it is built.
     const type = types.get(e.typeId);
@@ -171,6 +174,7 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
       label('Level', e.level ?? ''),
       label('SourceSheet', sheet ? `${sheet.name} ${sheet.title ?? ''}`.trim() : ''),
       label('SourcePage', String(sheet?.page ?? '')),
+      ...(locator && m?.points[0] ? [label('TagPointOnSheet', m.points[0].map((n) => n.toFixed(2)).join(', '))] : []),
       label('TakenOffBy', m?.source ?? 'hand'),
       label('Placement', e.placement),
       label('Quantity', `${Math.round(e.quantity * 100) / 100} ${e.unit}`),
@@ -214,6 +218,9 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
       if (e.unit === 'ft' || e.unit === 'm') q.push(add(`IFCQUANTITYLENGTH('Length',$,$,${num(e.unit === 'ft' ? e.quantity * 0.3048 : e.quantity)},$)`));
       else if (e.unit === 'SF' || e.unit === 'm²') q.push(add(`IFCQUANTITYAREA('NetArea',$,$,${num(e.unit === 'SF' ? e.quantity * 0.09290304 : e.quantity)},$)`));
       else q.push(add(`IFCQUANTITYCOUNT('Count',$,$,${num(e.quantity)},$)`));
+    } else if (s.type === 'axis') {
+      const len = s.points.slice(1).reduce((acc, p, i) => acc + Math.hypot(p[0] - s.points[i][0], p[1] - s.points[i][1]), 0);
+      q.push(add(`IFCQUANTITYLENGTH('Length',$,$,${num(len)},$)`));
     } else if (s.type === 'run') {
       const len = s.points.slice(1).reduce((acc, p, i) => acc + Math.hypot(p[0] - s.points[i][0], p[1] - s.points[i][1]), 0);
       q.push(add(`IFCQUANTITYLENGTH('Length',$,$,${num(len)},$)`), add(`IFCQUANTITYLENGTH('Height',$,$,${num(s.height)},$)`), add(`IFCQUANTITYAREA('GrossSideArea',$,$,${num(len * s.height)},$)`));

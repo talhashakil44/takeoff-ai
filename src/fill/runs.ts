@@ -446,3 +446,40 @@ export function joinRuns(runs: Pt[][], maxGap: number, maxOff: number): Pt[][] {
   }
   return out.filter((_, i) => alive[i]);
 }
+
+/**
+ * Lines of one type traced twice (two bands read off one drawn run, a run picked up from two
+ * labels): each stretch counted once. Taken longest first, a line keeps only the parts no line
+ * already kept lies along (in line within `tol`); what is left shorter than `minLen` is dropped.
+ * The result is the kept stretches as straight two-point lines, to be joined up again.
+ */
+export function uncover(lines: Pt[][], tol: number, minLen: number): Pt[][] {
+  const segs: [Pt, Pt][] = [];
+  for (const l of lines) for (let i = 1; i < l.length; i++) segs.push([l[i - 1], l[i]]);
+  segs.sort((a, b) => Math.hypot(b[1][0] - b[0][0], b[1][1] - b[0][1]) - Math.hypot(a[1][0] - a[0][0], a[1][1] - a[0][1]));
+  const kept: [Pt, Pt][] = [];
+  for (const [a, b] of segs) {
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (L < 1e-9) continue;
+    const ux = (b[0] - a[0]) / L;
+    const uy = (b[1] - a[1]) / L;
+    // Stretches of this line (0..L along it) that kept lines already lie along.
+    const covered: [number, number][] = [];
+    for (const [c, d] of kept) {
+      const off = (p: Pt) => Math.abs((p[0] - a[0]) * uy - (p[1] - a[1]) * ux);
+      if (off(c) > tol || off(d) > tol) continue;
+      const t = (p: Pt) => (p[0] - a[0]) * ux + (p[1] - a[1]) * uy;
+      const lo = Math.max(0, Math.min(t(c), t(d)));
+      const hi = Math.min(L, Math.max(t(c), t(d)));
+      if (hi > lo) covered.push([lo, hi]);
+    }
+    covered.sort((x, y) => x[0] - y[0]);
+    let from = 0;
+    const at = (t: number): Pt => [a[0] + ux * t, a[1] + uy * t];
+    for (const [lo, hi] of [...covered, [L, L] as [number, number]]) {
+      if (lo - from >= minLen) kept.push([at(from), at(lo)]);
+      from = Math.max(from, hi);
+    }
+  }
+  return kept.map(([a, b]) => [a, b]);
+}

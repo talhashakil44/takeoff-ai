@@ -27,7 +27,7 @@ export function sheetFrame(
   for (const m of project.measurements.filter((m) => m.sheetId === sheet.id)) {
     const s = model.elements.find((e) => e.measurementId === m.id)?.shape;
     const ps =
-      s?.type === "run" ? s.points : s?.type === "surface" ? s.ring : [];
+      (s?.type === "run" || s?.type === "axis") ? s.points : s?.type === "surface" ? s.ring : [];
     if (ps.length === m.points.length)
       m.points.forEach((p, i) => pairs.push({ p, q: ps[i] }));
   }

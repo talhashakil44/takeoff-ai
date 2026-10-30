@@ -12,6 +12,7 @@ import { applySetupEdits } from '../src/build/plan';
 import { readSpecFacts } from '../src/build/facts';
 import { titleBlockWords } from '../src/build/extract';
 import { registerSheets, type DrawingTexts } from '../src/build/building';
+import { doorSheets, slimLines } from '../src/build/sources';
 import { toIfc } from '../src/build/ifc';
 import type { Project } from '../src/model';
 
@@ -38,12 +39,13 @@ it.skipIf(!root)(
       const drawingLines: DrawingLines = {};
       const drawingTexts: DrawingTexts = {},
         levelHints: Record<string, string> = {};
+      const planDoorSheets = doorSheets(project);
       for (const s of project.sheets.filter((s) => !s.superseded)) {
         const d = await getDoc(s.docId);
         const texts = await pageTexts(await d.pdf.getPage(s.page));
         drawingTexts[s.id] = texts;
-        if (/ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? ''))
-          drawingLines[s.id] = await segmentsOf(await d.pdf.getPage(s.page));
+        if (planDoorSheets.has(s.id) || /ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? ''))
+          drawingLines[s.id] = slimLines(await segmentsOf(await d.pdf.getPage(s.page)));
         levelHints[s.id] = titleBlockWords(texts, s.width, s.height);
       }
       const sections = project.specs?.flatMap((s) => s.book?.sections ?? []) ?? [];
@@ -55,6 +57,14 @@ it.skipIf(!root)(
       writeFileSync(`${output}/${key === 'Kelso' ? 'kelso' : 'frederick'}-lines.json`, JSON.stringify(drawingLines));
       const out = buildAll(input);
       if (key === 'Kelso') {
+        expect(out.model.roofPlan?.areaM2).toBeGreaterThan(950);
+        expect(out.model.roofPlan?.areaM2).toBeLessThan(1050);
+        expect(out.model.roofPlan?.source.label).toBe('A2.3');
+        expect(out.schedule.activities.find((a) => a.id === 'work:envelope:roof-covering')).toMatchObject({ duration: 14, durationBasis: 'inferred' });
+        expect(out.scopeSuggestions.some((s) => s.key === 'envelope')).toBe(false);
+        const withoutDerivedRoof = replan({ ...out.model, roofPlan: undefined }, out.setup, input).schedule;
+        expect(withoutDerivedRoof.feasibility.earliestFinish).toBe('2027-08-05');
+        expect(out.schedule.feasibility.earliestFinish).toBe('2027-08-25');
         const slabs = out.model.elements
           .filter((e) => e.origin === 'building' && e.id.endsWith(':slab'))
           .map((e) => e.shape)
@@ -94,10 +104,15 @@ it.skipIf(!root)(
       expect(JSON.stringify(project)).toBe(original);
       expect(readFileSync(file).equals(before)).toBe(true);
       expect(out.model.elements.filter((e) => e.origin === 'takeoff')).toHaveLength(project.measurements.length);
+      expect(out.schedule.activities.some((a) => a.id.startsWith('longlead:') || a.id.startsWith('scope:'))).toBe(false);
+      if (key === '84 Frederick') {
+        expect(out.schedule.activities.some((a) => a.id === 'ms:phase-one')).toBe(false);
+        expect(out.schedule.issues.map((i) => i.id)).toEqual(expect.arrayContaining(['phase-scope-unmapped', 'historical-start']));
+      }
       expect(later.activities.map((a) => [a.id, a.duration, a.crews, a.deps])).toEqual(
         lean.activities.map((a) => [a.id, a.duration, a.crews, a.deps]),
       );
-      expect(earlier.feasibility.changes?.length).toBeGreaterThan(0);
+      expect(earlier.feasibility.baselineFinish).toBe(lean.feasibility.earliestFinish);
       expect(out.schedule.issues.some((i) => i.id === 'loop')).toBe(false);
       const slug = key === 'Kelso' ? 'kelso' : 'frederick';
       writeFileSync(`${output}/${slug}.ifc`, toIfc({ ...out, project, sections }));

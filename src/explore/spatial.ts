@@ -63,7 +63,12 @@ export function roomStops(
     )
     .flatMap((m) => {
       const element = model.elements.find((e) => e.measurementId === m.id);
-      if (!element || element.shape?.type !== "surface") return [];
+      // Room boundaries are measured spaces, not ceiling/slab construction.
+      // Build intentionally omits their physical shape; navigation still uses the
+      // original polygon on a registered plan with a known floor datum.
+      if (!element || element.status === "demolished" ||
+          !model.levels.some(l => l.id === element.level) ||
+          (element.shape?.type !== "surface" && m.source !== "rooms")) return [];
       const ring = m.points.map((p) => worldPoint(p, frame)),
         holes = m.holes.map((h) => h.map((p) => worldPoint(p, frame)));
       if (!simpleRing(ring) || holes.some((h) => !simpleRing(h))) return [];

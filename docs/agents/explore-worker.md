@@ -48,11 +48,11 @@ T11 completion additionally requires:
 7. Read Claude's T11 reply, incorporate review, repeat. Only claim acknowledgment
    after a reply exists. No automatic main merge or deployment.
 
-Until bus supports distinct consumer cursors, this worker inspects `channel/`
-messages using `git show` without calling `read gpt` or `wait gpt`: those commands
-share a common Git-directory cursor with the Build coordination chat. Message
-files remain the durable record. Use short bounded polling during active work.
+The bus now supports distinct `gpt-explore` and `gpt-build` consumer cursors.
+Use `read gpt-explore` and bounded `wait gpt-explore`, never consume the other
+workstream's tasks. Claude owns bus policy and confirmed acknowledgment.
 
-The bus's `wait` command polls; it does not launch an agent or create a persistent
-repair daemon. This workflow runs while an agent session is active. Do not describe
-it as unattended execution until a durable worker and wake-up mechanism are installed.
+The active Codex heartbeat `explore-geometry-and-claude-repair-worker` resumes
+this chat every 30 minutes. The bus itself only carries messages; the Codex
+scheduler supplies the unattended worker. Local execution depends on workspace
+and scheduler availability. Continue from `docs/agents/explore-progress.md`.

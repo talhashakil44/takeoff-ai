@@ -154,7 +154,7 @@ export function layerElement(
   return {
     ...e,
     shape:
-      shape.type === "run"
+      (shape.type === "run" || shape.type === "axis")
         ? { ...shape, points: shape.points.map(map) }
         : shape.type === "surface"
           ? {
@@ -162,6 +162,8 @@ export function layerElement(
               ring: shape.ring.map(map),
               holes: shape.holes.map((h) => h.map(map)),
             }
+          : shape.type === "locator"
+            ? { ...shape, at: map(shape.at) }
           : {
               ...shape,
               at: map(shape.at),

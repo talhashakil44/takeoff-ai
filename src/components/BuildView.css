@@ -306,3 +306,27 @@
 }
 
 .bld-placement-filter { width:calc(100% - 24px); margin:0 12px 10px; padding:8px; border:1px solid #344253; border-radius:6px; color:#d8e4f2; background:#1a2634; font:inherit; }
+
+/* The target verdict: fits only with (unpriced) recovery changes, and a start already past. */
+.bld-feas.stretched {
+  background: rgba(255, 179, 64, 0.16);
+  color: #ffc56b;
+}
+.bld-feas.past {
+  background: rgba(255, 179, 64, 0.1);
+  color: #f2c27a;
+  font-weight: 500;
+}
+.bld-feas em {
+  font-style: normal;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.bld-allowance b { display: flex; align-items: baseline; gap: 6px; }
+.bld-allowance b .link-button { margin-left: auto; }
+.bld-allowance input.bld-unit { width: 4.5em; margin-left: 4px; }
+.bld-allowance p { margin: 2px 0 0; }
+.bld-allowance label.check { display: inline-flex; align-items: center; gap: 6px; }
+.bld-allowance label.check input { width: auto; margin: 0; }
+.bld-allowance.suggested { border-style: dashed; }

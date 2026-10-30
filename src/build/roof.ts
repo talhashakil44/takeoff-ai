@@ -4,10 +4,61 @@ import { gridAxes, registerSheets, type DrawingTexts } from './building';
 import type { BuildModel, SourceRef } from './types';
 export type DrawingLines = Record<string, Segment[]>;
 
+/** An outer pair of repeated grid bubbles. Roof outlines are too easily confused with
+ * dimension and section lines, so this deliberately gives a labelled plan-area estimate. */
+function outerGrid(texts: DrawingTexts[string], pattern: RegExp, axis: 'x' | 'y', width: number, height: number) {
+  const labels = new Map<string, typeof texts>();
+  for (const t of texts) {
+    const label = t.str.trim();
+    if (pattern.test(label) && t.cx < width * 0.87)
+      labels.set(label, [...(labels.get(label) ?? []), t]);
+  }
+  return [...labels.values()].flatMap((ts) => {
+    for (const a of ts) for (const b of ts) {
+      const along = axis === 'x' ? Math.abs(a.cy - b.cy) : Math.abs(a.cx - b.cx);
+      const across = axis === 'x' ? Math.abs(a.cx - b.cx) : Math.abs(a.cy - b.cy);
+      if (along > (axis === 'x' ? height : width) * 0.25 && across < 5)
+        return [{ at: axis === 'x' ? (a.cx + b.cx) / 2 : (a.cy + b.cy) / 2 }];
+    }
+    return [];
+  }).sort((a, b) => a.at - b.at);
+}
+
+/** Derived roof plan area from registered outer x-grids. An R2 well stays within the
+ * total until its own perimeter can be located; no fabricated roof-type split. */
+export function recoverRoofPlanArea(model: BuildModel, project: Project, texts: DrawingTexts, registration = registerSheets(project, texts)) {
+  const plans = project.sheets.filter((s) => !s.superseded && /ROOF PLAN/i.test(s.title ?? '') && s.metersPerPoint && registration[s.id]);
+  for (const sheet of plans) {
+    const ts = texts[sheet.id] ?? [];
+    const axes = gridAxes(ts, sheet.width, sheet.height);
+    if (Object.keys(axes).filter((k) => axes[k].axis === 'x').length < 3 ||
+        Object.keys(axes).filter((k) => axes[k].axis === 'y').length < 3) continue;
+    const xx = outerGrid(ts, /^[A-Z]x$/i, 'x', sheet.width, sheet.height);
+    const yy = outerGrid(ts, /^(?:[1-9]|1[0-9])x$/i, 'y', sheet.width, sheet.height);
+    if (xx.length < 2 || yy.length < 2) continue;
+    const x0 = xx[0].at, x1 = xx.at(-1)!.at, y0 = yy[0].at, y1 = yy.at(-1)!.at;
+    const innerX = Object.values(axes).filter((a) => a.axis === 'x').map((a) => a.at);
+    const innerY = Object.values(axes).filter((a) => a.axis === 'y').map((a) => a.at);
+    if (x0 > Math.min(...innerX) || x1 < Math.max(...innerX) ||
+        y0 > Math.min(...innerY) || y1 < Math.max(...innerY)) continue;
+    const areaM2 = (x1 - x0) * (y1 - y0) * sheet.metersPerPoint! ** 2;
+    if (!Number.isFinite(areaM2) || areaM2 < 30 || areaM2 > 100_000) continue;
+    const well = ts.some((t) => /^R2[A-Z]?$/i.test(t.str.trim()) && t.cx > x0 && t.cx < x1 && t.cy > y0 && t.cy < y1);
+    model.roofPlan = {
+      areaM2,
+      basis: 'inferred',
+      source: { kind: 'sheet', id: sheet.id, page: sheet.page, label: sheet.name, box: [x0, y0, x1, y1] },
+      why: `Roof plan area inferred from registered outer grid extents on ${sheet.name}; roof edges and slope are unverified${well ? ', and the R2 roof well is included in the total because its perimeter is not separately registered' : ''}.`,
+    };
+    return;
+  }
+}
+
 /** Recover a single-pitch roof only when elevation linework, datums and plan grids agree.
  * No project names, assumed slope directions or fixed elevations are used. */
 export function recoverRoof(model: BuildModel, project: Project, texts: DrawingTexts, lines: DrawingLines, origin: [number, number]) {
   const registration = registerSheets(project, texts);
+  recoverRoofPlanArea(model, project, texts, registration);
   const plans = project.sheets.filter((s) => registration[s.id]);
   const plan = plans.sort((a, b) => registration[b.id].grids.length - registration[a.id].grids.length)[0];
   if (!plan?.metersPerPoint) return;

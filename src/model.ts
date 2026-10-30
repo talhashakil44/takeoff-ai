@@ -138,9 +138,15 @@ export interface Measurement {
   /** Cutouts subtracted from an area measurement. */
   holes: Pt[][];
   /** Made by the automatic wall or room takeoff, so a re-run can replace it; 'ai' was added by an AI over MCP, to review. */
-  source?: 'walls' | 'rooms' | 'legend' | 'sprinklers' | 'ceilings' | 'symbols' | 'windows' | 'runs' | 'trades' | 'demolition' | 'ai';
+  source?: 'walls' | 'rooms' | 'legend' | 'sprinklers' | 'ceilings' | 'symbols' | 'windows' | 'runs' | 'trades' | 'demolition' | 'foundations' | 'structure' | 'site' | 'pipes' | 'ducts' | 'envelope' | 'etags' | 'doors' | 'ai';
   /** A name for this takeoff, e.g. the room it covers ("112 RECEIVING & GEN. STORAGE"). */
   label?: string;
+  /**
+   * A run's length as the drawing writes it, in metres ("80.2m - 75mmØ HDPE SANITARY FORCEMAIN"
+   * on a civil plan): the quantity, instead of the drawn line's length. The line then only marks
+   * where the label is. Cleared when the run is redrawn by hand.
+   */
+  statedLength?: number;
   /**
    * For a filled room: how much of its outline crosses door and window openings, in sheet
    * points. Base and wall finishes leave it out. Cleared when the outline is edited by hand.

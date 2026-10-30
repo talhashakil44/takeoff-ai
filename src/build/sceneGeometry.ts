@@ -6,6 +6,29 @@ import type { BuildElement } from './types';
 export function geometryOf(e: BuildElement): THREE.BufferGeometry | null {
   const s = e.shape;
   if (!s) return null;
+  if (s.type === 'locator') {
+    const marker = new THREE.SphereGeometry(0.16, 8, 6);
+    marker.translate(s.at[0], s.z + 0.16, s.at[1]);
+    return marker;
+  }
+  if (s.type === 'axis') {
+    const parts: THREE.BufferGeometry[] = [];
+    for (let i = 1; i < s.points.length; i++) {
+      const [x0, y0] = s.points[i - 1], [x1, y1] = s.points[i];
+      const from = new THREE.Vector3(x0, s.z, y0), to = new THREE.Vector3(x1, s.z, y1);
+      const direction = to.clone().sub(from), length = direction.length();
+      if (length < 0.001) continue;
+      // A thin scene marker keeps the measured span selectable; its radius is not a member size.
+      const marker = new THREE.CylinderGeometry(0.025, 0.025, length, 6);
+      marker.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize()));
+      marker.translate((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2);
+      parts.push(marker);
+    }
+    if (!parts.length) return null;
+    const g = parts.length === 1 ? parts[0] : mergeGeometries(parts);
+    if (parts.length > 1) for (const p of parts) p.dispose();
+    return g;
+  }
   if (s.type === 'run') {
     const parts: THREE.BufferGeometry[] = [];
     for (const p of runSolids(s)) {

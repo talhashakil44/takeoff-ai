@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keynoteList } from '../src/automate/keynotes';
+import { isDemoPlan, keynoteList, removed } from '../src/automate/keynotes';
 import { blobs, scheduleTags } from '../src/automate/trades';
 import { chainRuns, dashLines, ductSizes, joinRuns, pairParallels, sizeRuns, withoutSymbols } from '../src/fill/runs';
 import type { Segment } from '../src/fill/vectors';
@@ -97,6 +97,33 @@ describe('schedules and keynotes', () => {
     const notes = keynoteList(texts);
     expect(notes.map((n) => n.number)).toEqual(['1', '2', '3']);
     expect(notes[1].text).toBe('REMOVE AND DISPOSE OF EXISTING HOLLOW METAL DOOR AND FRAME. REMOVE EXISTING BULLNOSE BLOCK.');
+  });
+
+  it('reads a note whose number sits beside its middle, and skips legend pointers and note 0', () => {
+    const t = (str: string, x0: number, cy: number) => text(str, x0, cy, 6.2);
+    // Numbers centred on notes of several lines, a blank line between notes.
+    const texts = [
+      t('1', 10, 149), t('Remove door, frame, and hardware complete, and', 30, 141), t('dispose. Enlarge the opening to suit new frame.', 30, 150), t('See Openings Schedule.', 30, 159),
+      t('2', 10, 185), t('Remove door and hardware, and dispose.', 30, 181), t('Existing frame to remain.', 30, 190),
+      t('3', 10, 218), t('Disconnect and remove light fixtures in accordance with', 30, 209), t('Electrical Lighting Plan.', 30, 218), t('See also Electrical documents.', 30, 227),
+      t('4', 10, 248), t('Remove all washrooms accessories, and dispose.', 30, 245),
+      // A symbol legend: pointers to other sheets, one numbered 0.
+      t('0', 400, 140), t('Floor Types, see A000 series Sheets', 420, 140), t('5', 400, 160), t('Building Elevation See A300 series Sheets', 420, 160), t('6', 400, 180), t('Wall Section See A600 series Sheets', 420, 180),
+    ];
+    const notes = keynoteList(texts);
+    expect(notes.map((n) => n.number)).toEqual(['1', '2', '3', '4']);
+    expect(notes[0].text).toBe('Remove door, frame, and hardware complete, and dispose. Enlarge the opening to suit new frame. See Openings Schedule.');
+    expect(notes[2].text.startsWith('Disconnect and remove light fixtures')).toBe(true);
+  });
+
+  it('reads what a removal note removes, and a pointer to removals plans is no removals plan', () => {
+    expect(removed('Remove and dispose floor finish c/w base and make good all wood subfloors and wall substrates')).toBe('floor finish');
+    expect(removed('Remove partitions, and dispose. Make good all subfloors')).toBe('partitions');
+    expect(removed('REMOVE AND DISPOSE OF EXISTING WOOD FLOORING AND BASE.')).toBe('WOOD FLOORING AND BASE');
+    const sheet = { id: 's', name: 'A011', title: 'OBC Matrix and Information', metersPerPoint: 0.03 } as never;
+    const titled = (str: string) => ({ str, cx: 100, cy: 100, w: 200, h: 12.6 }) as PageText;
+    expect(isDemoPlan(sheet, [titled('For Floor Plan Removals see A200 series Sheets')])).toBe(false);
+    expect(isDemoPlan({ ...(sheet as object), name: 'A201', title: 'Basement Floor Removals Plan' } as never, [])).toBe(true);
   });
 
   it('finds each fixture drawn on a demolition layer once', () => {

@@ -92,7 +92,7 @@ export function doorTakeoff(p: Project, found: { sheetId: string; tags: DoorTag[
       const key = `${typeId}|${docOf.get(sheetId)}|${d.number}`;
       if (counted.has(key)) return [];
       counted.add(key);
-      return [{ id: newId(), sheetId, typeId, points: [d.at], holes: [], label: d.number }];
+      return [{ id: newId(), sheetId, typeId, points: [d.at], holes: [], source: 'doors' as const, label: d.number }];
     }),
   );
   if (!added.length) return { message: `All ${total} door tags ${everywhere ? 'on the drawings' : 'on this sheet'} are already counted.` };

@@ -1,221 +1,118 @@
-import type { Activity, BuildModel, PlanSetup, SpecFact } from './types';
+import { tradeByKey } from './extract';
+import type { BuildModel, Issue, PlanSetup, ScopeAllowance, ScopeSuggestion, SpecFact } from './types';
 
-const link = (from: string, why: string) => ({
-  from,
-  why,
-  type: 'FS' as const,
-  lag: 0,
-  basis: 'assumed' as const,
-});
-/** Complete scope is distinct from the takeoff: no invented measurements or quantities. */
-export function completeScope(model: BuildModel, acts: Activity[], setup: PlanSetup, facts: SpecFact[]) {
-  if (!model.floorAreas || !Object.keys(model.floorAreas).length) return;
-  const renovation = model.projectType === 'renovation';
-  const levels = model.levels.filter((l) => model.floorAreas![l.id] > 0);
-  if (renovation) levels.sort((a, b) => b.elevation - a.elevation);
-  const footprint = Math.max(...Object.values(model.floorAreas));
-  const add = (id: string, name: string, area: number, rate: number, predecessors: string[], extra: Partial<Activity> = {}) => {
-    const a: Activity = {
-      id,
-      name,
-      kind: 'work',
-      trade: null,
-      level: null,
-      elements: [],
-      quantities: { 'm²': area },
-      rates: { 'm²': rate },
-      crews: 1,
-      duration: Math.max(1, Math.ceil(area / rate)),
-      durationBasis: 'assumed',
-      durationWhy: `Building scope allowance: ${Math.round(area)} m² / ${rate} m² per crew-day. Confirm scope and production with superintendent.`,
-      deps: predecessors.map((p) => link(p, 'Physical construction prerequisite')),
-      specs: [],
-      sources: [],
-      ...extra,
-    };
-    acts.push(a);
-    return a.id;
-  };
-  const procure = (key: string, name: string, lead: number) =>
-    add(`longlead:${key}`, name, 0, 1, ['mobilize'], {
-      kind: 'procurement',
-      quantities: undefined,
-      rates: undefined,
-      duration: setup.submittalPrepDays.value + setup.reviewDays.value + lead,
-      durationWhy: `Assumed ${lead} working days manufacture/delivery + ${setup.submittalPrepDays.value} preparation + ${setup.reviewDays.value} review. Confirm vendor quotation; not compressible by crews.`,
-    });
-  const steel = renovation ? null : procure('steel', 'Structural frame / timber fabrication', 80);
-  const gear = procure('switchgear', 'Switchgear procurement', 180);
-  const ahu = procure('ahu', 'Air handling equipment procurement', 120);
-  const glazing = procure('glazing', 'Exterior glazing procurement', 100);
-  const enabling = renovation
-    ? add('scope:phasing', 'Occupied building: segregation, protection and phased access', footprint, 100, ['mobilize'])
-    : add('scope:excavation', 'Site preparation and excavation', footprint, 35, ['mobilize'], { weather: 'site' });
-  const foundation = renovation
-    ? add('scope:abatement', 'Survey, selective abatement and clearance', footprint, 50, [enabling])
-    : add('scope:foundations', 'Foundations and below-grade waterproofing', footprint, 20, [enabling], { weather: 'structure' });
-  const underground = add(
-    'scope:underground',
-    renovation ? 'Service isolation and utility alterations' : 'Underground services and backfill',
-    footprint,
-    45,
-    [foundation],
-  );
-  let prev = underground;
-  const frame: string[] = [];
-  for (const l of levels) {
-    const id = `work:structure:${l.id}`;
-    let a = acts.find((a) => a.id === id);
-    if (!a) {
-      add(
-        id,
-        `${renovation ? 'Structural alterations' : 'Structure and slab'} — ${l.name}`,
-        model.floorAreas[l.id],
-        renovation ? 100 : 25,
-        [prev, ...(steel ? [steel] : [])],
-        {
-          trade: 'structure',
-          level: l.id,
-          elements: model.elements
-            .filter((e) => e.origin === 'building' && e.trade === 'structure' && e.level === l.id && e.status !== 'existing')
-            .map((e) => e.id),
-          weather: renovation ? undefined : 'structure',
-        },
-      );
-      a = acts.at(-1)!;
-    } else {
-      a.deps.push(link(prev, 'Supporting structure / underground first'), ...(steel ? [link(steel, 'Structural material on site')] : []));
-      a.allowanceCrewDays = model.floorAreas[l.id] / (renovation ? 100 : 25);
-      if (Math.ceil(a.allowanceCrewDays / (a.crews ?? 1)) > a.duration) a.durationBasis = 'assumed';
-      a.duration = Math.max(a.duration, Math.ceil(a.allowanceCrewDays / (a.crews ?? 1)));
-      a.durationWhy += ` · full floor structural coverage allowance: ${Math.round(model.floorAreas[l.id])} m² / ${renovation ? 100 : 25} m² per crew-day (partial takeoff cannot omit the frame/slab)`;
-      a.weather = renovation ? undefined : 'structure';
-    }
-    a.elements = [
-      ...new Set([
-        ...a.elements,
-        ...model.elements
-          .filter((e) => e.origin === 'building' && e.trade === 'structure' && e.level === l.id && e.status !== 'existing')
-          .map((e) => e.id),
-      ]),
-    ];
-    prev = id;
-    frame.push(id);
-  }
-  const roof = add('scope:roof', 'Roofing, flashing and drainage', footprint, 60, [prev], {
-    trade: 'envelope',
-    weather: 'roof',
-    elements: model.elements
-      .filter((e) => e.origin === 'building' && e.shape?.type === 'surface' && e.trade === 'envelope' && e.status !== 'existing')
-      .map((e) => e.id),
+/** Area can proxy these missing work packages. Count and site work need their own evidence. */
+const AREA_PROXY_TRADES = [
+  'envelope', 'mech-rough', 'elec-rough', 'fire-rough', 'partitions',
+  'ceilings', 'painting', 'flooring', 'finishes',
+] as const;
+
+/** Suggestions have no effect until the user accepts one into edits.setup.allowances. */
+export function suggestScopeAllowances(model: BuildModel, setup: PlanSetup): ScopeSuggestion[] {
+  const unit = model.units === 'metric' ? 'm²' : 'SF';
+  const areaM2 = Object.entries(model.floorAreas ?? {})
+    .filter(([level]) => level !== 'roof' && level !== 'fdn')
+    .reduce((sum, [, area]) => sum + (Number.isFinite(area) && area > 0 ? area : 0), 0);
+  const slabM2 = model.elements
+    .filter((e) => e.origin === 'takeoff' && e.trade === 'structure' && e.level === 'fdn' && /slab on grade/i.test(e.typeName))
+    .reduce((sum, e) => sum + (e.unit === 'm²' ? e.quantity : e.unit === 'SF' ? e.quantity * 0.09290304 : 0), 0);
+  return AREA_PROXY_TRADES.flatMap((key): ScopeSuggestion[] => {
+    const measured = model.elements.some((e) => e.origin === 'takeoff' && e.status !== 'existing' && !e.planningExcluded && (
+      (e.trade === key && (key !== 'envelope' || (/roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF')))) ||
+      (key === 'elec-rough' && e.trade === 'elec-trim' && e.measurementSource === 'etags' && e.unit === 'ea' && e.quantity > 0)
+    ));
+    if (measured || (key === 'envelope' && model.roofPlan) || key in (setup.allowances?.value ?? {})) return [];
+    const referenceAreaM2 = key === 'envelope' ? slabM2 : areaM2;
+    if (referenceAreaM2 <= 0) return [];
+    const quantity = Math.round((model.units === 'metric' ? referenceAreaM2 : referenceAreaM2 / 0.09290304) * 10) / 10;
+    const rate = setup.trades[key]?.value.rates[unit];
+    if (!Number.isFinite(rate) || rate <= 0) return [];
+    const name = tradeByKey.get(key)?.name ?? key;
+    return [{
+      key,
+      allowance: { quantity, unit, rate, provisional: true, ...(key === 'envelope' ? {} : { distribution: 'gfa-by-level' as const }) },
+      referenceAreaM2,
+      areaBasis: 'inferred',
+      rateBasis: 'assumed',
+      why: `${key === 'envelope' ? 'Roof covering' : name} has no measured takeoff. ${quantity} ${unit} is a proxy from ${key === 'envelope' ? 'the measured slab-on-grade footprint (roof area and slope unverified)' : 'recovered gross floor area'}; ${rate} ${unit} per crew-day is an assumed planning rate, not a trade commitment. Review scope and rate before accepting.`,
+    }];
   });
-  const envelope = add(
-    'scope:envelope',
-    renovation ? 'Envelope repairs and glazing replacement' : 'Exterior envelope and glazing',
-    footprint,
-    40,
-    [...frame, glazing],
-    {
-      trade: 'envelope',
-      elements: model.elements
-        .filter((e) => e.origin === 'building' && e.shape?.type === 'run' && e.trade === 'envelope' && e.status !== 'existing')
-        .map((e) => e.id),
-    },
-  );
-  add('ms:weather-tight', 'Weather-tight', 0, 1, [roof, envelope], {
-    kind: 'milestone',
-    duration: 0,
-  });
-  const rates: Record<string, number> = {
-    'mech-rough': 20,
-    'elec-rough': 30,
-    'fire-rough': 60,
-    partitions: 25,
-    ceilings: 45,
-    doors: 80,
-    painting: 60,
-    flooring: 45,
-    'mech-trim': 55,
-    'elec-trim': 55,
-    'fire-heads': 100,
+}
+
+const allowanceValue = (value: unknown): value is ScopeAllowance => {
+  if (!value || typeof value !== 'object') return false;
+  const a = value as Partial<ScopeAllowance>;
+  return Number.isFinite(a.quantity) && a.quantity! > 0 &&
+    typeof a.unit === 'string' && !!a.unit.trim() &&
+    Number.isFinite(a.rate) && a.rate! > 0 &&
+    typeof a.provisional === 'boolean';
+};
+
+/** Valid, active user allowances. Zero quantities are draft rows and add no work. */
+export function activeAllowances(setup: PlanSetup): [string, ScopeAllowance][] {
+  const entries = setup.allowances?.value;
+  if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return [];
+  return Object.entries(entries)
+    .filter(([key, value]) => (key === 'foundations' || tradeByKey.has(key)) && allowanceValue(value))
+    .map(([key, value]) => [key, { ...value, unit: value.unit.trim() }]);
+}
+
+/** Missing scope stays a review item; only user-entered allowances create extra work. */
+export function planningScopeIssues(model: BuildModel, facts: SpecFact[], setup: PlanSetup): Issue[] {
+  const issues: Issue[] = [];
+  const excluded = model.elements.filter((e) => e.origin === 'takeoff' && e.planningExcluded);
+  const explanations: Record<string, string> = {
+    'egress-demolition': 'Egress-diagram traces do not establish demolition work. Check the actual removals plan before adding them.',
+    'unverified-demo-type': 'These numbered labels are empty or join drawing reference text rather than naming a removal. Re-read the demolition notes before assigning a work type.',
+    'room-context': 'Generic room polygons are floor-area context; no ceiling or floor-finish installation is inferred from them.',
+    'elevation-window': 'Elevation glazing marks may repeat plan window assemblies and do not establish a building level. Reconcile opening IDs and the assembly/lite count basis.',
+    'open-ceiling': 'An open or unshown ceiling area is not new ceiling installation.',
+    'unverified-ceiling-type': 'A ceiling area typed from concatenated general notes needs its actual ceiling mark confirmed.',
+    'duplicate-roof-view': 'Coincident generic equipment marks on two sheet views count once on the roof plan. Verify the equipment service and symbol legend.',
   };
-  if (renovation) for (const a of acts) a.deps = a.deps.filter((d) => !/Same crew, level after level/.test(d.why));
-  for (const [i, l] of levels.entries()) {
-    for (const [trade, rate] of Object.entries(rates)) {
-      const id = `work:${trade}:${l.id}`;
-      if (!acts.some((a) => a.id === id))
-        add(id, `${trade.replaceAll('-', ' ')} — ${l.name}`, model.floorAreas[l.id], rate, [], { trade, level: l.id });
-      const a = acts.find((a) => a.id === id)!;
-      if (a.elements.length) {
-        a.allowanceCrewDays = model.floorAreas[l.id] / rate;
-        const allowance = Math.ceil(a.allowanceCrewDays / (a.crews ?? 1));
-        if (allowance > a.duration) {
-          a.duration = allowance;
-          a.durationBasis = 'assumed';
-          a.durationWhy += ` · incomplete coverage allowance: ${Math.round(model.floorAreas[l.id])} m² / ${rate} m² per crew-day; greater of measured work and full floor coverage`;
-        }
-      }
-      if (i > 0 && !setup.levelsInParallel.value && !a.deps.some((d) => d.from === `work:${trade}:${levels[i - 1].id}`))
-        a.deps.push(link(`work:${trade}:${levels[i - 1].id}`, 'Same crew, level after level'));
-      if (['partitions', 'mech-rough', 'elec-rough', 'fire-rough'].includes(trade))
-        a.deps.push(
-          link(`work:structure:${l.id}`, 'Structure released'),
-          link(
-            renovation ? `work:structure:${l.id}` : 'ms:weather-tight',
-            renovation ? 'Existing enclosure retained' : 'Dry interior work',
-          ),
-        );
-      if (trade === 'mech-trim') a.deps.push(link(ahu, 'Equipment delivered'));
-      if (trade === 'elec-trim') a.deps.push(link(gear, 'Equipment delivered'));
-    }
-    const rough = ['mech-rough', 'elec-rough', 'fire-rough', 'partitions'].map((t) => `work:${t}:${l.id}`);
-    const inspect = add(`scope:inspection:${l.id}`, `Concealed work inspection — ${l.name}`, 0, 1, rough, {
-      kind: 'testing',
-      duration: setup.testingDays.value,
-      level: l.id,
-      durationWhy: setup.testingDays.why,
+  for (const [reason, text] of Object.entries(explanations)) {
+    const matches = excluded.filter((e) => e.planningExcluded === reason);
+    if (!matches.length) continue;
+    issues.push({
+      id: `takeoff-review:${reason}`, severity: 'warning',
+      text: `${matches.length} saved takeoff${matches.length === 1 ? '' : 's'} excluded from new-work planning. ${text}`,
+      refs: matches.map((e) => e.id), sources: matches.map((e) => e.sources[0]),
     });
-    for (const t of ['ceilings', 'painting', 'doors'])
-      acts.find((a) => a.id === `work:${t}:${l.id}`)!.deps.push(link(inspect, 'Inspect before covering'));
-    for (const t of ['flooring', 'mech-trim', 'elec-trim', 'fire-heads'])
-      acts.find((a) => a.id === `work:${t}:${l.id}`)!.deps.push(link(`work:ceilings:${l.id}`, 'Ceilings complete'));
-    acts.find((a) => a.id === `work:flooring:${l.id}`)!.deps.push(link(`work:painting:${l.id}`, 'Paint before final flooring'));
-    if (renovation && i > 0)
-      acts
-        .find((a) => a.id === `work:partitions:${l.id}`)!
-        .deps.push(link(`work:flooring:${levels[i - 1].id}`, 'Occupied building phase handover before next fit-out'));
   }
+  if (excluded.some((e) => e.planningExcluded === 'unverified-demo-type')) {
+    const shiftedNotes = model.elements.filter((e) => e.origin === 'takeoff' && e.measurementSource === 'demolition' &&
+      /^A20[1-4]$/i.test(e.sources[0]?.label ?? '') && /^demo\s*\d+\s*:/i.test(e.typeName));
+    const provisional = shiftedNotes.filter((e) => !e.planningExcluded).length;
+    if (shiftedNotes.length) issues.push({
+      id: 'takeoff-review:shifted-demo-keynotes', severity: 'warning',
+      text: `${shiftedNotes.length} saved A201–A204 demolition markers use note-numbered type labels from an extraction that shifted some keynote text by one line. Their marked positions remain in the source takeoff, but the specific removal types, units and production basis need drawing review; ${provisional} labels that sound like removals remain provisional in demolition work.`,
+      refs: shiftedNotes.map((e) => e.id), sources: shiftedNotes.map((e) => e.sources[0]),
+    });
+  }
+  const entries = setup.allowances?.value;
+  if (entries && typeof entries === 'object' && !Array.isArray(entries))
+    for (const [key, value] of Object.entries(entries)) {
+      if ((key === 'foundations' || tradeByKey.has(key)) && value && typeof value === 'object' && (value as ScopeAllowance).quantity === 0) continue;
+      if ((key !== 'foundations' && !tradeByKey.has(key)) || !allowanceValue(value))
+        issues.push({ id: `scope-allowance-invalid:${key}`, severity: 'warning', text: `${key}: incomplete scope allowance; enter a positive quantity and crew-day rate, a unit, and its provisional status before it can enter the plan.` });
+      else if (value.provisional)
+        issues.push({ id: `scope-allowance-provisional:${key}`, severity: 'warning', text: `${key}: ${value.quantity} ${value.unit} at ${value.rate} ${value.unit} per crew-day is an unmeasured, provisional scope allowance. Confirm it against the drawings and trade before relying on the finish date.` });
+    }
   const phase = facts.find((f) => f.key === 'phaseDate');
   if (phase)
-    add(
-      'ms:phase-one',
-      'Phase one occupancy (whole-floor conservative scope)',
-      0,
-      1,
-      acts
-        .filter(
-          (a) =>
-            a.kind === 'work' &&
-            ['L3', 'L2', 'L1'].includes(a.level ?? '') &&
-            /trim|flooring|doors|painting|ceilings|fire-heads/.test(a.trade ?? ''),
-        )
-        .map((a) => a.id),
-      {
-        kind: 'milestone',
-        duration: 0,
-        requiredBy: String(phase.value),
-        sources: [phase.source],
-        durationWhy:
-          'Contract phase-one includes upper floors and ground-floor entry/dining; whole ground floor used conservatively until zones are assigned.',
-      },
-    );
-  for (const a of acts) a.deps = a.deps.filter((d, i, ds) => ds.findIndex((x) => x.from === d.from) === i);
-  add('scope:site-completion', 'Final grading, paving and landscape reinstatement', footprint, 65, [roof], {
-    weather: 'site',
-    trade: 'site',
-  });
-  if (model.elements.some((e) => /elevator|lift/i.test(e.name))) {
-    const lift = procure('elevator', 'Elevator fabrication', 160);
-    add('scope:elevator', 'Elevator installation and certification', footprint, 60, [prev, lift], { trade: 'other' });
+    issues.push({
+      id: 'phase-scope-unmapped',
+      severity: 'warning',
+      text: `The specification gives a phase occupancy date of ${phase.value}, but the phase's rooms or zones are not mapped to takeoffs. Assign the actual phase scope before checking that milestone; no whole-floor work has been inferred.`,
+      sources: [phase.source],
+    });
+  for (const level of model.levels.filter((l) => l.id !== 'roof' && l.id !== 'fdn')) {
+    if ((model.floorAreas?.[level.id] ?? 0) > 0) continue;
+    issues.push({
+      id: `scope-floor-evidence:${level.id}`,
+      severity: 'warning',
+      text: `${level.name}: no defensible exterior boundary or gross floor area was recovered. Review the drawing and measured work; scheduling cannot infer missing floor trades.`,
+    });
   }
+  return issues;
 }

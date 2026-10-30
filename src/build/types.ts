@@ -38,8 +38,14 @@ export interface Level {
 }
 
 export type ElementShape =
+  /** Located plan span only. A symbolic scene marker, never a physical IFC solid. */
+  | { type: 'axis'; points: [number, number][]; z: number }
+  /** Grid-located counted item. Scene marker and IFC placement only; no invented physical section. */
+  | { type: 'locator'; at: [number, number]; z: number }
   /** A run (wall, duct, pipe): a polyline extruded to a height. */
   | { type: 'run'; points: [number, number][]; z0: number; height: number; thickness: number; topPlane?: [number, number, number];
+      /** Inferred square-turn fills shared by viewer and IFC for separate measured wall runs. */
+      cornerFills?: { at: [number, number]; incoming: [number, number]; turn: number; size: number }[];
       openings?: {
         elementId: string;
         segment: number;
@@ -66,13 +72,19 @@ export interface BuildElement {
   /** Quantity in project units, with its unit (LF, SF, ea, m, m²). */
   quantity: number;
   unit: string;
+  /** Quantity used to plan production when an assembly gives a better unit than the primary takeoff. */
+  production?: { quantity: number; unit: string };
   typeId: string;
   typeName: string;
   division: string;
   measurementId: string;
+  /** Original takeoff source, so tag-derived planning does not mistake other counts for circuit tags. */
+  measurementSource?: string;
   opening?: { width:number; height:number; sill:number };
   origin?: "takeoff" | "building";
   status?: "existing" | "new" | "demolished";
+  /** Source takeoff is retained for review, but has no verified new-work quantity in the plan. */
+  planningExcluded?: string;
   sheetId: string;
   /** Spec sections it is governed by (keys), with how they were linked. */
   specs: { key: string; basis: Basis }[];
@@ -85,6 +97,8 @@ export interface BuildModel {
   version: number;
   projectType?: "new" | "renovation";
   floorAreas?: Record<string, number>;
+  /** Roof-plan grid extent, a planning quantity rather than a measured roof covering. */
+  roofPlan?: { areaM2: number; basis: 'inferred'; source: SourceRef; why: string };
   /** Hash of the project data it was made from (sheets, takeoffs, specs, settings). */
   sourceHash: string;
   units: 'metric' | 'imperial';
@@ -175,6 +189,28 @@ export interface TradeSetup {
   leadDays: number;
 }
 
+/** User-entered scope that has not been taken off. No source element or geometry is implied. */
+export interface ScopeAllowance {
+  quantity: number;
+  unit: string;
+  /** Quantity installed by one crew in one working day. */
+  rate: number;
+  provisional: boolean;
+  /** Accepted gross-floor-area proxy: plan each level's share as a separate work package. */
+  distribution?: 'gfa-by-level';
+}
+
+/** An optional planning proxy, shown for user review before it enters setup. */
+export interface ScopeSuggestion {
+  key: string;
+  allowance: ScopeAllowance;
+  /** The area used for the proxy, in m²: gross floors or a measured slab footprint. */
+  referenceAreaM2: number;
+  areaBasis: 'inferred';
+  rateBasis: 'assumed';
+  why: string;
+}
+
 export interface PlanSetup {
   start: Assumption<string>;
   /** The finish wanted: a target, never a reason to compress work arbitrarily. */
@@ -189,17 +225,21 @@ export interface PlanSetup {
   floorToFloor: Assumption;
   /** Different trades may work on one level at once; the same trade's crews go level by level. */
   levelsInParallel: Assumption<boolean>;
+  /** Require a provisional weather-tight milestone before interior finish work. */
+  dryInBeforeFinishes: Assumption<boolean>;
   testingDays: Assumption;
   commissioningDays: Assumption;
   closeoutDays: Assumption;
   trades: Record<string, Assumption<TradeSetup>>;
+  /** Keyed by a Build It trade, or `foundations` for work before above-grade structure. */
+  allowances: Assumption<Record<string, ScopeAllowance>>;
   /** Which milestone the target is for: the documented substantial performance date, or the project's finish. */
   targetFor: 'ms:substantial' | 'ms:finish';
 }
 
 /** What the user changed: kept with the project, applied over each rebuild. */
 export interface BuildEdits {
-  setup?: Partial<Record<keyof PlanSetup, unknown>> & { trades?: Record<string, Partial<TradeSetup>> };
+  setup?: Partial<Record<keyof PlanSetup, unknown>> & { trades?: Record<string, Partial<TradeSetup>>; allowances?: Record<string, ScopeAllowance> };
   activities?: Record<string, { duration?: number; crews?: number; addDeps?: { from: string; lag?: number }[]; dropDeps?: string[] }>;
   /** A plan sheet's level, set by hand. */
   levels?: Record<string, string>;
@@ -228,6 +268,8 @@ export interface Scheduled {
 export interface Feasibility {
   changes?: string[];
   earliestFinish: string;
+  /** Unaccelerated finish for the same target milestone and setup, before recovery changes. */
+  baselineFinish?: string;
   target: string | null;
   /** Working days past the target (0 when it fits). */
   overBy: number;

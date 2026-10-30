@@ -1,14 +1,12 @@
 import type { SpecSection } from '../spec/parse';
-import { completeScope } from './scope';
 import { TRADES, tradeByKey } from './extract';
-import type { Activity, Assumption, Basis, BuildEdits, BuildModel, Dependency, PlanSetup, SourceRef, SpecFact, TradeSetup } from './types';
+import { activeAllowances } from './scope';
+import type { Activity, Assumption, Basis, BuildEdits, BuildModel, Dependency, PlanSetup, ScopeAllowance, SourceRef, SpecFact, TradeSetup } from './types';
 
 /**
- * The plan: activities for everything the project needs, not only what has a shape —
- * submittals and their review, procurement, the work level by level, testing, commissioning
- * and closeout — each tied to the elements, quantities and spec sections it covers, with
- * explicit links between them. Durations come from quantities and production rates, from the
- * specification, or from stated assumptions; nothing is shortened to meet a target.
+ * The plan: activities for measured work, including items that cannot be placed in 3D,
+ * with linked submittals, procurement, testing and closeout. Missing trades and phase zones
+ * are review issues; a floor outline alone does not authorize work or a vendor lead time.
  */
 
 // Production per crew per day (imperial units; metric converted), lead times in working days.
@@ -29,7 +27,7 @@ const DEFAULTS: Record<string, { LF: number; SF: number; ea: number; lead: numbe
   specialties: { LF: 40, SF: 300, ea: 8, lead: 30, crews: 1 },
   'mech-trim': { LF: 80, SF: 400, ea: 10, lead: 30, crews: 1 },
   'elec-trim': { LF: 150, SF: 600, ea: 25, lead: 30, crews: 1 },
-  site: { LF: 150, SF: 1500, ea: 10, lead: 10, crews: 1 },
+  site: { LF: 150, SF: 1500, ea: 10, lead: 0, crews: 1 },
   other: { LF: 100, SF: 500, ea: 12, lead: 15, crews: 1 },
 };
 
@@ -71,7 +69,13 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
   for (const t of TRADES) {
     const d = DEFAULTS[t.key] ?? DEFAULTS.other;
     const rates: Record<string, number> = metric ? { m: Math.round(d.LF * 0.3048), 'm²': Math.round(d.SF * 0.0929), ea: d.ea } : { ft: d.LF, SF: d.SF, ea: d.ea };
-    trades[t.key] = a({ rates, crews: d.crews, leadDays: d.lead }, 'assumed', 'Typical production and lead time: confirm with the trade');
+    if (t.key === 'structure') rates[metric ? 'm³' : 'CY'] = metric ? 8 : 10;
+    if (t.key === 'site') rates[metric ? 'm³' : 'CY'] = metric ? 50 : 65;
+    trades[t.key] = a({ rates, crews: d.crews, leadDays: d.lead }, 'assumed', t.key === 'structure'
+      ? 'Planning allowances: 10 members or 8 m³ of foundation concrete per metric crew-day (10 CY imperial); confirm member complexity, forming, reinforcement and crew size with the trade'
+      : t.key === 'elec-rough'
+        ? 'Assumed 30 tagged electrical points per crew-day for rough-in, with 15 working days lead time; confirm device complexity, circuits, containment and crew size with the trade'
+        : 'Typical production and lead time: confirm with the trade');
   }
   return {
     start: startFact ? a(start, 'documented', 'Contract start in the specification', startFact.source) : a(start, 'assumed', 'Next working day: set the real start'),
@@ -86,10 +90,12 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
     resubmitReviewDays: review ? a(reviewDays, 'documented', `Same review period (${review.source.label})`, review.source) : a(10, 'assumed', 'Same as the first review'),
     floorToFloor: a(metric ? 3.6 : 12, 'assumed', 'Typical floor-to-floor height'),
     levelsInParallel: a(false, 'assumed', 'One crew per trade, going level by level'),
+    dryInBeforeFinishes: a(true, 'assumed', 'Interior finishes start after an assumed weather-tight milestone; confirm enclosure and timing on site'),
     testingDays: a(3, 'assumed', 'Field testing and inspection per trade'),
     commissioningDays: a(10, 'assumed', 'Commissioning of building systems'),
     closeoutDays: a(15, 'assumed', 'Closeout documents, O&M manuals, as-builts'),
     trades,
+    allowances: a<Record<string, ScopeAllowance>>({}, 'unknown', 'No unmeasured scope allowances entered'),
   };
 }
 
@@ -127,16 +133,22 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
   // The work, by trade and level.
   const levelOrder = [...model.levels.map((l) => l.id), null];
   const byTL = new Map<string, typeof model.elements>();
-  for (const e of model.elements.filter(e => e.origin !== 'building' && e.status !== 'existing')) {
+  for (const e of model.elements.filter(e => e.origin !== 'building' && e.status !== 'existing' && !e.planningExcluded)) {
     const k = `${e.trade}|${e.level ?? ''}`;
     byTL.set(k, [...(byTL.get(k) ?? []), e]);
   }
-  const workId = (t: string, l: string | null) => `work:${t}:${l ?? 'unplaced'}`;
-  const tradesUsed = TRADES.filter((t) => model.elements.some((e) => e.trade === t.key));
+  // Device tags are measured finish points. They also provide a count proxy for
+  // rough-in when no rough-in takeoff exists on that level. A saved user allowance
+  // takes precedence, so old GFA allowances and these counts never stack.
+  const taggedRough = activeAllowances(setup).some(([key]) => key === 'elec-rough') ? [] : model.elements.filter((e) =>
+    e.origin === 'takeoff' && e.status !== 'existing' && !e.planningExcluded && e.measurementSource === 'etags' &&
+    e.trade === 'elec-trim' && e.unit === 'ea' && Number.isFinite(e.quantity) && e.quantity > 0);
+  const workId = (t: string, l: string | null) => `work:${t}:${l ?? (t === 'site' ? 'site' : 'unplaced')}`;
+  const tradesUsed = TRADES.filter((t) => [...byTL.keys()].some((key) => key.startsWith(`${t.key}|`)) || (t.key === 'elec-rough' && taggedRough.length > 0));
   const levelName = (l: string | null) => (l ? model.levels.find((x) => x.id === l)?.name ?? l : 'Unplaced (level not known)');
   for (const t of tradesUsed) {
     const setupT = setup.trades[t.key]?.value ?? { rates: {}, crews: 1, leadDays: 0 };
-    const specKeys = [...new Set(model.elements.filter((e) => e.trade === t.key).flatMap((e) => e.specs.map((s) => s.key)))];
+    const specKeys = [...new Set([...byTL.values()].flat().filter((e) => e.trade === t.key).flatMap((e) => e.specs.map((s) => s.key)))];
     const specs = specKeys.map((k) => secByKey.get(k)).filter((s): s is SpecSection => !!s);
     // Submittals: what the trade's spec sections ask for, reviewed, maybe resubmitted, then ordered and delivered.
     const asked = specs.filter((s) => s.articles.some((x) => SUBMIT.test(x.title)));
@@ -175,48 +187,87 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     // Work on each level.
     let prevLevel: string | null = null;
     for (const l of levelOrder) {
-      const els = byTL.get(`${t.key}|${l ?? ''}`);
-      if (!els?.length) continue;
-      const quantities: Record<string, number> = {};
-      for (const e of els) quantities[e.unit] = (quantities[e.unit] ?? 0) + e.quantity;
-      const crews = Math.max(1, setupT.crews);
-      let crewDays = 0;
-      const missing: string[] = [];
-      for (const [u, q] of Object.entries(quantities)) {
-        const r = setupT.rates[u];
-        if (r && r > 0) crewDays += q / r;
-        else if (q > 0) missing.push(u);
+      const all = byTL.get(`${t.key}|${l ?? ''}`) ?? [];
+      const proxyTags = t.key === 'elec-rough' && !all.length ? taggedRough.filter((e) => e.level === l) : [];
+      const groups = t.key === 'site' && l === null ? [
+        { id: 'work:site:earthwork', name: 'Site work — Excavation', els: all.filter((e) => /^\s*31\b/.test(e.division)) },
+        { id: workId(t.key, l), name: t.name, els: all.filter((e) => !/^\s*31\b/.test(e.division)) },
+      ] : [{ id: workId(t.key, l), name: `${t.name} — ${levelName(l)}`, els: all }];
+      for (const { id, name, els } of groups) {
+        const tags = t.key === 'elec-rough' && !els.length ? proxyTags : [];
+        if (!els.length && !tags.length) continue;
+        const workElements = tags.length ? tags : els;
+        const quantities: Record<string, number> = {};
+        for (const e of workElements) {
+          const q = e.production ?? e;
+          quantities[q.unit] = (quantities[q.unit] ?? 0) + q.quantity;
+        }
+        const crews = Math.max(1, setupT.crews);
+        const rates = id === 'work:site:earthwork'
+          ? Object.fromEntries(Object.entries(setupT.rates).filter(([unit]) => unit === 'm³' || unit === 'CY'))
+          : setupT.rates;
+        let crewDays = 0;
+        const missing: string[] = [];
+        for (const [u, q] of Object.entries(quantities)) {
+          const r = rates[u];
+          if (r && r > 0) crewDays += q / r;
+          else if (q > 0) missing.push(u);
+        }
+        const duration = Math.max(1, Math.ceil(crewDays / crews));
+        const qty = Object.entries(quantities).map(([u, q]) => `${Math.round(q).toLocaleString()} ${u}`).join(' + ');
+        const earthwork = id === 'work:site:earthwork';
+        const deps: Dependency[] = earthwork
+          ? [dep('mobilize', 'Excavation after mobilization')]
+          : [dep(before, before === 'mobilize' ? 'After mobilization' : 'Material approved and on site', before === 'mobilize' ? 'assumed' : 'documented')];
+        if (!earthwork && before !== 'mobilize') deps.push(dep('mobilize', 'Site set up first'));
+        if (prevLevel && !setup.levelsInParallel.value) deps.push(dep(workId(t.key, prevLevel), `Same crew, level after level (${setup.levelsInParallel.why})`));
+        add({
+          id,
+          name,
+          kind: 'work',
+          trade: t.key,
+          level: l,
+          elements: workElements.map((e) => e.id),
+          quantities,
+          rates,
+          crews,
+          duration,
+          durationBasis: tags.length ? 'assumed' : 'inferred',
+          durationWhy: `${tags.length ? 'Rough-in proxy from measured electrical device tags: ' : ''}${qty} at ${Object.entries(rates)
+            .filter(([u]) => quantities[u])
+            .map(([u, r]) => `${r} ${u}`)
+            .join(' / ')} per crew-day, ${crews} crew${crews === 1 ? '' : 's'}${tags.length ? ' · rate and device-to-rough-in equivalence assumed; confirm with electrical trade' : ''}${missing.length ? ` · no rate for ${missing.join(', ')}` : ''}`,
+          deps,
+          specs: specKeys,
+          sources: [],
+        });
+        prevLevel = l;
       }
-      const duration = Math.max(1, Math.ceil(crewDays / crews));
-      const qty = Object.entries(quantities).map(([u, q]) => `${Math.round(q).toLocaleString()} ${u}`).join(' + ');
-      const deps: Dependency[] = [dep(before, before === 'mobilize' ? 'After mobilization' : 'Material approved and on site', before === 'mobilize' ? 'assumed' : 'documented')];
-      if (before !== 'mobilize') deps.push(dep('mobilize', 'Site set up first'));
-      if (prevLevel && !setup.levelsInParallel.value) deps.push(dep(workId(t.key, prevLevel), `Same crew, level after level (${setup.levelsInParallel.why})`));
+    }
+    if (t.key === 'envelope' && model.projectType !== 'renovation' && model.roofPlan &&
+        !Object.hasOwn(setup.allowances?.value ?? {}, 'envelope') &&
+        !model.elements.some((e) => e.origin === 'takeoff' && e.status !== 'existing' && e.trade === 'envelope' &&
+          /roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF'))) {
+      const unit = model.units === 'metric' ? 'm²' : 'SF';
+      const quantity = model.units === 'metric' ? model.roofPlan.areaM2 : model.roofPlan.areaM2 / 0.09290304;
+      const rate = setupT.rates[unit];
+      const crews = Math.max(1, setupT.crews);
+      const prior = acts.find((x) => x.id === 'work:envelope:roof')?.id ?? before;
+      const structure = acts.find((x) => x.id === 'work:structure:roof')?.id;
       add({
-        id: workId(t.key, l),
-        name: `${t.name} — ${levelName(l)}`,
-        kind: 'work',
-        trade: t.key,
-        level: l,
-        elements: els.map((e) => e.id),
-        quantities,
-        rates: setupT.rates,
-        crews,
-        duration,
+        id: 'work:envelope:roof-covering',
+        name: 'Roof covering — derived plan area',
+        kind: 'work', trade: 'envelope', level: 'roof', elements: [],
+        quantities: { [unit]: quantity }, rates: { [unit]: rate }, crews,
+        duration: Math.max(1, Math.ceil(quantity / (rate > 0 ? rate : quantity) / crews)),
         durationBasis: 'inferred',
-        durationWhy: `${qty} at ${Object.entries(setupT.rates)
-          .filter(([u]) => quantities[u])
-          .map(([u, r]) => `${r} ${u}`)
-          .join(' / ')} per crew-day, ${crews} crew${crews === 1 ? '' : 's'}${missing.length ? ` · no rate for ${missing.join(', ')}` : ''}`,
-        deps,
-        specs: specKeys,
-        sources: [],
+        durationWhy: `${Math.round(quantity * 10) / 10} ${unit} from registered roof-plan outer grids at ${rate ?? '?'} ${unit} per crew-day, ${crews} crew${crews === 1 ? '' : 's'} · ${model.roofPlan.why}`,
+        deps: [dep(prior, 'Roof covering after envelope preparation'), ...(structure ? [dep(structure, 'Roof structure before covering')] : [])],
+        specs: specKeys, sources: [model.roofPlan.source],
       });
-      prevLevel = l;
     }
   }
   // The usual order of trades on a level: a trade waits for the ones before it (skipping trades with no work there).
-  completeScope(model, acts, setup, facts);
   const has = new Set(acts.map((x) => x.id));
   const waitsFor = (t: string, l: string | null, seen = new Set<string>()): string[] =>
     (AFTER[t] ?? []).flatMap((p) => {
@@ -226,20 +277,119 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     });
   for (const x of acts.filter((x) => x.kind === 'work')) {
     for (const p of waitsFor(x.trade!, x.level)) if (!x.deps.some((d) => d.from === p)) x.deps.push(dep(p, `${tradeByKey.get(p.split(':')[1])?.name ?? p} first on this level (usual order of work)`));
+    if (x.trade === 'structure' && x.level === 'fdn' && has.has('work:site:earthwork'))
+      x.deps.push(dep('work:site:earthwork', 'Excavation before foundation construction'));
+  }
+
+  // User-entered work that is absent from the takeoff stays separate from measured elements.
+  // It has no model geometry or inferred quantity, and only enters the plan when the user
+  // supplies a positive quantity and production rate in Build setup.
+  const measuredWork = acts.filter((x) => x.kind === 'work');
+  const lastMeasured = (trade: string) => measuredWork.filter((x) => x.trade === trade).at(-1)?.id;
+  const follows = (trade: string, prior: string, seen = new Set<string>()): boolean =>
+    (AFTER[trade] ?? []).some((p) => p === prior || (!seen.has(p) && (seen.add(p), follows(p, prior, seen))));
+  const allowanceEntries = activeAllowances(setup).sort(([a], [b]) =>
+    (a === 'site' ? 0 : a === 'foundations' ? 1 : a === 'structure' ? 2 : 3) -
+    (b === 'site' ? 0 : b === 'foundations' ? 1 : b === 'structure' ? 2 : 3));
+  const areaLevels = model.levels.filter((l) => l.id !== 'roof' && l.id !== 'fdn' && (model.floorAreas?.[l.id] ?? 0) > 0);
+  const totalFloorArea = areaLevels.reduce((sum, l) => sum + model.floorAreas![l.id], 0);
+  const unit = model.units === 'metric' ? 'm²' : 'SF';
+  const allowancePackages = new Map<string, { id: string; level: string | null; quantity: number }[]>();
+  for (const [key, value] of allowanceEntries) {
+    const expected = model.units === 'metric' ? totalFloorArea : totalFloorArea / 0.09290304;
+    const legacyProxy = value.provisional && Math.abs(value.quantity - expected) <= Math.max(0.2, expected * 0.001);
+    const split = key !== 'envelope' && key !== 'site' && key !== 'foundations' && key !== 'structure' &&
+      value.unit === unit && areaLevels.length > 0 && (value.distribution === 'gfa-by-level' || legacyProxy);
+    const packages = split
+      ? areaLevels.map((l) => ({ id: `allowance:${key}:${l.id}`, level: l.id, quantity: value.quantity * model.floorAreas![l.id] / totalFloorArea }))
+      : [{ id: `allowance:${key}`, level: null, quantity: value.quantity }];
+    allowancePackages.set(key, packages);
+  }
+  const allowanceIds = new Set([...allowancePackages.values()].flat().map((p) => p.id));
+  const allowanceBefore = (key: string, level: string | null): string | undefined => {
+    const packages = allowancePackages.get(key);
+    return packages?.find((p) => p.level === level)?.id ?? packages?.find((p) => p.level === null)?.id ?? packages?.at(-1)?.id;
+  };
+  for (const [key, value] of allowanceEntries) {
+    const packages = allowancePackages.get(key)!;
+    for (const [index, pack] of packages.entries()) {
+      const predecessors = new Set<string>();
+      if (key === 'site') {
+        predecessors.add('mobilize');
+      } else if (key === 'foundations') {
+        predecessors.add(has.has('work:structure:fdn') ? 'work:structure:fdn' : has.has('work:site:earthwork') ? 'work:site:earthwork' : 'mobilize');
+        if (!has.has('work:structure:fdn') && has.has('proc:structure')) predecessors.add('proc:structure');
+      } else if (key === 'structure') {
+        predecessors.add(lastMeasured('structure') ?? (has.has('work:site:earthwork') ? 'work:site:earthwork' : 'mobilize'));
+        const foundation = allowanceBefore('foundations', null);
+        if (foundation) predecessors.add(foundation);
+      } else {
+        const own = measuredWork.filter((x) => x.trade === key && x.level === pack.level).at(-1)?.id ?? lastMeasured(key);
+        predecessors.add(own ?? 'mobilize');
+        if (!own) {
+          for (const prior of AFTER[key] ?? []) {
+            const work = measuredWork.find((x) => x.id === workId(prior, pack.level))?.id ?? lastMeasured(prior);
+            if (work) predecessors.add(work);
+          }
+        }
+      }
+      if (index > 0 && !setup.levelsInParallel.value) predecessors.add(packages[index - 1].id);
+      if (key !== 'foundations')
+        for (const [prior] of allowanceEntries)
+          if (prior !== key && follows(key, prior)) {
+            const id = allowanceBefore(prior, pack.level);
+            if (id && allowanceIds.has(id)) predecessors.add(id);
+          }
+      add({
+        id: pack.id,
+        name: `${key === 'foundations' ? 'Foundations' : tradeByKey.get(key)?.name ?? key} — unmeasured scope allowance${pack.level ? ` — ${levelName(pack.level)}` : ''}`,
+        kind: 'work',
+        trade: key === 'foundations' ? 'structure' : key,
+        level: pack.level,
+        elements: [],
+        quantities: { [value.unit]: pack.quantity },
+        rates: { [value.unit]: value.rate },
+        crews: 1,
+        duration: Math.max(1, Math.ceil(pack.quantity / value.rate)),
+        durationBasis: 'assumed',
+        durationWhy: `${Math.round(pack.quantity * 10) / 10} ${value.unit} at ${value.rate} ${value.unit} per crew-day · ${value.provisional ? 'provisional' : 'confirmed by you'} unmeasured scope${pack.level ? `, allocated by ${levelName(pack.level)} gross floor area` : ''}, entered in Build setup`,
+        deps: [...predecessors].map((from) => dep(from, 'Scope allowance after prerequisite work')),
+        specs: [],
+        sources: [],
+      });
+    }
+  }
+  for (const x of measuredWork) {
+    for (const [key] of allowanceEntries) {
+      if (key === 'site') continue;
+      const required = key === 'foundations'
+        ? (x.trade === 'structure' && x.level !== 'fdn') || follows(x.trade!, 'structure')
+        : x.trade !== key && follows(x.trade!, key);
+      const prior = allowanceBefore(key, x.level);
+      if (required && prior && !x.deps.some((d) => d.from === prior))
+        x.deps.push(dep(prior, `Unmeasured ${key} scope before this work`));
+    }
+  }
+
+  if (setup.dryInBeforeFinishes?.value) {
+    const envelope = acts.filter((x) => x.kind === 'work' && x.trade === 'envelope');
+    const roofEvidence = model.roofPlan || model.elements.some((e) => e.trade === 'envelope' && /roof/i.test(e.typeName) && (e.unit === 'm²' || e.unit === 'SF')) || allowanceIds.has('allowance:envelope');
+    const wallEvidence = model.elements.some((e) => e.trade === 'envelope' && e.level !== 'roof');
+    if (envelope.length && roofEvidence && wallEvidence) {
+      const dryIn = add({ id: 'ms:dry-in', name: 'Weather-tight / dry-in (assumed)', kind: 'milestone', trade: null, level: null, elements: [], duration: 0, durationBasis: setup.dryInBeforeFinishes.basis, durationWhy: setup.dryInBeforeFinishes.why, deps: envelope.map((x) => dep(x.id, 'Envelope work before dry-in', 'assumed')), specs: [], sources: [] });
+      const finishTrades = new Set(['partitions', 'ceilings', 'doors', 'painting', 'flooring', 'finishes', 'specialties']);
+      for (const x of acts) if (x.kind === 'work' && finishTrades.has(x.trade ?? ''))
+        x.deps.push(dep(dryIn.id, 'Interior finish after assumed dry-in', 'assumed'));
+    }
   }
 
   // Testing and inspection where a trade's sections call for it.
-  const lastWork = (t: string) => {
-    const ws = acts.filter((x) => x.kind === 'work' && x.trade === t);
-    return ws[ws.length - 1];
-  };
   const tests: string[] = [];
   for (const t of tradesUsed) {
-    const lw = lastWork(t.key);
-    if (!lw || t.key === 'demolition') continue;
-    const secs = lw.specs.map((k) => secByKey.get(k)).filter((s): s is SpecSection => !!s && s.articles.some((x) => TESTS.test(x.title)));
-    if (!secs.length) continue;
     const ws = acts.filter((x) => x.kind === 'work' && x.trade === t.key);
+    if (!ws.length || t.key === 'demolition') continue;
+    const secs = [...new Set(ws.flatMap((w) => w.specs))].map((k) => secByKey.get(k)).filter((s): s is SpecSection => !!s && s.articles.some((x) => TESTS.test(x.title)));
+    if (!secs.length) continue;
     tests.push(
       add({
         id: `test:${t.key}`,

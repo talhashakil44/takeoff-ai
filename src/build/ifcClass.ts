@@ -37,6 +37,7 @@ export function ifcClassOf(e: BuildElement): { cls: string; tail: string } {
   const name = e.typeName.toLowerCase();
   const t9 = (cls: string, pre: string) => ({ cls, tail: `,${pre}` });
   if (e.trade === 'demolition') return t9('IFCBUILDINGELEMENTPROXY', '.NOTDEFINED.');
+  if (e.trade === 'structure' && /\bbeam\b/.test(name)) return t9('IFCBEAM', '.BEAM.');
   if (e.shape?.type === 'run') {
     if (e.trade === 'structure' && /^(?:l|bl)\d+\b|\blintel\b/.test(name)) return t9('IFCBEAM', '.LINTEL.');
     if (e.trade === 'structure' && /^b\d+\b|\bglulam beam\b/.test(name)) return t9('IFCBEAM', '.BEAM.');

@@ -1,6 +1,10 @@
 import { applyFinishes, ceilingsFromRcps, finishRooms, levelOfSheet, readFinishes } from './finishes';
 import { automateCeilings } from './ceilings';
 import { automateKeynotes } from './keynotes';
+import { automateDucts } from './ducts';
+import { automateRoof } from './envelope';
+import { automateElectricalTags } from './electrical';
+import { automatePipes } from './pipes';
 import { automateRuns } from './runs';
 import { automateTrades } from './trades';
 import { doorTakeoff, findDoorTagsIn } from './doors';
@@ -13,6 +17,9 @@ import { automateWalls, projectSetTypes } from './walls';
 import { automateWindows } from './windows';
 import { planShift as planShiftKnown, repeatedRuns } from './overlap';
 import { findRoomLabels } from '../fill/rooms';
+import { automateFoundations } from './foundations';
+import { automateStructure } from './structure';
+import { automateSite } from './site';
 import type { Project, Pt, Sheet } from '../model';
 import type { PDFDocumentProxy } from '../pdf';
 import { classifySheet, tradeOfNumber, type SheetKind } from '../sheetKind';
@@ -259,6 +266,48 @@ export async function takeOffWholeSet(
     });
   }
 
+  // Below and behind the walls: the foundations off the foundation plan and structural schedules,
+  // and the framing (beams, columns, lintels, structural walls) off the framing plans.
+  await run('foundations', async () => {
+    say('Whole set: foundations…');
+    await pause();
+    const r = await automateFoundations(project, access, opts.maxOpening);
+    apply('foundations', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('structure', async () => {
+    say('Whole set: structural framing…');
+    await pause();
+    const r = await automateStructure(project, access, opts.maxOpening);
+    apply('structure', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('site works', async () => {
+    say('Whole set: site services and roads…');
+    await pause();
+    const r = await automateSite(project, access);
+    apply('site', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('roof', async () => {
+    say('Whole set: roof…');
+    await pause();
+    const r = automateRoof(project);
+    apply('envelope', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
   await run('doors', async () => {
     const home = levels[0] ?? plans[0];
     if (!home) return 'not run: no floor plan';
@@ -366,8 +415,16 @@ export async function takeOffWholeSet(
     const r = await automateRuns(project, access);
     apply('runs', r);
     await hold();
-    for (const c of r.checks) review.push({ kind: 'check', text: c });
-    return r.message;
+    // Plans without layers: their piping by its labels, off the sheet as drawn.
+    const pipes = await automatePipes(project, access);
+    apply('pipes', pipes);
+    await hold();
+    const ducts = await automateDucts(project, access);
+    apply('ducts', ducts);
+    await hold();
+    const checks = pipes.apply || ducts.apply ? r.checks.filter((c) => !/have no CAD layers/.test(c)) : r.checks;
+    for (const c of [...checks, ...pipes.checks, ...ducts.checks]) review.push({ kind: 'check', text: c });
+    return [r.apply ? r.message : '', pipes.apply ? pipes.message : '', ducts.apply ? ducts.message : ''].filter(Boolean).join(' · ') || r.message;
   });
 
   await run('mechanical and electrical counts', async () => {
@@ -375,6 +432,16 @@ export async function takeOffWholeSet(
     await pause();
     const r = await automateTrades(project, access);
     apply('trades', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('electrical tags', async () => {
+    say('Whole set: electrical circuit tags…');
+    await pause();
+    const r = await automateElectricalTags(project, access);
+    apply('etags', r);
     await hold();
     for (const c of r.checks) review.push({ kind: 'check', text: c });
     return r.message;

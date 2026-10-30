@@ -242,6 +242,7 @@ export function structuralEvidence(
     out: Record<string, StructuralEvidence> = {};
   const arch = project.sheets.filter(
     (s) =>
+      !s.superseded &&
       /^A/.test(s.name) &&
       frames[s.id] &&
       /FLOOR PLAN/i.test(s.title ?? "") &&
@@ -341,11 +342,15 @@ export function structuralEvidence(
       ],
       quote: `${code}: supported member stroke; calibrated span ${length.toFixed(3)} m`,
     });
+    const memberLevel = model.levels.find((l) => l.id === e.level);
     const matches = arch
+      // Identical XY positions on stacked plans are not the same opening.
+      // Both the plan's level and the detail's floor datum must agree.
+      .filter((s) => memberLevel?.sheets.includes(s.id))
       .flatMap((s) =>
         (texts[s.id] ?? []).flatMap((t) => {
           const detail = openings[t.str.trim()];
-          if (!detail) return [];
+          if (!detail || !memberLevel || Math.abs(detail.floor - memberLevel.elevation) > 0.15) return [];
           const p = worldPoint([t.cx, t.cy], frames[s.id]),
             dist = Math.hypot(p[0] - mid[0], p[1] - mid[1]);
           if (dist > 1.2 || Math.abs(detail.width - length) > 0.12) return [];
@@ -569,10 +574,13 @@ export function connectStructuralModel(
       const count =
         project.types.find((t) => t.id === e.typeId)?.kind === "count";
       const sources = reviewed ? review.evidence : ev.sources;
+      // A registered grid locator is evidence of position, not an invented solid.
+      // Keep it when dimensions are unresolved; discard legacy count cubes.
+      const retainedShape = count && e.shape?.type !== "locator" ? null : e.shape;
       return {
         ...e,
-        shape: shape ?? (count ? null : e.shape),
-        placement: shape ? "inferred" : count ? "unknown" : e.placement,
+        shape: shape ?? retainedShape,
+        placement: shape ? "inferred" : retainedShape ? e.placement : count ? "unknown" : e.placement,
         specs: [
           ...e.specs,
           ...sources
@@ -589,10 +597,11 @@ export function connectStructuralModel(
             [...e.sources, ...sources].map((s) => [JSON.stringify(s), s]),
           ).values(),
         ],
-        issues: [
+        issues: [...new Set([
+          ...(!shape ? e.issues : []),
           ...ev.issues,
           ...(reviewed ? [`Reviewed geometry: ${review.note}`] : []),
-        ],
+        ])],
       };
     }),
   };

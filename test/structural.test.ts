@@ -2,6 +2,7 @@ import { ifcClassOf } from "../src/build/ifcClass";
 import { describe, it, expect } from "vitest";
 import {
   structuralSections,
+  structuralEvidence,
   lintelSpan,
   reviewedShape,
   connectStructuralModel,
@@ -238,4 +239,65 @@ describe("source-backed structure", () => {
     expect(result.elements[0].shape).toBeNull();
     expect(result.elements[0].quantity).toBe(1);
   });
+  it("retains registered count locators and their qualification until a physical section is resolved", () => {
+    const locator: BuildElement = {
+      ...member,
+      typeName: "C1 column",
+      placement: "inferred",
+      shape: { type: "locator", at: [5, 8], z: 4 },
+      issues: ["Symbolic location at structural grid A/3; section and height unverified."],
+    };
+    const unresolved = { m: { sources: [], issues: ["Member dimensions need review."], shape: null } };
+    const result = connectStructuralModel(project, { ...model, elements: [locator] }, unresolved, {}, { s: frame });
+    expect(result.elements[0].shape).toEqual(locator.shape);
+    expect(result.elements[0].placement).toBe("inferred");
+    expect(result.elements[0].issues).toContain(locator.issues[0]);
+    expect(result.elements[0].quantity).toBe(1);
+    // Running the connector again must not duplicate warnings or the located member.
+    const repeated = connectStructuralModel(project, result, unresolved, {}, { s: frame });
+    expect(repeated.elements).toEqual(result.elements);
+    const reviewed = connectStructuralModel(project, result, unresolved, {
+      m: { ...placement, fingerprint: structuralFingerprint(locator, project) },
+    }, { s: frame });
+    expect(reviewed.elements).toHaveLength(1);
+    expect(reviewed.elements[0].shape?.type).toBe("run");
+    expect(reviewed.elements[0].quantity).toBe(1);
+  });
+
+  it.each([
+    { plan: "a1", datum: 4000, accepted: false, why: "another floor's coincident plan tag" },
+    { plan: "a2", datum: 0, accepted: false, why: "another floor's opening detail datum" },
+    { plan: "a2", datum: 4000, accepted: true, why: "matching second-floor plan and detail" },
+  ])("checks the opening floor before recovering lintel height: $why", ({ plan, datum, accepted }) => {
+    const arch1 = { ...sheet, id: "a1", name: "A2.1", title: "GROUND FLOOR PLAN" };
+    const arch2 = { ...sheet, id: "a2", name: "A2.2", title: "SECOND FLOOR PLAN" };
+    const detail = { ...sheet, id: "detail", name: "A8.3", title: "WINDOW ELEVATIONS" };
+    const p = { ...project, sheets: [sheet, arch1, arch2, detail] };
+    const m = { ...model, elements: [{ ...member, level: "L2" }], levels: [
+      { id: "L1", elevation: 0, sheets: ["a1"] },
+      { id: "L2", elevation: 4, sheets: ["a2", "s"] },
+    ] } as BuildModel;
+    const words = (items: [string, number, number][]) => items.map(([str, cx, cy]) => ({ str, cx, cy })) as any;
+    const texts = {
+      s: words([["WOOD LINTEL SCHEDULE", 150, 10], ["MARK", 100, 30], ["SIZE", 150, 30],
+        ["POSTS", 210, 30], ["L1", 100, 45], ["2 - 38x184", 155, 45]]),
+      [plan]: words([["W1", 50, 50]]),
+      detail: words([["W1", 150, 300], [datum ? "FIN. SECOND FLOOR" : "FIN. GROUND FLOOR", 400, 250], [String(datum), 450, 250]]),
+    };
+    const lines = {
+      s: [line(0, 50, 40, 50), line(60, 50, 100, 50), line(0, 44, 0, 56, 0.3), line(100, 44, 100, 56, 0.3)],
+      detail: [line(100, 100, 200, 100), line(100, 200, 200, 200), line(100, 100, 100, 200), line(200, 100, 200, 200)],
+    };
+    const evidence = structuralEvidence(p, m, texts, lines, { s: frame, a1: frame, a2: frame }).m;
+    expect(evidence.span).toEqual([[0, 50], [100, 50]]);
+    if (accepted) {
+      expect(evidence.shape).toMatchObject({ type: "run", z0: 5.5, height: 0.184, thickness: 0.076 });
+      expect(evidence.sources.some(s => s.id === "a2" && s.quote?.includes("W1"))).toBe(true);
+    } else {
+      expect(evidence.shape).toBeNull();
+      expect(evidence.head).toBeUndefined();
+      expect(evidence.issues).toContain("Opening head elevation is unresolved; match the elevation/detail before placing vertically.");
+    }
+  });
+
 });

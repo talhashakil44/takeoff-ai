@@ -312,3 +312,26 @@ describe("reviewed control-point alignment", () => {
     ).toBeNull();
   });
 });
+
+// Symbolic structural geometry must survive the same drawing registration as solids.
+it("registers and reprojects measured beam axes and grid locators without inventing sections", () => {
+  const axis = { ...element, shape: { type: "axis", points: element.shape.ring, z: 4 } } as unknown as BuildElement;
+  const axisModel = { ...model, elements: [axis] };
+  const frame = sheetFrame(project, axisModel, sheet)!;
+  expect(frame).not.toBeNull();
+  const rotated = {a: 0, b: .1, tx: 20, ty: 30, residual: 0};
+  const moved = layerElement(axis, frame, rotated)!;
+  expect(moved.shape).toEqual({type: "axis", points: [[20,30],[20,40],[10,40],[10,30]], z:4});
+  expect(moved.quantity).toBe(axis.quantity);
+  const locator = {...axis, shape:{type:"locator",at:[5,7],z:4}} as BuildElement;
+  expect(layerElement(locator,frame,rotated)!.shape).toEqual({type:"locator",at:[20,30],z:4});
+  expect(axis.shape).toEqual({type:"axis",points:element.shape.ring,z:4});
+});
+
+it("keeps room navigation when Build excludes rooms from physical construction", () => {
+  const changed = {...model, elements: [{...model.elements[0], shape:null, trade:"other"}]};
+  const frame = sheetFrame(project,model,sheet)!;
+  expect(roomStops(project,changed,sheet,frame)).toHaveLength(1);
+  expect(roomStops(project,changed,sheet,frame)[0].element.shape).toBeNull();
+  expect(roomStops(project,{...changed,levels:[]},sheet,frame)).toHaveLength(0);
+});
