@@ -485,7 +485,7 @@
       "evidence": "claude/integration@b83fee7"
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [
         "T24"
       ],
@@ -502,7 +502,8 @@
       "prompt": "Refreshed Kelso demo (2,170 measurements; pipes 875 m, ducts 296 m) is on the Mac at .agents-data/Kelso demo (cf2bcad5). Using scripts/qa-kelso-overlays.mjs, sweep M1-01..M1-04 for labelled pipe/duct runs still without an overlay and for new false positives (T24 added faint-fill duct bridging and inline pipe labels). List each with sheet, PDF coords and label. Recompute Kelso schedule and report finish date and any change in mechanical/plumbing durations. No changes to Claude-owned files; never modify original project data.",
       "added": "2026-10-30T08:06:53.784Z",
       "by": "claude",
-      "updated": "2026-10-30T08:13:26.886Z"
+      "updated": "2026-10-30T08:19:01.682Z",
+      "branch": "codex/build-it-services-reqa"
     }
   ]
 }
