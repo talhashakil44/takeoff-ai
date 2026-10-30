@@ -20,6 +20,7 @@ import { findRoomLabels } from '../fill/rooms';
 import { automateFoundations } from './foundations';
 import { automateStructure } from './structure';
 import { automateSite } from './site';
+import { automateSheetViews } from './sheets';
 import type { Project, Pt, Sheet } from '../model';
 import type { PDFDocumentProxy } from '../pdf';
 import { classifySheet, tradeOfNumber, type SheetKind } from '../sheetKind';
@@ -158,6 +159,14 @@ export async function takeOffWholeSet(
   const tagged = new Map<string, string>();
   const roomKey = (n: string) => n.replace(/[\s.-]/g, '').toUpperCase();
 
+  // Sheets holding drawings at their own scales, with no sheet scale: each drawing's scale.
+  await run('Drawing scales', async () => {
+    const r = await automateSheetViews(project, access);
+    apply('Drawing scales', r);
+    live = project.sheets.filter((s) => !s.superseded);
+    return r.message;
+  });
+
   // Sheets the tools need a scale on.
   const needScale = live.filter((s) => !s.metersPerPoint && ['floor plan', 'RCP', 'finish plan'].includes(kinds.get(s.id)!.kind));
   for (const s of needScale) {
@@ -166,7 +175,9 @@ export async function takeOffWholeSet(
       sheet: s.name,
       sheetId: s.id,
       text:
-        s.scaleHints.length > 1
+        s.views?.length
+          ? `${sheetLabel(s)}: no sheet scale set; takeoffs in ${s.views.map((v) => `${v.title} (${v.scaleLabel})`).join(', ')} are measured at that drawing's scale. Check them, or set the sheet scale.`
+          : s.scaleHints.length > 1
           ? `${sheetLabel(s)}: no scale set, the sheet notes several (${s.scaleHints.join(', ')}). Set it, then run again for this sheet.`
           : `${sheetLabel(s)}: no scale set. Set it, then run again for this sheet.`,
     });

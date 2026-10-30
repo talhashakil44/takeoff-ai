@@ -15,6 +15,7 @@ import { automateRoof } from '../src/automate/envelope';
 import { automateElectricalTags } from '../src/automate/electrical';
 import { doorTakeoff, findDoorTagsIn } from '../src/automate/doors';
 import { classifySheet } from '../src/sheetKind';
+import { automateSheetViews } from '../src/automate/sheets';
 it('refresh', async () => {
   const root = process.env.R!, out = process.env.O!;
   const file = JSON.parse(readFileSync(root + '/project.json', 'utf8'));
@@ -24,7 +25,7 @@ it('refresh', async () => {
   for (const d of p.docs) { const o = await openDoc(`${root}/drawings/${d.id}.pdf`); o.id = d.id; docs.set(d.id, o); }
   const set = new NodeSet(docs, p.sheets);
   const access = { page: (s: any) => set.page(s), texts: (s: any) => set.texts(s), segments: (s: any) => set.segments(s), layers: (s: any) => set.layers(s) };
-  for (const [name, fn] of [['foundations', () => automateFoundations(p, access as any, 3)], ['structure', () => automateStructure(p, access as any, 3)], ['site', () => automateSite(p, access as any)], ['pipes', () => automatePipes(p, access as any)], ['ducts', () => automateDucts(p, access as any)], ['envelope', async () => automateRoof(p)], ['etags', () => automateElectricalTags(p, access as any)], ['doors', async () => {
+  for (const [name, fn] of [['views', () => automateSheetViews(p, access as any)], ['foundations', () => automateFoundations(p, access as any, 3)], ['structure', () => automateStructure(p, access as any, 3)], ['site', () => automateSite(p, access as any)], ['pipes', () => automatePipes(p, access as any)], ['ducts', () => automateDucts(p, access as any)], ['envelope', async () => automateRoof(p)], ['etags', () => automateElectricalTags(p, access as any)], ['doors', async () => {
     // Door tags on every sheet, from the first level floor plan (as the whole-set run does); numbers already counted stay as they are.
     const home = p.sheets.find((s: any) => !s.superseded && classifySheet(s).kind === 'floor plan' && classifySheet(s).level === 'level');
     if (!home) return { message: 'no floor plan' };
