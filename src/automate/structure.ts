@@ -93,7 +93,7 @@ export interface StructureResult extends Automation {
  * it) or, failing one, the end of the line (gaps of a column's width bridged). Null when no line
  * runs along the tag.
  */
-export function beamSpan(t: PageText, segs: Segment[], maxSpan: number): [Pt, Pt] | null {
+export function beamSpan(t: PageText, segs: Segment[], maxSpan: number, columns: Pt[] = []): [Pt, Pt] | null {
   const vertical = Math.abs(Math.sin(t.angle ?? 0)) > 0.7;
   const across = (x: number, y: number) => (vertical ? x : y);
   const along = (x: number, y: number) => (vertical ? y : x);
@@ -143,12 +143,16 @@ export function beamSpan(t: PageText, segs: Segment[], maxSpan: number): [Pt, Pt
     if (a >= piece[0] - 15 && a <= piece[1] + 15) crossing.push(a);
   }
   crossing.sort((p, q) => p - q);
+  // Column tags beside the line: a column drawn off the line's edge (hung under a beam drawn
+  // as two lines) crosses nothing, but its grid line does.
+  const tagged = columns.filter(([x, y]) => Math.abs(across(x, y) - best!.off) <= 25).map(([x, y]) => along(x, y));
   const supports: number[] = [];
   for (let i = 0; i < crossing.length; ) {
     let j = i;
     while (j + 1 < crossing.length && crossing[j + 1] - crossing[i] <= 25) j++;
-    // A column is two or more crossings (its two sides); a lone tick is not.
-    if (j > i) supports.push((crossing[i] + crossing[j]) / 2);
+    // A column is two or more crossings (its two sides); a lone tick is not, unless a column is tagged beside it.
+    const mid = (crossing[i] + crossing[j]) / 2;
+    if (j > i || tagged.some((a) => Math.abs(a - mid) <= 25)) supports.push(mid);
     i = j + 1;
   }
   const before = Math.max(piece[0], ...supports.filter((a) => a < at - 2));
@@ -193,6 +197,7 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
   const typeOf = new Map<string, TakeoffType>();
   const tally = new Map<string, number>();
   let unspanned = 0;
+  const tagOf = new Map<Measurement, Pt>();
   const counted = members.filter((m) => m.kind !== 'wall');
   const walls = new Map(members.filter((m) => m.kind === 'wall').map((m) => [norm(m.mark), m]));
 
@@ -211,6 +216,7 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
         tags,
         these.map((m) => ({ mark: m.mark, kind: 'pad', says: m.size, schedule: m.schedule }) as FoundationMark),
       );
+      const columnsAt = [...places].filter(([mark]) => /^(?:column|post)$/.test(these.find((x) => x.mark === mark)?.kind ?? '')).flatMap(([, at]) => at);
       for (const [mark, at] of places) {
         const m = these.find((x) => x.mark === mark)!;
         let t = typeOf.get(norm(mark));
@@ -238,9 +244,11 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
             continue;
           }
           const tag = tags.find((x) => x.cx === pt[0] && x.cy === pt[1]);
-          const span = tag && segs.length ? beamSpan(tag, segs, s.metersPerPoint ? 20 / s.metersPerPoint : 600) : null;
+          const span = tag && segs.length ? beamSpan(tag, segs, s.metersPerPoint ? 20 / s.metersPerPoint : 600, columnsAt) : null;
           if (!span) unspanned++;
-          added.push({ id: newId(), sheetId: s.id, typeId: t.id, points: span ?? [pt, pt], holes: [], source: 'structure', label: m.mark });
+          const beam: Measurement = { id: newId(), sheetId: s.id, typeId: t.id, points: span ?? [pt, pt], holes: [], source: 'structure', label: m.mark };
+          tagOf.set(beam, pt);
+          added.push(beam);
         }
         tally.set(m.mark, (tally.get(m.mark) ?? 0) + at.length);
       }
@@ -279,18 +287,35 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
   }
 
   // One beam per span: tags along a line whose supports weren't found all give the same span.
-  const seen = new Set<string>();
+  // Two different marks on one span: the tag nearer the line keeps it; the other is counted
+  // with no length, to be measured (each is a beam the drawing tags).
+  const seen = new Map<string, Measurement>();
   let repeats = 0;
+  let contested = 0;
+  const gap = (m: Measurement) => {
+    const t = tagOf.get(m);
+    const [[x1, y1], [x2, y2]] = m.points;
+    return t ? Math.abs((x2 - x1) * (y1 - t[1]) - (x1 - t[0]) * (y2 - y1)) / Math.max(1e-9, Math.hypot(x2 - x1, y2 - y1)) : Infinity;
+  };
   for (let k = added.length - 1; k >= 0; k--) {
     const m = added[k];
     if (m.points.length !== 2 || (m.points[0][0] === m.points[1][0] && m.points[0][1] === m.points[1][1])) continue;
-    const key = `${m.sheetId}|${m.typeId}|${m.points.flat().map((v) => v.toFixed(1)).join(',')}`;
-    if (seen.has(key)) {
+    const key = `${m.sheetId}|${m.points.flat().map((v) => v.toFixed(1)).join(',')}`;
+    const other = seen.get(key);
+    if (!other) seen.set(key, m);
+    else if (other.typeId === m.typeId) {
       added.splice(k, 1);
       repeats++;
-    } else seen.add(key);
+    } else {
+      const loser = gap(m) < gap(other) ? other : m;
+      if (loser === other) seen.set(key, m);
+      const t = tagOf.get(loser);
+      loser.points = t ? [t, t] : [loser.points[0], loser.points[0]];
+      contested++;
+    }
   }
   if (repeats) checks.push(`${repeats} beam tag${repeats === 1 ? '' : 's'} named a span already taken from another tag on the same line: counted once. The supports along that line weren't found, so check its spans.`);
+  if (contested) checks.push(`${contested} beam tag${contested === 1 ? '' : 's'} named the same span as a different beam mark: the tag nearer the line keeps it, the other is counted with no length. Check those spans on the framing plans.`);
   if (!added.length) return { message: 'No scheduled members tagged on the structural plans.', checks };
   const notFound = counted.filter((m) => !tally.has(m.mark)).map((m) => m.mark);
   if (notFound.length) checks.push(`Structural schedule marks not tagged on any framing plan: ${notFound.join(', ')}. Count them by hand if they are used.`);
