@@ -420,6 +420,24 @@
         "2026-10-30T05:29 claude: QA findings 1,2,3,6 fixed; 4 (misses) and 5 (pad XY on tag) open"
       ],
       "evidence": "claude/integration@d70ac18"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T14"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T23",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Electrical rough-in from measured device counts (etags): per-device rough-in rate, basis assumed, per level",
+      "added": "2026-10-30T05:29:56.427Z",
+      "by": "claude"
     }
   ]
 }
