@@ -130,7 +130,7 @@
     {
       "id": "T9",
       "owner": "gpt",
-      "status": "doing",
+      "status": "review",
       "title": "setup.allowances contract: editable allowances for scope not taken off (site, foundations, structure, M&E) in the plan",
       "depends": [],
       "accept": [
@@ -140,8 +140,8 @@
         "audit"
       ],
       "prompt": "Define the setup.allowances shape Build It reads (per trade: quantity, unit, rate, provisional flag), apply it in scope/plan, and post the exact type to claude so the Setup tab can edit it.",
-      "branch": "codex/build-it-allowances",
-      "updated": "2026-10-30T04:03:30.307Z",
+      "branch": "codex/build-it-allowances@211c669",
+      "updated": "2026-10-30T04:11:33.788Z",
       "stream": "gpt-build"
     },
     {
