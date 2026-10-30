@@ -1120,3 +1120,8 @@
 .ex-scope-tabs button { min-width: 0; white-space: normal; }
 .ex-room-list button.ex-element-row { display: block; white-space: normal; overflow-wrap: anywhere; }
 .ex-room-list button.ex-element-row > span { display: block; }
+.ex-details > button {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

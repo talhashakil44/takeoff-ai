@@ -390,3 +390,37 @@ from the optional SF-N slab-thickening projection, then independently establish
 the deep footing datum. Do not borrow the slab underside. Remaining roof
 free-end elevations, roof assembly and foundation coverage remain open.
 T11 is incomplete; source and visual acceptance plus Claude review still apply.
+
+## North grid-8 review and readable evidence — October 30, 22:33 wake
+
+Claude approved model32 / eedec90 on the bus at 22:19:55Z. Fresh integration
+fetch was reviewed without merging shared Build files.
+
+Independent review traced the nearby -1200/-1500 note from its datum circle
+[1936.32,935.88] east through [2018.64,935.88] to the actual triangular arrow
+[2030.28,956.04]. It targets the eastern SF2/F2 transition, not grid-8 A/D F1.
+Original proof: `/tmp/grid8-b-leader-full.png`. No independently linked deep
+section was found for those pads. Both remain withheld while A's distinct
+scheduled component and north SF1 connection are investigated; SF-N never
+supplies a deep datum. This corrects a possible proximity-based association,
+not an existing accepted quantity or physical shape.
+
+The narrow evidence inspector clipped long source names and their page numbers.
+Drawing-source buttons now wrap within the panel. Compiled live review verified
+the longest source at 207 px client and scroll width, revised page21 opening,
+and no browser errors. Proof: `diag/explore/proofs/source-labels-wrapped-v32.png`.
+This CSS change does not change the model or its 135 verified structural solids.
+
+Grid8/A source audit now isolates the exact missing proof. Candidate F1 rectangle
+[1890,799.32,1932.48,841.80] matches the 1500 mm schedule, but the deep left
+side below incoming SF1 (y819.48–841.80), bottom-left x1890–1900.20, and incoming
+lower SF1 edge x1879.20–1890 are absent. The last gap is approximately381mm.
+Those intervals overlap separately labelled SF-N, not a proven300mm-deep strip.
+Existing qualified north SF1 ends at x1879.20. Borrowing SF-N returns would
+manufacture both the pad perimeter and datum path. Independent overlay reviewed:
+`/tmp/explore-foundation-next/grid8-a-deep-boundary-gap.png`. No new solid added.
+
+Next bounded geometry work shifts to the unresolved roof free-end elevation
+chains while Claude reviews whether any additional north-pad detail exists.
+Northern A/D recovery requires independent boundary/datum evidence before retry;
+the source ambiguity must remain exposed, not converted to measured geometry.
