@@ -266,6 +266,7 @@ switch (cmd) {
     const [to, subject] = rest;
     if (!to || !subject) die('say <me> <to> "<subject>" [--task T] [--ref branch@sha] [--body file]');
     const body = file ? readFileSync(file, 'utf8') : readStdin();
+    if (!body.trim()) die('the message has no body: pipe it in on stdin or pass --body <file>');
     say(me, to, subject, body, { task, ref });
     break;
   }
