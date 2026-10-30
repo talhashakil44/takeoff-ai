@@ -26,7 +26,7 @@ const DEFAULTS: Record<string, { LF: number; SF: number; ea: number; lead: numbe
   specialties: { LF: 40, SF: 300, ea: 8, lead: 30, crews: 1 },
   'mech-trim': { LF: 80, SF: 400, ea: 10, lead: 30, crews: 1 },
   'elec-trim': { LF: 150, SF: 600, ea: 25, lead: 30, crews: 1 },
-  site: { LF: 150, SF: 1500, ea: 10, lead: 10, crews: 1 },
+  site: { LF: 150, SF: 1500, ea: 10, lead: 0, crews: 1 },
   other: { LF: 100, SF: 500, ea: 12, lead: 15, crews: 1 },
 };
 
@@ -68,7 +68,10 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
   for (const t of TRADES) {
     const d = DEFAULTS[t.key] ?? DEFAULTS.other;
     const rates: Record<string, number> = metric ? { m: Math.round(d.LF * 0.3048), 'm²': Math.round(d.SF * 0.0929), ea: d.ea } : { ft: d.LF, SF: d.SF, ea: d.ea };
-    trades[t.key] = a({ rates, crews: d.crews, leadDays: d.lead }, 'assumed', 'Typical production and lead time: confirm with the trade');
+    if (t.key === 'structure') rates[metric ? 'm³' : 'CY'] = metric ? 8 : 10;
+    trades[t.key] = a({ rates, crews: d.crews, leadDays: d.lead }, 'assumed', t.key === 'structure'
+      ? 'Planning allowances: 10 members or 8 m³ of foundation concrete per metric crew-day (10 CY imperial); confirm member complexity, forming, reinforcement and crew size with the trade'
+      : 'Typical production and lead time: confirm with the trade');
   }
   return {
     start: startFact ? a(start, 'documented', 'Contract start in the specification', startFact.source) : a(start, 'assumed', 'Next working day: set the real start'),
@@ -128,7 +131,7 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     const k = `${e.trade}|${e.level ?? ''}`;
     byTL.set(k, [...(byTL.get(k) ?? []), e]);
   }
-  const workId = (t: string, l: string | null) => `work:${t}:${l ?? 'unplaced'}`;
+  const workId = (t: string, l: string | null) => `work:${t}:${l ?? (t === 'site' ? 'site' : 'unplaced')}`;
   const tradesUsed = TRADES.filter((t) => model.elements.some((e) => e.trade === t.key));
   const levelName = (l: string | null) => (l ? model.levels.find((x) => x.id === l)?.name ?? l : 'Unplaced (level not known)');
   for (const t of tradesUsed) {
@@ -175,7 +178,10 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
       const els = byTL.get(`${t.key}|${l ?? ''}`);
       if (!els?.length) continue;
       const quantities: Record<string, number> = {};
-      for (const e of els) quantities[e.unit] = (quantities[e.unit] ?? 0) + e.quantity;
+      for (const e of els) {
+        const q = e.production ?? e;
+        quantities[q.unit] = (quantities[q.unit] ?? 0) + q.quantity;
+      }
       const crews = Math.max(1, setupT.crews);
       let crewDays = 0;
       const missing: string[] = [];
@@ -191,7 +197,7 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
       if (prevLevel && !setup.levelsInParallel.value) deps.push(dep(workId(t.key, prevLevel), `Same crew, level after level (${setup.levelsInParallel.why})`));
       add({
         id: workId(t.key, l),
-        name: `${t.name} — ${levelName(l)}`,
+        name: t.key === 'site' && l === null ? t.name : `${t.name} — ${levelName(l)}`,
         kind: 'work',
         trade: t.key,
         level: l,

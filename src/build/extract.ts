@@ -13,7 +13,8 @@ import {
   type DrawingTexts,
 } from "./building";
 import type { Measurement, Project, Sheet, TakeoffType } from '../model';
-import { measurementVars, primaryOf, primaryUnit } from '../quantities';
+import { formulaVars, measurementVars, primaryOf, primaryUnit } from '../quantities';
+import { evaluate } from '../formula';
 import { wordsOf, type SpecSection } from '../spec/parse';
 import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, Level, SourceRef } from './types';
 
@@ -24,7 +25,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 11;
+export const MODEL_VERSION = 12;
 
 export interface Trade {
   key: string;
@@ -60,11 +61,14 @@ export const tradeByKey = new Map(TRADES.map((t) => [t.key, t]));
 const divNum = (division?: string) => parseInt(/^\s*(\d{1,2})/.exec(division ?? '')?.[1] ?? '', 10);
 
 /** Which work package a takeoff type belongs to, from its division, kind and name. */
-export function tradeOf(type: TakeoffType): string {
+export function tradeOf(type: TakeoffType, source?: Measurement['source']): string {
   const d = divNum(type.division);
   const name = `${type.name} ${type.assemblyTitle ?? ''}`.toLowerCase();
   if (d === 2) return 'demolition';
   if (/\bdemo(lition|lish)?\b|\bremove\b|\bexisting to be removed\b/.test(name)) return 'demolition';
+  if (source === 'structure' || source === 'foundations') return 'structure';
+  if (source === 'site') return 'site';
+  if (/\b(?:beam|column|lintel|brace|post|base\s*plate|structural\s*wall|shear\s*wall|glulam)\b/.test(name)) return 'structure';
   if (d === 3 || d === 4 || d === 5) return 'structure';
   if (d === 7) return /roof|membrane|flashing|eaves|soffit|siding|cladding|air barrier|vapour/.test(name) ? 'envelope' : 'finishes';
   if (d === 8) return 'doors';
@@ -223,6 +227,10 @@ export function extractModel(input: ExtractInput): BuildModel {
   ])) {
     const s = sheets.get(sid);
     if (!s || s.superseded || (!used.has(sid) && (!isPlan(s) || isEnlarged(s)))) continue;
+    if (used.has(sid) && used.get(sid)!.every((m) => {
+      const type = types.get(m.typeId);
+      return type && tradeOf(type, m.source) === 'site';
+    })) continue;
     const byHand = edits?.levels?.[sid];
     if (byHand) {
       parsed.set(sid, { word: `id:${byHand}`, basis: 'assumed', from: 'set by you' });
@@ -311,7 +319,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     const s = sheets.get(m.sheetId);
     const type = types.get(m.typeId);
     if (!s || !type || s.superseded) continue;
-    const classifiedTrade = tradeOf(type);
+    const classifiedTrade = tradeOf(type, m.source);
     const trade = type.kind === 'area' && m.ceilingHeight && classifiedTrade !== 'demolition' ? 'ceilings' : classifiedTrade;
     const lv = levelOfSheet.get(s.id);
     const level = lv ? levelById.get(lv.id) ?? null : null;
@@ -324,7 +332,10 @@ export function extractModel(input: ExtractInput): BuildModel {
     const elIssues: string[] = [];
     let shape: ElementShape | null = null;
     let placement: Basis = 'unknown';
-    if (!s.metersPerPoint) {
+    if (trade === 'site') {
+      elIssues.push(`Site work is scheduled without a building level. Its plan route is not coordinated to the building model${m.statedLength !== undefined ? '; the length comes from the drawing label' : ''}.`);
+      if (!vars) elIssues.push(`${s.name} has no scale or stated length: its quantity is unknown.`);
+    } else if (!s.metersPerPoint) {
       elIssues.push(`${s.name} has no scale: its quantity and place are unknown.`);
       unplaced.set(s.id, 'no scale');
     } else if (!isPlan(s)) {
@@ -387,6 +398,13 @@ export function extractModel(input: ExtractInput): BuildModel {
       shape=null;placement='unknown';
       elIssues.push('Counted structural item retained; member position, span and section must be established before generating physical geometry.');
     }
+    const concrete = m.source === 'foundations' && trade === 'structure' && vars
+      ? type.items.find((item) => /^concrete\b/i.test(item.name) && (item.unit === 'm³' || item.unit === 'CY'))
+      : undefined;
+    const concreteResult = concrete && vars ? evaluate(concrete.formula, formulaVars(vars, type)) : undefined;
+    const production = concrete && concreteResult?.ok && concreteResult.value > 0
+      ? { quantity: concreteResult.value, unit: concrete.unit } : undefined;
+    if (concrete && !production) elIssues.push('Concrete volume cannot be calculated from the available dimensions; review the foundation production allowance.');
     if (shape?.type === 'surface' && (!simpleRing(shape.ring) || shape.holes.some(h => !simpleRing(h)))) {
       shape = null; placement = 'unknown';
       elIssues.push('Self-intersecting or degenerate polygon: retained in takeoff quantities, omitted from 3D/IFC geometry pending drawing review.');
@@ -408,10 +426,11 @@ export function extractModel(input: ExtractInput): BuildModel {
       status: trade === 'demolition' ? 'demolished' : (explicitExisting || codedExisting) && !/\bNEW\b/i.test(type.name) ? 'existing' : 'new',
       name: m.label ? `${type.name} · ${m.label}` : type.name,
       trade,
-      level: level?.id ?? null,
+      level: trade === 'site' ? null : level?.id ?? null,
       shape,
       quantity,
       unit: primaryUnit(type.kind, units),
+      ...(production ? { production } : {}),
       typeId: type.id,
       typeName: type.name,
       division: type.division ?? '',

@@ -5,6 +5,7 @@ import { extractModel, levelWords, tradeOf } from '../src/build/extract';
 import { readSpecFacts } from '../src/build/facts';
 import { toIfc } from '../src/build/ifc';
 import { ifcClassLabel, ifcGuid } from '../src/build/ifcClass';
+import { replan } from '../src/build/run';
 import type { Project, TakeoffType } from '../src/model';
 import type { SpecSection } from '../src/spec/parse';
 
@@ -43,6 +44,56 @@ describe('build it', () => {
     expect(tradeOf(type('a', 'Remove existing light fixture', 'count', '26 Electrical'))).toBe('demolition');
     expect(levelWords('LEVEL 2 (MAIN) FLOOR PLAN')).toEqual({ num: 2, word: 'main' });
     expect(levelWords('BELOW GRADE PLAN - DRAINAGE').word).toBe('lower');
+    for (const name of ['Beam B2 GLULAM', 'Column C1', 'Lintel L1', 'Brace BR1', 'Post P1', 'Base plate BP1', 'Structural wall WT1'])
+      expect(tradeOf(type('s', name, 'count', '06 Wood, Plastics & Composites'))).toBe('structure');
+    expect(tradeOf(type('s', 'Joist / truss J1', 'count', '06 Wood'), 'structure')).toBe('structure');
+    expect(tradeOf(type('f', 'Excavation', 'area', '31 Earthwork'), 'foundations')).toBe('structure');
+  });
+
+  it('plans stated site lengths after mobilization without a building level or route geometry', () => {
+    const p = project();
+    p.units = 'metric';
+    p.sheets = [{ ...sheet('civil', 'C1.0', 'SITE SERVICES PLAN', 1), metersPerPoint: null }, { ...sheet('road', 'C2.0', 'ROAD PLAN', 2), metersPerPoint: 0.1 }];
+    p.types = [type('pipe', 'Sanitary sewer', 'linear', '33 Utilities'), type('pavement', 'Paved road', 'area', '32 Exterior Improvements')];
+    p.measurements = [
+      { id: 'run', sheetId: 'civil', typeId: 'pipe', source: 'site', points: [[0, 0], [20, 0]], holes: [], statedLength: 900 },
+      { id: 'paving', sheetId: 'road', typeId: 'pavement', source: 'site', points: [[0, 0], [498, 0], [498, 500], [0, 500]], holes: [] },
+    ];
+    const model = extractModel({ project: p, sections: [], floorToFloor: 3.6 });
+    const el = model.elements[0];
+    expect(el).toMatchObject({ trade: 'site', level: null, shape: null, quantity: 900, unit: 'm' });
+    expect(model.issues.some((i) => i.id === 'unplaced:level unknown')).toBe(false);
+    const setup = defaultSetup(model, [], '2026-11-02');
+    const work = planActivities(model, setup, [], []).find((a) => a.id === 'work:site:site')!;
+    expect(work).toMatchObject({ name: 'Site work', level: null, quantities: { m: 900, 'm²': 2490 }, duration: 38 });
+    expect(work.deps.map((d) => d.from)).toEqual(['mobilize']);
+  });
+
+  it('uses foundation concrete volume for production and structural counts separately', () => {
+    const p = project();
+    p.units = 'metric';
+    p.sheets = [sheet('fdn', 'S1.0', 'FOUNDATION PLAN', 1), sheet('framing', 'S2.0', 'FRAMING PLAN', 2), sheet('roof', 'S2.1', 'PLAN', 3)];
+    p.types = [
+      { ...type('pad', 'F1 – Pad footing', 'count', '03 Concrete'), width: 1.5, depth: 1.5, thickness: 0.3, items: [{ id: 'concrete', name: 'Concrete + 5%', unit: 'm³', formula: 'N * W * D * T * 1.05' }] },
+      type('beam', 'B2 – Beam GLULAM', 'count', '06 Wood'),
+    ];
+    p.measurements = [
+      { id: 'pad1', sheetId: 'fdn', typeId: 'pad', source: 'foundations', points: [[1, 1]], holes: [] },
+      { id: 'beam1', sheetId: 'framing', typeId: 'beam', source: 'structure', points: [[1, 1]], holes: [] },
+      { id: 'beam2', sheetId: 'roof', typeId: 'beam', source: 'structure', points: [[1, 1]], holes: [] },
+    ];
+    const model = extractModel({ project: p, sections: [], levelHints: { framing: 'MAIN FLOOR FRAMING PLAN', roof: 'HIGH ROOF FRAMING PLAN' }, floorToFloor: 3.6 });
+    expect(model.elements.map((e) => [e.trade, e.level])).toEqual([['structure', 'fdn'], ['structure', 'L1'], ['structure', 'roof']]);
+    expect(model.elements[0].quantity).toBe(1);
+    expect(model.elements[0].production).toEqual({ quantity: 0.70875, unit: 'm³' });
+    const setup = defaultSetup(model, [], '2026-11-02');
+    const acts = planActivities(model, setup, [], []);
+    expect(acts.find((a) => a.id === 'work:structure:fdn')?.quantities).toEqual({ 'm³': 0.70875 });
+    expect(acts.find((a) => a.id === 'work:structure:L1')?.quantities).toEqual({ ea: 1 });
+    expect(setup.trades.structure.value.rates['m³']).toBe(8);
+    expect(replan(model, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.some((i) => i.id === 'structure-production-review')).toBe(true);
+    const confirmed = applySetupEdits(setup, { setup: { trades: { structure: { rates: { ea: 4, 'm³': 6 } } } } });
+    expect(replan(model, confirmed, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.some((i) => i.id === 'structure-production-review')).toBe(false);
   });
 
   it('reads the review period the specification gives', async () => {

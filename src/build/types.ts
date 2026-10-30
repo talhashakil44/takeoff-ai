@@ -68,6 +68,8 @@ export interface BuildElement {
   /** Quantity in project units, with its unit (LF, SF, ea, m, m²). */
   quantity: number;
   unit: string;
+  /** Quantity used to plan production when an assembly gives a better unit than the primary takeoff. */
+  production?: { quantity: number; unit: string };
   typeId: string;
   typeName: string;
   division: string;

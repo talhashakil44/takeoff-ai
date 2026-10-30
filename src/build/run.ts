@@ -46,6 +46,19 @@ export function replan(model: BuildModel, setup: PlanSetup, input: Pick<BuildInp
   const acts = planActivities(model, setup, input.sections, input.facts, input.edits);
   const schedule = planToTarget(acts, setup);
   schedule.issues.push(...planningScopeIssues(model, input.facts));
+  const structureRates = setup.trades.structure?.value.rates;
+  const structureRateRefs = model.elements.filter((e) => e.trade === 'structure' && (
+    (e.unit === 'ea' && structureRates?.ea === 10) ||
+    (e.production?.unit === 'm³' && structureRates?.['m³'] === 8) ||
+    (e.production?.unit === 'CY' && structureRates?.CY === 10)
+  )).map((e) => e.id);
+  if (structureRateRefs.length)
+    schedule.issues.push({
+      id: 'structure-production-review',
+      severity: 'warning',
+      text: 'Structural member counts and foundation concrete use provisional crew-day rates. Confirm erection complexity, forming, reinforcement and concrete placing rates with the trade before relying on the finish date.',
+      refs: structureRateRefs,
+    });
   const now = new Date();
   const today = input.today ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   if (setup.start.value < today)
