@@ -3,6 +3,7 @@ import { imperialDatumEvidence } from './datumEvidence';
 import { quarantineDetachedSheets } from './placementQuality';
 import { recoverRoof, type DrawingLines } from './roof';
 import { simpleRing } from './surface';
+import { drawingFingerprint } from './sources';
 import {
   addBuilding,
   cutOpenings,
@@ -143,8 +144,8 @@ export function sourceHashOf(input: ExtractInput): string {
     JSON.stringify(input.edits?.levels),
     JSON.stringify(input.edits?.elevations),
     JSON.stringify(input.levelHints),
-    JSON.stringify(input.drawingTexts),
-    JSON.stringify(input.drawingLines),
+    // Drawing evidence by fingerprint: stringifying the linework (tens of MB) froze the window.
+    drawingFingerprint(input.drawingTexts, input.drawingLines),
     p.units,
     input.floorToFloor,
   ];

@@ -6,8 +6,9 @@ import { loadBuild, runBuild, runReplan, saveBuild } from '../build/client';
 import { Calendar } from '../build/cpm';
 import { isPlan, sourceHashOf, titleBlockWords, TRADES, tradeByKey } from '../build/extract';
 import { readSpecFacts } from '../build/facts';
+import { loadDrawingSources } from '../build/sources';
 import { type BuildOutput } from '../build/run';
-import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Issue, PlanSetup, SourceRef, SpecFact } from '../build/types';
+import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Feasibility, Issue, PlanSetup, SourceRef, SpecFact } from '../build/types';
 import type { Project } from '../model';
 import type { Place } from '../graph/graph';
 import type { SpecSection } from '../spec/parse';
@@ -41,7 +42,11 @@ interface Props {
 
 const BASIS_LABEL: Record<Basis, string> = { documented: 'Documented', inferred: 'Inferred', assumed: 'Assumption', unknown: 'Unknown' };
 const KIND_LABEL: Record<Activity['kind'], string> = { milestone: 'Milestone', mobilize: 'Site', submittal: 'Submittal', review: 'Review', resubmittal: 'Resubmittal', procurement: 'Procurement', work: 'Work', testing: 'Testing', commissioning: 'Commissioning', closeout: 'Closeout' };
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today on this computer's calendar (not UTC's: in the evening in Toronto UTC is already tomorrow). */
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 const fmt = (iso: string | null | undefined) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
 
 function Badge({ basis }: { basis: Basis }) {
@@ -118,28 +123,32 @@ export default function BuildView({ project, sections, specText, sheetText, shee
       gone = true;
     };
   }, [sections, specText]);
+  // The drawing evidence the model reads (sheet text, elevation linework): only the sheets it
+  // uses, a few at a time, kept on this computer so the next opening is quick.
+  const [reading, setReading] = useState<{ done: number; of: number } | null>(null);
   useEffect(() => {
     let gone = false;
     void (async () => {
-      const h: Record<string, string> = {};
-      const drawings: DrawingTexts = {};
-      const linework: DrawingLines = {};
-      for (const sid of project.sheets.map(s => s.id)) {
-        const s = project.sheets.find((x) => x.id === sid);
-        if (!s || s.superseded) continue;
-
-        const t = await sheetText(sid).catch(() => []);
-        h[sid] = titleBlockWords(t, s.width, s.height);
-        drawings[sid] = t;
-        if (sheetLines && /ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? '')) linework[sid] = await sheetLines(sid).catch(() => []);
+      const src = await loadDrawingSources({
+        project,
+        sheetText,
+        sheetLines,
+        titleWords: titleBlockWords,
+        progress: (done, of) => !gone && setReading(done < of ? { done, of } : null),
+        cancelled: () => gone,
+      });
+      if (!gone) {
+        setHints(src.hints);
+        setDrawingTexts(src.texts);
+        setDrawingLines(src.lines);
+        setReading(null);
       }
-      if (!gone) { setHints(h); setDrawingTexts(drawings); setDrawingLines(linework); }
     })();
     return () => {
       gone = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.sheets, sheetText, sheetLines]);
+  }, [project.sheets, measured.join(','), sheetText, sheetLines]);
   const ready = facts !== null && hints !== null;
 
   const requestVersion = useRef(0);
@@ -345,7 +354,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   return (
     <div className={`bld bld-workspace bld-mode-${workspace}`} role="region" aria-label="Build It">
       <header className="bld-bar">
-        {busy && <div className="bld-live-status" role="status">{busy}</div>}
+        {(busy || reading) && <div className="bld-live-status" role="status">{busy ?? `Reading the drawings… ${reading!.done} of ${reading!.of} sheets`}</div>}
         {error && <div className="bld-live-error" role="alert">{error}</div>}
         <div className="bld-title">
           <Icon name="walls" size={16} />
@@ -357,9 +366,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
           <button aria-pressed={workspace === 'sequence'} onClick={() => setWorkspace('sequence')}>Construction</button>
         </nav>}
         {out && feas && (
-          <div className={`bld-feas ${feas.target ? (feas.overBy ? 'late' : 'ok') : 'none'}`} title={feas.target ? `Target ${fmt(feas.target)}` : 'No target set'}>
-            {feas.target ? (feas.overBy ? `${feas.overBy} working days late · earliest ${fmt(feas.earliestFinish)}` : `Fits the target · ${fmt(feas.earliestFinish)}`) : `Earliest finish ${fmt(feas.earliestFinish)} · no target set`}
-          </div>
+          <FeasibilityBadge feas={feas} start={out.setup.start} />
         )}
         {stale && (
           <button className="bld-stale" onClick={() => void build()} title="The drawings, takeoff or specification changed since this was built">
@@ -393,11 +400,12 @@ export default function BuildView({ project, sections, specText, sheetText, shee
 
       <div className="bld-main">
         {setupOpen && out && (
-          <div className="bld-left-tabs">
-            <button className={left === 'model' ? 'on' : ''} onClick={() => setLeft('model')}>
-              Model
+          <div className="bld-left-tabs" role="tablist" aria-label="Side panel">
+            {/* "Elements", not "Model": the header's Model/Construction switch already has that name (and "Browser" opens this panel). */}
+            <button role="tab" aria-selected={left === 'model'} className={left === 'model' ? 'on' : ''} onClick={() => setLeft('model')}>
+              Elements
             </button>
-            <button className={left === 'setup' ? 'on' : ''} onClick={() => setLeft('setup')}>
+            <button role="tab" aria-selected={left === 'setup'} className={left === 'setup' ? 'on' : ''} onClick={() => setLeft('setup')}>
               Setup
             </button>
           </div>
@@ -549,7 +557,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                 {project.measurements.length.toLocaleString()} takeoffs on {measured.length} sheets · {sections.length} spec sections
               </p>
               <button className="primary big" disabled={!ready || !!busy || !project.measurements.length} onClick={() => void build()}>
-                {busy ?? (!ready ? 'Reading the documents…' : 'Build it')}
+                {busy ?? (!ready ? (reading ? `Reading the drawings… ${reading.done} of ${reading.of}` : 'Reading the documents…') : 'Build it')}
               </button>
               {!project.measurements.length && <p className="dim">There is no takeoff yet: take off the drawings first.</p>}
               {error && <p className="bld-error">{error}</p>}
@@ -1159,5 +1167,50 @@ function Gantt(props: {
       {target !== null && <div className="bld-g-target" style={{ left: `calc(var(--g-name) + ${target * zoom}px)` }} title="Target" />}
       </div>
     </div>
+  );
+}
+
+/**
+ * The header's verdict on the target. "Fits" says when it only fits with recovery changes
+ * (extra crews, overlapped levels: unpriced), and what the finish is without them; a start
+ * date already behind us is pointed out rather than silently planned from.
+ *
+ * Data contract (from the plan, src/build/replanTarget.ts): `feasibility.changes` lists the
+ * recovery changes applied; `feasibility.baseline` is the lean plan before any of them
+ * ({ earliestFinish, overBy }), absent when no recovery ran.
+ */
+function FeasibilityBadge({ feas, start }: { feas: Feasibility; start: Assumption<string> }) {
+  const changes = feas.changes ?? [];
+  const baseline = (feas as Feasibility & { baseline?: { earliestFinish: string; overBy: number } }).baseline;
+  const n = changes.length;
+  const recovery = n ? `${n} recovery change${n === 1 ? '' : 's'}` : '';
+  const late = !!feas.target && feas.overBy > 0;
+  const text = !feas.target
+    ? `Earliest finish ${fmt(feas.earliestFinish)} · no target set`
+    : late
+      ? `${feas.overBy} working days late${n ? ` even with ${recovery}` : ''} · earliest ${fmt(feas.earliestFinish)}`
+      : n
+        ? `Fits only with ${recovery} · ${fmt(feas.earliestFinish)}`
+        : `Fits the target · ${fmt(feas.earliestFinish)}`;
+  const tip = [
+    feas.target ? `Target ${fmt(feas.target)}` : 'No target set',
+    baseline ? `Without recovery: ${fmt(baseline.earliestFinish)}${baseline.overBy ? `, ${baseline.overBy} working days late` : ''}` : '',
+    ...changes.map((c) => `• ${c}`),
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const past = start.value < today();
+  return (
+    <>
+      <div className={`bld-feas ${!feas.target ? 'none' : late ? 'late' : n ? 'stretched' : 'ok'}`} title={tip}>
+        {text}
+        {baseline && n > 0 && <em> · without: {fmt(baseline.earliestFinish)}</em>}
+      </div>
+      {past && (
+        <div className="bld-feas past" title={`${start.why}. The plan runs from this date; set the real start in Setup if the work hasn't begun.`}>
+          Starts {fmt(start.value)} · in the past
+        </div>
+      )}
+    </>
   );
 }

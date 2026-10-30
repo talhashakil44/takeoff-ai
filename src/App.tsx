@@ -388,17 +388,20 @@ export function App() {
     if (!sh || !pdf) return [];
     return pageTexts(await pdf.getPage(sh.page)).catch(() => []);
   }, []);
+  // The spec and the map use the drawings' graph; Build It doesn't, so opening it doesn't read
+  // the whole set into one (that held the window up for half a minute on a big set).
+  const linkedView = view === 'specs' || view === 'map';
   const projectMap = useMemo(
-    () => (view !== 'drawings' && project && (specBooks.length || graph) ? buildProjectMap(graph, specBooks, project.sheets, graph?.specRefs ?? [], project.docs) : null),
+    () => (linkedView && project && (specBooks.length || graph) ? buildProjectMap(graph, specBooks, project.sheets, graph?.specRefs ?? [], project.docs) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [view === 'drawings', graph, specBooks, project?.sheets],
+    [linkedView, graph, specBooks, project?.sheets],
   );
   if (import.meta.env.DEV) (window as unknown as { __pmap: unknown; __graph: unknown }).__pmap = projectMap;
   if (import.meta.env.DEV) (window as unknown as { __pmap: unknown; __graph: unknown }).__graph = graph;
   const sheetByNumber = useMemo(() => new Map((project?.sheets ?? []).filter((s) => !s.superseded && /\d/.test(s.name)).map((s) => [norm(s.name), s])), [project?.sheets]);
   // The spec or the map open: the drawings are read into their graph for it (again when drawings come or go).
   useEffect(() => {
-    if (view !== 'drawings' && graphKey && !graphBuilding.current && graphRef.current?.key !== graphKey) void openLinks();
+    if (linkedView && graphKey && !graphBuilding.current && graphRef.current?.key !== graphKey) void openLinks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, graphKey]);
   // Drawings added or removed while links are on: read the set again.
