@@ -1,21 +1,21 @@
-# Door swing and wall hosting (T34)
+# Door swing and wall hosting (T34 and T35)
 
-Reviewed 30 October 2026 on the refreshed demos under `.agents-data`. Frederick has 2,855 saved measurements; Kelso has 2,105. Their project JSON SHA-256 values are listed below. The project JSON and PDFs were read only.
+Reviewed 30 October 2026 on the refreshed demos under `.agents-data`. Frederick has 2,855 saved measurements; Kelso has 2,105. Their project JSON SHA-256 values are listed below. The project JSON and PDFs were read only. T35 uses the linework loader at `claude/integration@ec059dd`, which recognizes Kelso's straight-chord polyline swings before Build It searches for door hosts.
 
 Build It now reads door-plan vector linework, reconnects curved chords into quarter-circle swing candidates, and searches within 2 m of each saved door tag. A candidate must have a wall run within 0.4 m of a possible opening midpoint on the same level. The door is snapped to that wall and the arc's PDF box is retained as a second source; the original tag box remains first. Each arc is used at most once. If no swing can be matched, the old 600 mm wall-proximity placement remains provisional and the model raises a review issue. No geometry is invented for an unhosted tag.
 
-| Demo and sheet | Doors | Hosted before | Hosted after | Swing verified after | Still unhosted |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Frederick A211 | 50 | 20 | 30 | 30 | 20 |
-| Frederick A212 | 38 | 29 | 34 | 26 | 4 |
-| Frederick A213 | 35 | 26 | 30 | 29 | 5 |
-| Frederick A214 | 32 | 23 | 28 | 28 | 4 |
-| Kelso A2.1 | 15 | 15 | 15 | 0 | 0 |
-| Kelso A2.2 | 18 | 14 | 14 | 0 | 4 |
-| **Frederick total** | **155** | **98** | **122** | **113** | **33** |
-| **Kelso total** | **33** | **29** | **29** | **0** | **4** |
+| Demo and sheet | Doors | Hosted before T34 | Hosted after T34 | Hosted after T35 | Swing verified after T35 | Still unhosted |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Frederick A211 | 50 | 20 | 30 | 30 | 30 | 20 |
+| Frederick A212 | 38 | 29 | 34 | 34 | 26 | 4 |
+| Frederick A213 | 35 | 26 | 30 | 30 | 29 | 5 |
+| Frederick A214 | 32 | 23 | 28 | 28 | 28 | 4 |
+| Kelso A2.1 | 15 | 15 | 15 | 15 | 13 | 0 |
+| Kelso A2.2 | 18 | 14 | 14 | 16 | 15 | 2 |
+| **Frederick total** | **155** | **98** | **122** | **122** | **113** | **33** |
+| **Kelso total** | **33** | **29** | **29** | **31** | **28** | **2** |
 
-The nine Frederick doors hosted only by proximity remain provisional. Kelso A2.2 has 74,870 vector segments but zero marked curved segments, so the PDF supplies no vector swing arcs to verify. Its existing 29 hosts remain proximity based. Frederick's A211 has 53 detected swing arcs and A212 has 49; detection is deliberately limited to plausible quarter-circle groups, not tag circles. The schedule finish is unchanged: Frederick **2025-08-06**, Kelso **2027-08-25**.
+The nine Frederick doors and three Kelso doors hosted only by proximity remain provisional. Kelso A2.1 and A2.2 have no raw Bézier-curve segments; the source loader identifies straight-chord arc runs and exposes 36 swing candidates on each sheet. Build It matched 28 of their 33 saved door tags to a same-sheet swing and wall. Frederick's A211 has 53 detected swing arcs and A212 has 49; its hosting counts did not regress. Detection is deliberately limited to plausible quarter-circle groups, not tag circles. The schedule finish is unchanged: Frederick **2025-08-06**, Kelso **2027-08-25**.
 
 ## Unhosted saved door measurement IDs
 
@@ -35,6 +35,6 @@ Project JSON SHA-256: `84ac0c87482e2afeabc99dc251fb6d216f7ac894f2b4168b2f7e15b19
 
 Project JSON SHA-256: `ea9f01c96a9f0eb7e2765704ae13e52b61700a6dd82a925ddbddd3e4d96c0f8b` (2105 measurements).
 
-**A2.2 (4):** `d14769fd-fc45-46e6-a351-0d7ad97a095c`, `ca91402a-1df0-420c-b079-1070c18467a7`, `aa04dcec-eb22-47c1-aa3c-d022fdaf906b`, `05c587bc-8236-41f7-850d-dd189f5dd86f`.
+**A2.2 (2):** `aa04dcec-eb22-47c1-aa3c-d022fdaf906b`, `05c587bc-8236-41f7-850d-dd189f5dd86f`.
 
 The saved tag, inferred wall, and arc source can be inspected in Build It. These remaining IDs require drawing review or richer linework before assigning a new 3D wall host.

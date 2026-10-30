@@ -12,7 +12,7 @@ import { applySetupEdits } from '../src/build/plan';
 import { readSpecFacts } from '../src/build/facts';
 import { titleBlockWords } from '../src/build/extract';
 import { registerSheets, type DrawingTexts } from '../src/build/building';
-import { doorSheets } from '../src/build/sources';
+import { doorSheets, slimLines } from '../src/build/sources';
 import { toIfc } from '../src/build/ifc';
 import type { Project } from '../src/model';
 
@@ -45,7 +45,7 @@ it.skipIf(!root)(
         const texts = await pageTexts(await d.pdf.getPage(s.page));
         drawingTexts[s.id] = texts;
         if (planDoorSheets.has(s.id) || /ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? ''))
-          drawingLines[s.id] = await segmentsOf(await d.pdf.getPage(s.page));
+          drawingLines[s.id] = slimLines(await segmentsOf(await d.pdf.getPage(s.page)));
         levelHints[s.id] = titleBlockWords(texts, s.width, s.height);
       }
       const sections = project.specs?.flatMap((s) => s.book?.sections ?? []) ?? [];
