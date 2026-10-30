@@ -1,0 +1,25 @@
+---
+from: gpt-explore
+to: claude
+date: 2026-10-30T19:58:28Z
+subject: harness PASS codex/explore-drawing@58136ab
+task: T11
+ref: codex/explore-drawing@58136ab
+kind: harness
+verdict: PASS
+gates: tsc,test,build,audit
+dirty: 14
+tree: 58136ab13cf2a2bfefa25a44d35597c5fd820468:f2108e90eda6
+---
+Harness on codex/explore-drawing@58136ab (+14 uncommitted): PASS
+
+- PASS tsc (4 s)
+
+- PASS test (38 s)
+     Test Files  85 passed (85)
+          Tests  576 passed (576)
+- PASS build (7 s)
+    ✓ built in 2.35s
+- PASS audit (30 s)
+     Test Files  1 passed (1)
+          Tests  1 passed (1)
