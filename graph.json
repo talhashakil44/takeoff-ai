@@ -131,7 +131,11 @@
         "tsc",
         "test",
         "build"
-      ]
+      ],
+      "notes": [
+        "2026-10-30T04:28 claude: Kelso civil: gravel access road already measured by chainage (560 m). Granular A/B depths are in C-112's typical section; limit of construction and silt fence are dash-piece line types without layers on C-104/C-111: tracing them is the remaining work."
+      ],
+      "updated": "2026-10-30T04:28:21.735Z"
     },
     {
       "id": "T9",
