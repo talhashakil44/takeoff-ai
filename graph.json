@@ -370,7 +370,7 @@
       "updated": "2026-10-30T05:09:07.046Z"
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [
         "T19"
       ],
@@ -386,7 +386,9 @@
       "title": "Dry-in gate and per-level allowances: interior finishes (incl. finish allowances) wait for an assumed weather-tight milestone after envelope; floor-area allowances split per level by each level GFA",
       "prompt": "Standard sequencing, labelled basis assumed: a Dry-in milestone after roof + exterior wall envelope work (measured or accepted allowance) on each building; interior finishes (partitions finishing, ceilings, flooring, painting, specialties) start after it. Make it a Setup toggle (on by default) so the user can turn it off. Split accepted GFA allowances per level by each level floor area so they overlap floor by floor like measured work. Report Kelso/Frederick dates before/after.",
       "added": "2026-10-30T05:05:00.944Z",
-      "by": "claude"
+      "by": "claude",
+      "branch": "codex/build-it-dry-in",
+      "updated": "2026-10-30T05:09:09.671Z"
     }
   ]
 }
