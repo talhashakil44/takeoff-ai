@@ -463,7 +463,7 @@
       "updated": "2026-10-30T05:44:01.220Z"
     },
     {
-      "status": "review",
+      "status": "done",
       "depends": [
         "T22"
       ],
@@ -480,8 +480,9 @@
       "prompt": "QA finding 5: S1.0 F1/P2/BP2 count points sit on the tag text, ~1-3 m from the footing. Footings, piers, base plates and columns sit on grid intersections. Build It has the registered grid: snap each such count to the nearest intersection within ~2.5 m (flag when none), without editing the takeoff point. I tried snapping in the takeoff to the scheduled outline and it was unreliable (dashed outlines, mass footings jump to the wrong one), so it belongs in Build It.",
       "added": "2026-10-30T05:43:56.634Z",
       "by": "claude",
-      "branch": "codex/build-it-grid-counts@b83fee7",
-      "updated": "2026-10-30T05:59:24.361Z"
+      "branch": "claude/integration@b83fee7",
+      "updated": "2026-10-30T06:01:32.892Z",
+      "evidence": "claude/integration@b83fee7"
     }
   ]
 }
