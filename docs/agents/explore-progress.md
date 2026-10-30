@@ -47,7 +47,7 @@ credible zero lengths. Source-derived spans remain separate.
 - Four canopy B7 beams have centred plan ink, traced dogleg grid leaders and a
   drawn 20-vertex I-profile. Revised S5.0 corroborates the 6.623 m datum through
   the web; inferred steel bottom/top are 6.562675 / 6.769050 m.
-- Twenty-nine foundations: fourteen source-qualified pads, nine exterior piers,
+- Thirty foundations: fifteen source-qualified pads, nine exterior piers,
   two east MF2 mass footings, and four source-bounded SF1/SF2 spans. Revised
   pier tops are -0.250 m. Mass-footing depth is 400 mm and is not confused with
   adjacent 300 mm strip-footing notes. Pad/pier centres follow actual eccentric
@@ -75,7 +75,7 @@ credible zero lengths. Source-derived spans remain separate.
   separately in `model.drawingGeometry`: no quantities, materials or schedule
   assignments. The first and southeast top -0.250 m are direct; the middle top -0.250 m is inferred through
   the adjoining unstepped strip. All bottoms are -0.650 m. Explore and Build
-  expose their drawing references and acceptance status. Model version 31 forces
+  expose their drawing references and acceptance status. Model version 32 forces
   older geometry to rebuild; imported accepted takeoffs remain unchanged.
 - Three WT-1 wall defaults are axes, not unsupported four-metre-high solids.
   Their complete footprints, opening cuts and vertical sections are unresolved.
@@ -89,14 +89,14 @@ missing faces and coincident internal caps.
 
 ## Evidence and gates
 
-Latest v30 independent production replay: 131 accepted-source structural/foundation
+Latest v32 independent production replay: 132 accepted-source structural/foundation
 solids plus three drawing-only MF3 solids; all 2,108 accepted quantity tuples unchanged.
 A complete replay changes no recovered objects; removing all evidence withdraws
-all derived solids and candidates. Independent IFC validation creates all 134 closed
+all derived solids and candidates. Independent IFC validation creates all 135 closed
 solids without topology failures (maximum relative volume discrepancy 0.00345%).
 Drawing candidates have no IFC quantity sets. The rebuilt 2,115-record engine project
 connects the same three MF3 footprints to accepted takeoffs, with no duplicate
-drawing candidates; all 134 physical solids are then accepted-source geometry.
+drawing candidates; all 135 physical solids are then accepted-source geometry.
 Physical pads/mass footings and strip footings export as IfcFooting; recovered
 columns and piers export as IfcColumn. Inspector dimensions preserve millimetres.
 Obsolete locator warnings are hidden only while fresh physical evidence qualifies;
@@ -135,9 +135,9 @@ do not uniquely establish left-B/right-E B2 free-end elevations.
   extensions remain unresolved and their support spans are labelled incomplete. Distinguish
   B2/B3 frames from separate R2 purlins. Do not assign an upper purlin level to a
   lower frame beam or apply purlin notch notes indiscriminately to B2/B3.
-- Pad coverage: 14 of 34 accepted F1/F2 pads recovered (one alternate-qualified).
-  The remaining twenty require local datum, compound-footprint or sump evidence.
-  Southeast F2 has a qualified component footprint but unresolved MF2 continuity;
+- Pad coverage: 15 of 34 accepted F1/F2 pads recovered (one alternate-qualified).
+  The remaining nineteen require local datum, compound-footprint or sump evidence.
+  Southeast F2 now has qualified inferred top continuity through its adjoining MF2;
   north grid-8 corners intersect SF-N slab thickening.
 - Resolve additional footing leaders, west mass-footing datums, stepped strip
   intervals and foundation wall heights. Do not flatten stepped runs to one datum.
@@ -329,3 +329,64 @@ is exactly identical to its validated IFC snapshot. The compiled app rebuilds
 through the normal loader and retains 29/154 foundation shapes and the southwest
 component's dimensions, datums and inference labels. Private final visual proof:
 `diag/explore/proofs/sw-f2-foundation-v31.png`.
+
+## North grid-8 source distinction — revised 10/S1.2
+
+Independent source review traced S0.2's SF-N type ST to revised 10/S1.2
+(Addendum 5 page 23). The detail is explicitly a SLAB THICKENING OPTION:
+200 mm total depth below finished floor, 600 mm flat underside and 2:1 sloping
+sides. It is not the 300 mm deep SF1/SF2 foundation strip and cannot establish a
+deep F1 pad's elevation. Original detail and plan crops are
+`/tmp/sfn-detail10.png` and `/tmp/grid8-a-d-context.png`.
+
+The F1 records near PDF centres [1911.144, 819.936] and [1911.144, 1136.016]
+remain unresolved. Future recovery must distinguish projected slab-thickening
+ink from the F1 scheduled 1500 × 1500 × 300 mm component, prove that component's
+own boundary/tag association, then independently qualify its foundation datum.
+Do not union the projected SF-N outline with the pad or borrow the slab underside.
+The optional-detail designation remains part of the source qualification.
+
+## Southeast F2 — version 32 source shoulder qualification
+
+The incoming SF2 edge widens before MF2. The original source contains a closed
+filled shoulder subpath 420 at [2013.24, 1110.84, 2055.5995, 1132.08], attached
+to mass-footing subpath 373 at [2013.24, 1132.08, 2154.84, 1183.08]. The direct
+strip leader tip [2055.72, 1110.96] lands at the shoulder corner. This is a
+separate source topology segment; the constant-width SF2 gate must stay intact.
+The outgoing connection from MF2 bottom y1183.08 to F2 top y1216.2 is straight.
+
+Claude reviewed this detail and accepted top-only inference subject to continuous
+source boundaries, both independent leaders, and no step/crossbar/STEP text.
+The shoulder's thickness is not established by the plan. It must remain unmodelled;
+neither SF2's 300 mm nor MF2's 400 mm thickness may be assigned to it. The adjacent
+Note 2 refers to the buttress wall and does not establish the shoulder depth.
+
+Version 32 recovers southeast F2 as an explicitly inferred scheduled rectangle
+component, top -0.250 m and bottom -0.550 m from its own 300 mm depth. Both
+independent strip/mass leaders, the closed shoulder and its drawn sides, the
+straight outgoing band, and the pad perimeter remain required. No shoulder solid
+is created. STEP annotations in each path segment, a standalone outgoing
+crossbar, conflicting elevations or removal of either leader/shoulder connection
+withdraw the pad. Earlier recovered geometry is preserved. The full harness
+passes 579 tests in 85 files, TypeScript, production build and Kelso/Frederick audit.
+Original source overlay: `/tmp/explore-foundation-next/se-top-continuity-verified.png`.
+
+Independent v32 QA confirms 30 accepted-source foundation shapes and 135 total
+structural solids in each project: legacy 132 accepted plus three drawing-only;
+engine 135 accepted with no duplicates. Only southeast F2 is added; all prior
+134 source solids are unchanged. All 2,108/2,115 accepted tuples are unchanged,
+replay is stable and source withdrawal removes derived solids/candidates. Both
+fresh IFC exports create 135 manifold solids, maximum volume discrepancy
+0.00345%; legacy drawing-only footings still have no quantity sets.
+
+The normal compiled-app rebuild exposes 30/154 S1.0 physical shapes. Live 2D
+and focused 3D source overlays were inspected, including the linked revised
+page 21 and inspector top -0.250 / bottom -0.550 / own depth 0.300 m. Browser
+errors: none. Private proofs: `diag/explore/proofs/se-f2-foundation-v32.png`
+and `diag/explore/proofs/se-f2-foundation-v32-plan.png`.
+
+Current next action: qualify north grid-8 F1 component boundaries separately
+from the optional SF-N slab-thickening projection, then independently establish
+the deep footing datum. Do not borrow the slab underside. Remaining roof
+free-end elevations, roof assembly and foundation coverage remain open.
+T11 is incomplete; source and visual acceptance plus Claude review still apply.

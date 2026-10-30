@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import {
   footingTopDatum,
   padJunctionPerimeter,
+  padMassTopDatum,
   recoverFoundationGeometry,
 } from '../src/build/foundationGeometry';
 import type { Project } from '../src/model';
@@ -1210,4 +1211,141 @@ it('accounts for every large pad-perimeter gap using actual scheduled strip retu
     line(0,200,0,300,1.32),line(-20,20,0,20,1.32),line(-20,80,0,80,1.32),
   ]};
   expect(padJunctionPerimeter(plan,[0,0,100,100],.3,[{width:.6,depth:.3,source:{kind:'spec',id:'revision',page:19,label:'Strip schedule'}}])).toBeNull();
+});
+
+
+it('requires two independent agreeing leaders and a closed shoulder for mass-to-pad TOP continuity', () => {
+  const line = (
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    sub: number,
+    filled = false,
+  ) => ({
+    x1,
+    y1,
+    x2,
+    y2,
+    sub,
+    width: filled ? 0 : 0.6,
+    filled,
+    color: filled ? '#c0c0c0' : '#000000',
+  });
+  const shoulder = [
+    line(0, 70, 150, 70, 1, true),
+    line(150, 70, 150, 100, 1, true),
+    line(150, 100, 0, 100, 1, true),
+    line(0, 100, 0, 70, 1, true),
+  ];
+  const edges = [
+    line(0, 70, 0, 100, 2),
+    line(150, 70, 150, 100, 3),
+    line(60, -30, 60, 70, 4),
+    line(150, -30, 150, 70, 5),
+    line(60, 200, 60, 240, 6),
+    line(150, 200, 150, 240, 7),
+  ];
+  const plan = {
+    docId: 'revision',
+    page: 21,
+    key: 'spec:revision:21',
+    sheetId: 'plan',
+    frame: { a: 0.01, b: 0, tx: 0, ty: 0, residual: 0 },
+    texts: [],
+    lines: [...shoulder, ...edges],
+  };
+  const source = {
+    kind: 'spec' as const,
+    id: 'revision',
+    page: 21,
+    label: 'Direct local leader',
+  };
+  const stripLeader = {
+    tip: [150, 70] as [number, number],
+    top: -0.25,
+    bottom: -0.55,
+    source: { ...source, quote: 'Independent strip top/bottom' },
+  };
+  const massLeader = {
+    tip: [300, 150] as [number, number],
+    top: -0.25,
+    bottom: -0.65,
+    source: { ...source, quote: 'Independent mass top/bottom' },
+  };
+  const leaders = [stripLeader, massLeader];
+  const mass = {
+    ...pad,
+    typeName: 'MF2',
+    shape: {
+      type: 'point',
+      at: [1.5, 1.5],
+      z: -0.65,
+      size: [3, 1, 0.4],
+      rotation: 0,
+    },
+    issues: ['Foundation revision applied: direct local top/underside leader'],
+    sources: [source],
+  } as BuildElement;
+  const current = { ...model, elements: [mass] };
+  const strips = [
+    { width: 0.9, depth: 0.3, source: { ...source, label: 'SF2 schedule' } },
+  ];
+  const box = [50, 240, 230, 420];
+  const recover = (p = plan, ls = leaders, m = current) =>
+    padMassTopDatum(p, box, 0.3, ls, strips, m);
+  expect(recover()?.top).toBe(-0.25);
+  expect(
+    recover()
+      ?.sources.map((s) => s.quote)
+      .join(' '),
+  ).toContain('shoulder volume and depth remain unmodelled');
+  expect(recover()?.sources).toContainEqual(stripLeader.source);
+  expect(recover()?.sources).toContainEqual(massLeader.source);
+  expect(recover(plan, [stripLeader])).toBeNull();
+  expect(recover(plan, [massLeader])).toBeNull();
+  expect(
+    recover(plan, [{ ...stripLeader, top: -0.3, bottom: -0.6 }, massLeader]),
+  ).toBeNull();
+  expect(
+    recover({ ...plan, lines: plan.lines.filter((l) => l.sub !== 1) }),
+  ).toBeNull();
+  expect(
+    recover({ ...plan, lines: plan.lines.filter((l) => l.sub !== 2) }),
+  ).toBeNull();
+  expect(
+    recover({ ...plan, lines: plan.lines.filter((l) => l.sub !== 4) }),
+  ).toBeNull();
+  expect(
+    recover({
+      ...plan,
+      lines: plan.lines.map((l) =>
+        l.sub === 1 ? { ...l, y1: l.y1 - 5, y2: l.y2 - 5 } : l,
+      ),
+    }),
+  ).toBeNull();
+  expect(
+    recover({ ...plan, lines: [...plan.lines, line(60, 220, 150, 220, 8)] }),
+  ).toBeNull();
+  for (const [cx, cy] of [
+    [100, 0],
+    [100, 85],
+    [200, 150],
+    [100, 220],
+  ]) {
+    expect(
+      recover({ ...plan, texts: [{ str: 'STEP', cx, cy }] } as typeof plan),
+    ).toBeNull();
+  }
+  expect(
+    recover(plan, leaders, {
+      ...current,
+      elements: [
+        {
+          ...mass,
+          shape: { ...mass.shape!, z: -0.7 } as BuildElement['shape'],
+        },
+      ],
+    }),
+  ).toBeNull();
 });

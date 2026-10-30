@@ -2111,6 +2111,359 @@ export function padJunctionPerimeter(
     : null;
 }
 
+/** A source-filled shoulder can join a strip to a wider mass. Its top is
+ * inferred only; this helper never supplies a shoulder volume or depth. */
+function shoulderStripConnection(
+  plan: RevisedPlan,
+  mass: number[],
+  depth: number,
+  leaders: LocalFootingLeader[],
+  strips: { width: number; depth: number; source: SourceRef }[],
+) {
+  const scale = Math.hypot(plan.frame.a, plan.frame.b);
+  const groups = new Map<number, DrawingLines[string]>();
+  for (const l of plan.lines)
+    if (l.filled && !l.curve && l.color === '#c0c0c0' && l.sub !== undefined)
+      groups.set(l.sub, [...(groups.get(l.sub) ?? []), l]);
+  const matches: {
+    leader: LocalFootingLeader;
+    schedule: SourceRef;
+    box: number[];
+    shoulder: number[];
+    axis: number;
+  }[] = [];
+  for (const ls of groups.values()) {
+    if (ls.length !== 4) continue;
+    const xs = ls.flatMap((l) => [l.x1, l.x2]),
+      ys = ls.flatMap((l) => [l.y1, l.y2]);
+    const box = [
+      Math.min(...xs),
+      Math.min(...ys),
+      Math.max(...xs),
+      Math.max(...ys),
+    ];
+    const corners = [
+      [box[0], box[1]],
+      [box[2], box[1]],
+      [box[2], box[3]],
+      [box[0], box[3]],
+    ];
+    if (
+      !corners.every((p, i) =>
+        ls.some((l) => {
+          const q = corners[(i + 1) % 4];
+          return (
+            (Math.hypot(l.x1 - p[0], l.y1 - p[1]) < 0.15 &&
+              Math.hypot(l.x2 - q[0], l.y2 - q[1]) < 0.15) ||
+            (Math.hypot(l.x2 - p[0], l.y2 - p[1]) < 0.15 &&
+              Math.hypot(l.x1 - q[0], l.y1 - q[1]) < 0.15)
+          );
+        }),
+      )
+    )
+      continue;
+    for (const axis of [0, 1])
+      for (const direction of [-1, 1]) {
+        const cross = 1 - axis,
+          contact = direction < 0 ? box[axis + 2] : box[axis],
+          massEdge = direction < 0 ? mass[axis] : mass[axis + 2],
+          outer = direction < 0 ? box[axis] : box[axis + 2];
+        if (
+          Math.abs(contact - massEdge) > 0.15 ||
+          box[cross] < mass[cross] - 0.15 ||
+          box[cross + 2] > mass[cross + 2] + 0.15 ||
+          (outer - contact) * direction <= 0.15
+        )
+          continue;
+        // Both side edges of this actual filled shoulder must also be drawn.
+        const sides = [box[cross], box[cross + 2]].every((at) => {
+          const spans = plan.lines
+            .filter(
+              (l) =>
+                !l.filled &&
+                !l.curve &&
+                l.width >= 0.5 &&
+                (!l.color || l.color === '#000000') &&
+                Math.abs((cross === 0 ? l.x1 : l.y1) - at) < 0.15 &&
+                Math.abs((cross === 0 ? l.x2 : l.y2) - at) < 0.15,
+            )
+            .map((l) => [
+              Math.max(
+                Math.min(outer, contact),
+                Math.min(axis === 0 ? l.x1 : l.y1, axis === 0 ? l.x2 : l.y2),
+              ),
+              Math.min(
+                Math.max(outer, contact),
+                Math.max(axis === 0 ? l.x1 : l.y1, axis === 0 ? l.x2 : l.y2),
+              ),
+            ])
+            .filter((v) => v[1] > v[0])
+            .sort((a, b) => a[0] - b[0]);
+          let end = Math.min(outer, contact),
+            total = 0;
+          for (const [a, b] of spans) {
+            if ((a - end) * scale > 0.25) return false;
+            total += Math.max(0, b - Math.max(a, end));
+            end = Math.max(end, b);
+          }
+          return (
+            (Math.max(outer, contact) - end) * scale <= 0.25 &&
+            total / Math.abs(outer - contact) > 0.5
+          );
+        });
+        if (!sides) continue;
+        for (const leader of leaders) {
+          if (
+            Math.abs(leader.top - leader.bottom - depth) > 0.002 ||
+            Math.abs(leader.tip[axis] - outer) > 0.3 ||
+            Math.min(
+              Math.abs(leader.tip[cross] - box[cross]),
+              Math.abs(leader.tip[cross] - box[cross + 2]),
+            ) > 0.3
+          )
+            continue;
+          for (const strip of strips.filter(
+            (s) => Math.abs(s.depth - depth) < 0.002,
+          )) {
+            // A verification cross-section one strip-width upstream is a graph
+            // probe, never a fabricated physical element or accepted measurement.
+            const at = outer + (direction * strip.width) / scale;
+            const probe =
+              axis === 0
+                ? [at - 0.01, box[cross], at + 0.01, box[cross + 2]]
+                : [box[cross], at - 0.01, box[cross + 2], at + 0.01];
+            const approach = padStripDatum(
+              plan,
+              probe,
+              depth,
+              [leader],
+              [strip],
+            );
+            if (approach.length === 1)
+              matches.push({ ...approach[0], shoulder: box, axis });
+          }
+        }
+      }
+  }
+  return [...new Map(matches.map((m) => [JSON.stringify(m), m])).values()];
+}
+
+/** Infer TOP continuity only: independent strip and mass leaders must agree.
+ * The mass keeps its own depth; the destination pad keeps its scheduled depth. */
+export function padMassTopDatum(
+  plan: RevisedPlan,
+  box: number[],
+  depth: number,
+  leaders: LocalFootingLeader[],
+  strips: { width: number; depth: number; source: SourceRef }[],
+  current: BuildModel,
+) {
+  const scale = Math.hypot(plan.frame.a, plan.frame.b);
+  const matches: { top: number; sources: SourceRef[] }[] = [];
+  for (const element of current.elements) {
+    const shape = element.shape;
+    if (
+      shape?.type !== 'point' ||
+      !/^MF-?\d+\b/.test(element.typeName) ||
+      !element.issues.some(
+        (i) =>
+          i.startsWith('Foundation revision applied:') &&
+          i.includes('direct local top/underside leader'),
+      )
+    )
+      continue;
+    const centre = sheetPoint(shape.at, plan.frame);
+    const mass = [
+      centre[0] - shape.size[0] / scale / 2,
+      centre[1] - shape.size[1] / scale / 2,
+      centre[0] + shape.size[0] / scale / 2,
+      centre[1] + shape.size[1] / scale / 2,
+    ];
+    const nearBoundary = (p: number[]) =>
+      p[0] >= mass[0] - 0.15 &&
+      p[0] <= mass[2] + 0.15 &&
+      p[1] >= mass[1] - 0.15 &&
+      p[1] <= mass[3] + 0.15 &&
+      Math.min(
+        Math.abs(p[0] - mass[0]),
+        Math.abs(p[0] - mass[2]),
+        Math.abs(p[1] - mass[1]),
+        Math.abs(p[1] - mass[3]),
+      ) < 0.15;
+    const direct = leaders.filter(
+      (l) =>
+        nearBoundary(l.tip) &&
+        Math.abs(l.top - l.bottom - shape.size[2]) < 0.002,
+    );
+    if (direct.length !== 1) continue;
+    const massLeader = direct[0];
+    if (
+      Math.abs(shape.z + shape.size[2] - massLeader.top) > 0.002 ||
+      Math.abs(shape.z - massLeader.bottom) > 0.002
+    )
+      continue;
+    // This association cannot be supplied by the proposed destination pad.
+    const straight = padStripDatum(plan, mass, depth, leaders, strips);
+    const incoming = straight.length
+      ? straight
+      : shoulderStripConnection(plan, mass, depth, leaders, strips);
+    if (
+      incoming.length !== 1 ||
+      Math.abs(incoming[0].leader.top - massLeader.top) > 0.002
+    )
+      continue;
+    const incomingAxis = 'axis' in incoming[0] ? incoming[0].axis :
+      incoming[0].box[2] <= mass[0] + .3 || incoming[0].box[0] >= mass[2] - .3 ? 0 : 1;
+    for (const axis of [0, 1]) {
+      // This bounded path supports straight-through connectivity only.
+      if (axis !== incomingAxis) continue;
+      const cross = 1 - axis;
+      const edge =
+        box[axis] > mass[axis + 2]
+          ? mass[axis + 2]
+          : box[axis + 2] < mass[axis]
+            ? mass[axis]
+            : null;
+      if (edge === null) continue;
+      const starts = [
+        ...new Set(
+          plan.lines.flatMap((l) => {
+            if (
+              l.filled ||
+              l.curve ||
+              (l.color && l.color !== '#000000') ||
+              l.width < 0.5 ||
+              Math.abs(cross === 0 ? l.x1 - l.x2 : l.y1 - l.y2) > 0.05
+            )
+              return [];
+            return [
+              [l.x1, l.y1],
+              [l.x2, l.y2],
+            ]
+              .filter(
+                (p) =>
+                  Math.abs(p[axis] - edge) < 0.15 &&
+                  p[cross] >= mass[cross] - 0.15 &&
+                  p[cross] <= mass[cross + 2] + 0.15,
+              )
+              .map((p) => p[cross]);
+          }),
+        ),
+      ];
+      for (const at of starts) {
+        const tip = (axis === 0 ? [edge, at] : [at, edge]) as [number, number];
+        const outgoing = padStripDatum(
+          plan,
+          box,
+          depth,
+          [
+            {
+              tip,
+              top: massLeader.top,
+              bottom: massLeader.top - depth,
+              source: massLeader.source,
+            },
+          ],
+          strips,
+        );
+        if (outgoing.length !== 1) continue;
+        const shoulder =
+          'shoulder' in incoming[0] ? (incoming[0].shoulder as number[]) : null;
+        const path = [
+          incoming[0].box,
+          ...(shoulder ? [shoulder] : []),
+          mass,
+          outgoing[0].box,
+        ];
+        // A STEP note anywhere on this bounded connection is a hard stop,
+        // including labels whose associated crossbar is slightly displaced.
+        if (
+          plan.texts.some(
+            (t) =>
+              /\bSTEP(?:PED)?\b|^S\.?F\.?$/i.test(t.str.trim()) &&
+              path.some(
+                (b) =>
+                  t.cx >= b[0] - 0.3 &&
+                  t.cx <= b[2] + 0.3 &&
+                  t.cy >= b[1] - 0.3 &&
+                  t.cy <= b[3] + 0.3,
+              ),
+          )
+        )
+          continue;
+        const crossed = path.some((bounds) => {
+          const penWeights = plan.lines
+            .filter(
+              (l) =>
+                !l.filled &&
+                !l.curve &&
+                (!l.color || l.color === '#000000') &&
+                l.width >= 0.5 &&
+                Math.abs(cross === 0 ? l.x1 - l.x2 : l.y1 - l.y2) < 0.05 &&
+                [bounds[cross], bounds[cross + 2]].some(
+                  (v) => Math.abs((cross === 0 ? l.x1 : l.y1) - v) < 0.15,
+                ) &&
+                Math.max(axis === 0 ? l.x1 : l.y1, axis === 0 ? l.x2 : l.y2) >
+                  bounds[axis] &&
+                Math.min(axis === 0 ? l.x1 : l.y1, axis === 0 ? l.x2 : l.y2) <
+                  bounds[axis + 2],
+            )
+            .map((l) => l.width);
+          return plan.lines.some((l) => {
+            if (
+              l.filled ||
+              l.curve ||
+              (l.color && l.color !== '#000000') ||
+              !penWeights.some((w) => Math.abs(w - l.width) < 0.05)
+            )
+              return false;
+            const p = [l.x1, l.y1],
+              q = [l.x2, l.y2];
+            return (
+              Math.abs(p[axis] - q[axis]) < 0.05 &&
+              p[axis] > bounds[axis] + 0.3 &&
+              p[axis] < bounds[axis + 2] - 0.3 &&
+              Math.min(Math.max(p[cross], q[cross]), bounds[cross + 2]) -
+                Math.max(Math.min(p[cross], q[cross]), bounds[cross]) >
+                (bounds[cross + 2] - bounds[cross]) * 0.8
+            );
+          });
+        });
+        if (crossed) continue;
+        const source: SourceRef = {
+          kind: 'spec',
+          id: plan.docId,
+          page: plan.page,
+          label:
+            'Revised pad top continuity through independently dimensioned mass footing',
+          quote: `Top ${massLeader.top} m inferred through two source-bounded no-step strip junctions. Independent strip top ${incoming[0].leader.top} m / bottom ${incoming[0].leader.bottom} m and mass top ${massLeader.top} m / bottom ${massLeader.bottom} m agree at the top only. Destination pad uses its own ${depth} m scheduled depth; mass underside is not propagated.${shoulder ? ' Closed source shoulder supplies TOP connectivity only; shoulder volume and depth remain unmodelled.' : ''}`,
+          box: [
+            Math.min(...path.map((b) => b[0])),
+            Math.min(...path.map((b) => b[1])),
+            Math.max(...path.map((b) => b[2])),
+            Math.max(...path.map((b) => b[3])),
+          ],
+        };
+        matches.push({
+          top: massLeader.top,
+          sources: [
+            source,
+            incoming[0].leader.source,
+            massLeader.source,
+            incoming[0].schedule,
+            outgoing[0].schedule,
+            ...element.sources.filter((s) => s.kind === 'spec'),
+          ],
+        });
+      }
+    }
+  }
+  const unique = [
+    ...new Map(matches.map((m) => [JSON.stringify(m), m])).values(),
+  ];
+  return unique.length === 1 ? unique[0] : null;
+}
+
 function recoverRevisedPads(
   project: Project,
   original: BuildModel,
@@ -2440,6 +2793,20 @@ function recoverRevisedPads(
           ? padStripDatum(plan, box, section.depth, localLeaders, stripSections)
           : [];
       const propagated = adjoining.length === 1;
+      const massTop =
+        allowMergedComponents &&
+        footprintJunction &&
+        leaders.length === 0 &&
+        adjoining.length === 0
+          ? padMassTopDatum(
+              plan,
+              box,
+              section.depth,
+              localLeaders,
+              stripSections,
+              held,
+            )
+          : null;
       const embedded =
         leaders.length === 0 && adjoining.length === 0
           ? embeddedPadDatum(plan, box, section.depth, held)
@@ -2475,6 +2842,7 @@ function recoverRevisedPads(
       const cut = anchor ? candidateCut : undefined;
       if (
         !propagated &&
+        !massTop &&
         !cut &&
         !junction &&
         (leaders.length !== 1 ||
@@ -2483,53 +2851,67 @@ function recoverRevisedPads(
         return e;
       const d =
         leaders[0] ??
-        (junction
+        (massTop
           ? {
-              z: junction.top,
-              bottom: Math.round((junction.top - section.depth) * 1e6) / 1e6,
+              z: massTop.top,
+              bottom: massTop.top - section.depth,
               t: {
-                str: `T/O FTG: ${junction.top * 1000}`,
+                str: `T/O FTG: ${massTop.top * 1000}`,
                 cx: (box[0] + box[2]) / 2,
                 cy: (box[1] + box[3]) / 2,
               },
               under: {
-                str: `U/S FTG: ${(junction.top - section.depth) * 1000}`,
+                str: `U/S FTG: ${(massTop.top - section.depth) * 1000}`,
                 cy: (box[1] + box[3]) / 2,
               },
             }
-          : cut
+          : junction
             ? {
-                z: -cut.drop,
-                bottom: -cut.drop - section.depth,
+                z: junction.top,
+                bottom: Math.round((junction.top - section.depth) * 1e6) / 1e6,
                 t: {
-                  str: `T/O FTG: ${-cut.drop * 1000}`,
+                  str: `T/O FTG: ${junction.top * 1000}`,
                   cx: (box[0] + box[2]) / 2,
                   cy: (box[1] + box[3]) / 2,
                 },
                 under: {
-                  str: `U/S FTG: ${(-cut.drop - section.depth) * 1000}`,
+                  str: `U/S FTG: ${(junction.top - section.depth) * 1000}`,
                   cy: (box[1] + box[3]) / 2,
                 },
               }
-            : {
-                z: adjoining[0].leader.top,
-                bottom: adjoining[0].leader.bottom,
-                t: {
-                  str: `T/O FTG: ${adjoining[0].leader.top * 1000}`,
-                  cx: adjoining[0].leader.tip[0],
-                  cy: adjoining[0].leader.tip[1],
-                },
-                under: {
-                  str: `U/S FTG: ${adjoining[0].leader.bottom * 1000}`,
-                  cy: adjoining[0].leader.tip[1],
-                },
-              });
+            : cut
+              ? {
+                  z: -cut.drop,
+                  bottom: -cut.drop - section.depth,
+                  t: {
+                    str: `T/O FTG: ${-cut.drop * 1000}`,
+                    cx: (box[0] + box[2]) / 2,
+                    cy: (box[1] + box[3]) / 2,
+                  },
+                  under: {
+                    str: `U/S FTG: ${(-cut.drop - section.depth) * 1000}`,
+                    cy: (box[1] + box[3]) / 2,
+                  },
+                }
+              : {
+                  z: adjoining[0].leader.top,
+                  bottom: adjoining[0].leader.bottom,
+                  t: {
+                    str: `T/O FTG: ${adjoining[0].leader.top * 1000}`,
+                    cx: adjoining[0].leader.tip[0],
+                    cy: adjoining[0].leader.tip[1],
+                  },
+                  under: {
+                    str: `U/S FTG: ${adjoining[0].leader.bottom * 1000}`,
+                    cy: adjoining[0].leader.tip[1],
+                  },
+                });
       const source: SourceRef = {
         kind: 'spec',
         id: plan.docId,
         page: plan.page,
         label: 'Revised foundation plan',
-        quote: `${d.t.str}; ${d.under.str}; ${junction ? 'datum inferred through the closed pad junction on a source-resolved no-step strip' : cut ? 'datum inferred from the explicitly crossing interior section cut' : propagated ? 'datum inferred through source-bounded adjoining strip without an intervening S.F. marker' : 'direct leader associated with drawn'} ${code} footing perimeter`,
+        quote: `${d.t.str}; ${d.under.str}; ${massTop ? 'top continuity inferred through independently dimensioned strip and mass footing junctions' : junction ? 'datum inferred through the closed pad junction on a source-resolved no-step strip' : cut ? 'datum inferred from the explicitly crossing interior section cut' : propagated ? 'datum inferred through source-bounded adjoining strip without an intervening S.F. marker' : 'direct leader associated with drawn'} ${code} footing perimeter`,
         box: [
           Math.min(box[0], d.t.cx - 40),
           Math.min(box[1], d.t.cy - 10),
@@ -2560,6 +2942,7 @@ function recoverRevisedPads(
               section.source,
               source,
               ...(junctionPerimeterSource ? [junctionPerimeterSource] : []),
+              ...(massTop?.sources ?? []),
               ...(cut && anchor ? [cut.source, cut.planSource, anchor] : []),
               ...(junction
                 ? [
@@ -2577,7 +2960,7 @@ function recoverRevisedPads(
           ...e.issues.filter(
             (i) => !i.startsWith('Foundation revision unresolved:'),
           ),
-          `Foundation revision applied: revised grid registration, drawn footing perimeter and ${junction ? 'closed pad junction on source-resolved strip (top continuity inferred)' : cut ? 'explicitly crossing interior section cut (local datum applicability inferred)' : propagated ? 'source-bounded adjoining strip datum (inferred continuity)' : 'local elevation leader'} agree.${footprintJunction ? ' Scheduled rectangle component inferred inside the merged strip/pad perimeter; every large perimeter gap is explained by source-drawn strip returns.' : ''}${cut?.alternate ? ' ALTERNATE DETAIL applies only to this explicitly cut pad; confirm local detail selection.' : ''} Top ${d.z} m; bottom ${d.bottom} m. Source takeoff quantity unchanged.`,
+          `Foundation revision applied: revised grid registration, drawn footing perimeter and ${massTop ? 'independent strip/mass leaders and two bounded no-step junctions (TOP continuity inferred; own pad depth)' : junction ? 'closed pad junction on source-resolved strip (top continuity inferred)' : cut ? 'explicitly crossing interior section cut (local datum applicability inferred)' : propagated ? 'source-bounded adjoining strip datum (inferred continuity)' : 'local elevation leader'} agree.${footprintJunction ? ' Scheduled rectangle component inferred inside the merged strip/pad perimeter; every large perimeter gap is explained by source-drawn strip returns.' : ''}${cut?.alternate ? ' ALTERNATE DETAIL applies only to this explicitly cut pad; confirm local detail selection.' : ''} Top ${d.z} m; bottom ${d.bottom} m. Source takeoff quantity unchanged.`,
         ],
       };
     }),
