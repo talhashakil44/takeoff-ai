@@ -97,6 +97,7 @@ export function ExploreWorkspace({
     [opacity, setOpacity] = useState(0.65),
     [showBase, setShowBase] = useState(true),
     [showAllowances, setShowAllowances] = useState(false),
+    [showDrawingGeometry, setShowDrawingGeometry] = useState(true),
     [showFootprints, setShowFootprints] = useState(true),
     [showUnplaced, setShowUnplaced] = useState(false),
     [showGrids, setShowGrids] = useState(false),
@@ -154,7 +155,7 @@ export function ExploreWorkspace({
     () => new Set([sid, ...enabled]),
     [sid, enabled],
   );
-  const [scope, setScope] = useState<"rooms" | "structure">("rooms");
+  const [scope, setScope] = useState<"rooms" | "structure" | "drawings">("rooms");
   const [structureOnly, setStructureOnly] = useState(false);
   const structuralKey = `explore-structure:${project.id}:${model.sourceHash}`;
   const [structuralReviews, setStructuralReviews] = useState<
@@ -214,6 +215,7 @@ export function ExploreWorkspace({
   const coordinatedModel = useMemo(
     () => ({
       ...model,
+      drawingGeometry: showDrawingGeometry ? structuralModel.drawingGeometry : [],
       elements: structuralModel.elements.flatMap((e) => {
         // Source-built structural solids and accepted member reviews are already
         // in the canonical world frame. A selected-floor overlay is not a new
@@ -250,6 +252,7 @@ export function ExploreWorkspace({
       project,
       model,
       structuralModel,
+      showDrawingGeometry,
       originalFrames,
       structuralReviews,
       roofRegistrations,
@@ -388,8 +391,9 @@ export function ExploreWorkspace({
     });
   };
   const sheetUrl = useMemo(() => page?.toDataURL("image/png"), [page]);
+  const drawingGeometry = structuralModel.drawingGeometry ?? [];
   const room = rooms.find((r) => r.id === roomId) ?? null,
-    element = structuralModel.elements.find((e) => e.id === selected) ?? null;
+    element = structuralModel.elements.find((e) => e.id === selected) ?? drawingGeometry.find(e => e.id === selected) ?? null;
   const measurements = useMemo(
     () => new Map(project.measurements.map((m) => [m.id, m])),
     [project],
@@ -398,7 +402,7 @@ export function ExploreWorkspace({
     t = m ? project.types.find((t) => t.id === m.typeId) : undefined;
   const sourceSheet = m
     ? project.sheets.find((s) => s.id === m.sheetId)
-    : undefined;
+    : element ? project.sheets.find(s => s.id === element.sheetId) : undefined;
   const vars =
     m && t && sourceSheet
       ? measurementVars(m, t, sourceSheet, project.units)
@@ -421,8 +425,8 @@ export function ExploreWorkspace({
       (e.sheetId === sid || available.some((l) => l.sheet.id === e.sheetId)),
   );
   const candidates =
-    query || scope === "structure"
-      ? (scope === "structure" ? structuralElements : allSheetElements).filter(
+    query || scope !== "rooms"
+      ? (scope === "drawings" ? drawingGeometry : scope === "structure" ? structuralElements : allSheetElements).filter(
           (e) => e.name.toLowerCase().includes(query.toLowerCase()) ||
             (!!query.replace(/[^a-z0-9]/gi, "") && e.name.replace(/[^a-z0-9]/gi, "").toLowerCase().includes(query.replace(/[^a-z0-9]/gi, "").toLowerCase())),
         )
@@ -564,7 +568,7 @@ export function ExploreWorkspace({
         </a>
         <div className="ex-project">
           {project.name}
-          <span>Measured takeoff · read only</span>
+          <span>Takeoff and drawing evidence · read only</span>
         </div>
         <button className="ex-close" onClick={onClose}>
           Back to takeoff <span>↗</span>
@@ -628,11 +632,15 @@ export function ExploreWorkspace({
             >
               Structure
             </button>
+            {drawingGeometry.length > 0 && <button
+              aria-pressed={scope === "drawings"}
+              onClick={() => { setScope("drawings"); setQuery(""); }}
+            >From drawings</button>}
           </div>
           <div className="ex-section-heading">
-            <h2>{scope === "structure" ? "Structural takeoffs" : "Spaces"}</h2>
+            <h2>{scope === "drawings" ? "Drawing-derived geometry" : scope === "structure" ? "Structural takeoffs" : "Spaces"}</h2>
             <span>
-              {(scope === "structure"
+              {(scope === "drawings" ? drawingGeometry.length : scope === "structure"
                 ? structuralElements.length
                 : rooms.length
               )
@@ -645,6 +653,7 @@ export function ExploreWorkspace({
               {structuralElements.filter(e => e.shape && e.shape.type !== "axis" && e.shape.type !== "locator").length} of {structuralElements.length} records have solid geometry. Remaining records need placement, section or elevation evidence.
             </p>
           )}
+          {scope === "drawings" && <p className="ex-coverage">Source-backed shapes without accepted takeoffs. Excluded from quantities and schedule.</p>}
           <input
             className="ex-search"
             aria-label="Find a measured room or element"
@@ -653,13 +662,14 @@ export function ExploreWorkspace({
             onChange={(e) => setQuery(e.target.value)}
           />
           <div className="ex-room-list">
-            {query || scope === "structure"
+            {query || scope !== "rooms"
               ? candidates.slice(0, 60).map((e) => (
                   <button
                     key={e.id}
-                    className={selected === e.id ? "active" : ""}
+                    className={`ex-element-row${selected === e.id ? " active" : ""}`}
                     onClick={() => {
                       setSelected(e.id);
+                      if (e.origin === "drawing") setShowDrawingGeometry(true);
                       if (e.sheetId !== sid && !enabled.has(e.sheetId)) {
                         if (enabled.size < 4)
                           setEnabled((old) => new Set([...old, e.sheetId]));
@@ -672,7 +682,7 @@ export function ExploreWorkspace({
                   >
                     <span>{e.name}</span>
                     <small>
-                      {quantityPending(e) ? "Quantity uncalibrated" : `${num(e.quantity)} ${e.unit}`}
+                      {e.origin === "drawing" ? "No accepted takeoff" : quantityPending(e) ? "Quantity uncalibrated" : `${num(e.quantity)} ${e.unit}`}
                       {!e.shape ? " · unplaced" : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : ""}
                     </small>
                   </button>
@@ -702,7 +712,7 @@ export function ExploreWorkspace({
               </p>
             )}
             {query && !candidates.length && (
-              <p className="ex-muted">No matching takeoffs on this sheet.</p>
+              <p className="ex-muted">No matching records in this view.</p>
             )}
           </div>
           <div className="ex-trust">
@@ -823,6 +833,10 @@ export function ExploreWorkspace({
                 <input type="checkbox" checked={showFootprints} onChange={e => setShowFootprints(e.target.checked)} />{" "}
                 Takeoff footprints · drawing view
               </label>
+              {drawingGeometry.length > 0 && <label>
+                <input type="checkbox" checked={showDrawingGeometry} onChange={e => setShowDrawingGeometry(e.target.checked)} />{" "}
+                Drawing-derived geometry · no accepted takeoff
+              </label>}
               <label>
                 <input type="checkbox" checked={showAllowances} onChange={e => setShowAllowances(e.target.checked)} />{" "}
                 Guessed shell &amp; slab · translucent context only
@@ -1053,10 +1067,10 @@ export function ExploreWorkspace({
             <>
               <p className="ex-element-title">{element.name}</p>
               <div className="ex-quantity">
-                <strong>{quantityPending(element) ? "Uncalibrated" : num(element.quantity)}</strong>
-                <span>{quantityPending(element) ? "" : element.unit}</span>
+                <strong>{element.origin === "drawing" ? "No takeoff" : quantityPending(element) ? "Uncalibrated" : num(element.quantity)}</strong>
+                <span>{element.origin === "drawing" || quantityPending(element) ? "" : element.unit}</span>
                 <small>
-                  {quantityPending(element) ? "Saved quantity is unresolved. Drawing-derived span is shown separately below." : element.origin === "takeoff"
+                  {element.origin === "drawing" ? "Drawing-derived geometry. No accepted quantity; excluded from estimate and schedule." : quantityPending(element) ? "Saved quantity is unresolved. Drawing-derived span is shown separately below." : element.origin === "takeoff"
                     ? "Original takeoff quantity"
                     : "Derived building allowance"}
                 </small>
@@ -1097,7 +1111,7 @@ export function ExploreWorkspace({
                   </>
                 )}
                 <div>
-                  <dt>Takeoff trade</dt>
+                  <dt>{element.origin === "drawing" ? "Source discipline" : "Takeoff trade"}</dt>
                   <dd>{element.division || element.trade}</dd>
                 </div>
               </dl>
@@ -1173,7 +1187,7 @@ export function ExploreWorkspace({
                     Isolate structural members
                   </label>
                   <p>
-                    {element.shape?.type === "axis" ? "Measured span only — framing elevation and section still need evidence"
+                    {element.origin === "drawing" ? "Drawing-derived geometry · not accepted into takeoff" : element.shape?.type === "axis" ? "Measured span only — framing elevation and section still need evidence"
                       : element.shape?.type === "locator" ? "Inferred grid location only — physical dimensions still need evidence"
                       : element.shape
                       ? "Connected to measured takeoff"
@@ -1197,7 +1211,7 @@ export function ExploreWorkspace({
                     </p>
                   )}
                   <ul>
-                    {(element.issues.some(i=>i.startsWith("Physical ")) ? element.issues.filter(i=>i.startsWith("Physical ")) : recoveredStructure[element.id]?.issues ?? []).map((issue, i) => (
+                    {(element.origin === "drawing" ? element.issues : element.issues.some(i=>i.startsWith("Physical ")) ? element.issues.filter(i=>i.startsWith("Physical ")) : recoveredStructure[element.id]?.issues ?? []).map((issue, i) => (
                       <li key={i}>{issue}</li>
                     ))}
                   </ul>
@@ -1216,13 +1230,13 @@ export function ExploreWorkspace({
                         {ref.label} · {ref.quote?.split(":")[0]} ↗
                       </button>
                     ))}
-                  <button
+                  {element.origin !== "drawing" && <button
                     disabled={!memberFrames[element.id]}
                     onClick={() => setEditingStructural(element)}
                   >
                     Review / connect geometry
-                  </button>
-                  {!memberFrames[element.id] && (
+                  </button>}
+                  {element.origin !== "drawing" && !memberFrames[element.id] && (
                     <p>Align this source to the floor first.</p>
                   )}
                   {structuralReviews?.[element.id] && (

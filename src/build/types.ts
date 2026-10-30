@@ -65,7 +65,7 @@ export type ElementShape =
 export interface BuildElement {
   /** Original plan seed; restored before rechecking derived physical geometry. */
   physicalGeometryBaseline?: import("./physicalGeometryLifecycle").PhysicalGeometryBaseline;
-  /** Stable: the measurement's id. */
+  /** Stable measurement id, or drawing:<source-key> for unaccepted source geometry. */
   id: string;
   name: string;
   /** Work package (trade) it belongs to: 'partitions', 'mech-rough', … */
@@ -85,7 +85,7 @@ export interface BuildElement {
   /** Original takeoff source, so tag-derived planning does not mistake other counts for circuit tags. */
   measurementSource?: string;
   opening?: { width:number; height:number; sill:number };
-  origin?: "takeoff" | "building";
+  origin?: "takeoff" | "building" | "drawing";
   status?: "existing" | "new" | "demolished";
   /** Source takeoff is retained for review, but has no verified new-work quantity in the plan. */
   planningExcluded?: string;
@@ -108,6 +108,11 @@ export interface BuildModel {
   units: 'metric' | 'imperial';
   levels: Level[];
   elements: BuildElement[];
+  /** Source-backed geometry without an accepted takeoff. Kept OUT of elements,
+   * quantities and scheduling. Entries use origin:'drawing', stable drawing: IDs,
+   * quantity:0, no production, no project type/measurement, and source evidence.
+   * Rebuilt from current evidence; never retain stale candidates after withdrawal. */
+  drawingGeometry?: BuildElement[];
   /** Model-wide issues: unplaced sheets, levels not found, … */
   issues: Issue[];
   /** Extent of what is drawn, in metres: [minX, minY, maxX, maxY]. */

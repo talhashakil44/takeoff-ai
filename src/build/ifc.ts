@@ -151,7 +151,8 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
   // Elements with no place in the model (level unknown, not a plan) are still exported, with their
   // quantities and properties and no geometry, in the building: no takeoff is lost on the way out.
   const loose: string[] = [];
-  for (const e of model.elements) {
+  const exportElements = [...new Map([...model.elements, ...(model.drawingGeometry ?? [])].map(e => [e.id, e])).values()];
+  for (const e of exportElements) {
     const lv = e.level ? storeys.get(e.level) : undefined;
     const shape = e.shape && lv ? shapeOf(e, lv.elevation) : null;
     const locator = e.shape?.type === 'locator' && lv ? e.shape : null;
@@ -159,16 +160,16 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
       ? placeAt(lv!.pl, locator.at[0], -locator.at[1], locator.z - lv!.elevation)
       : add(`IFCLOCALPLACEMENT(${shape && lv ? lv.pl : bldPl},${add(`IFCAXIS2PLACEMENT3D(${origin},$,$)`)})`);
     const { cls, tail } = classOf(e);
-    const ref = add(`${cls}('${ifcGuid(e.id)}',${owner},${str(e.name)},${str(e.typeName)},${str(tradeByKey.get(e.trade)?.name ?? e.trade)},${pl},${shape ?? '$'},${str(e.id.slice(0, 8))}${tail})`);
-    refOf.set(e.id, ref);
+    const ref = add(`${cls}('${ifcGuid(e.id)}',${owner},${str(e.name)},${str(e.typeName)},${str(tradeByKey.get(e.trade)?.name ?? e.trade)},${pl},${shape ?? '$'},${str(e.origin === 'drawing' ? e.id : e.id.slice(0, 8))}${tail})`);
+    if (e.origin !== "drawing") refOf.set(e.id, ref);
     if ((shape || locator) && lv) lv.members.push(ref);
     else loose.push(ref);
     // Properties: what it is, where it came from, what governs it, when it is built.
-    const type = types.get(e.typeId);
-    const m = ms.get(e.measurementId);
+    const type = e.origin === 'drawing' ? undefined : types.get(e.typeId);
+    const m = e.origin === 'drawing' ? undefined : ms.get(e.measurementId);
     const sheet = sheets.get(e.sheetId);
-    const t = schedule?.times[actOf.get(e.id) ?? ''];
-    const act = schedule?.activities.find((a) => a.id === actOf.get(e.id));
+    const t = e.origin === 'drawing' ? undefined : schedule?.times[actOf.get(e.id) ?? ''];
+    const act = e.origin === 'drawing' ? undefined : schedule?.activities.find((a) => a.id === actOf.get(e.id));
     const props = [
       label('TakeoffType', e.typeName),
       label('System', tradeByKey.get(e.trade)?.name ?? e.trade),
@@ -177,9 +178,9 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
       label('SourceSheet', sheet ? `${sheet.name} ${sheet.title ?? ''}`.trim() : ''),
       label('SourcePage', String(sheet?.page ?? '')),
       ...(locator && m?.points[0] ? [label('TagPointOnSheet', m.points[0].map((n) => n.toFixed(2)).join(', '))] : []),
-      label('TakenOffBy', m?.source ?? 'hand'),
+      ...(e.origin === 'drawing' ? [label('Acceptance', 'Not accepted takeoff'), text('GeometrySourceEvidence', e.sources.map(s => `${s.label}, page ${s.page ?? ''}: ${s.quote ?? ''}`).join(' | '))] : [label('TakenOffBy', m?.source ?? 'hand')]),
       label('Placement', e.placement),
-      label('Quantity', `${Math.round(e.quantity * 100) / 100} ${e.unit}`),
+      ...(e.origin === 'drawing' ? [] : [label('Quantity', `${Math.round(e.quantity * 100) / 100} ${e.unit}`)]),
       label('SpecSections', e.specs.map((s) => { const sec = secs.get(s.key); return sec ? `${sec.number} ${sec.title}${sec.missing ? ' (not issued)' : ''}` : s.key; }).join('; ')),
       ...(type?.assemblyTitle ? [label('Assembly', type.assemblyTitle)] : []),
       ...(type?.description ? [text('AssemblyBuildUp', type.description.slice(0, 900))] : []),
@@ -191,7 +192,7 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
           : e.trade === 'demolition' ? "DEMOLISH"
             : "NEW",
       ),
-      label("Origin", e.origin === "building"
+      label("Origin", e.origin === "drawing" ? "Drawing-derived geometry - not accepted takeoff" : e.origin === "building"
           ? "Derived building context - not measured takeoff"
           : "Measured takeoff", ),
       ...(e.issues.length ? [text('OpenIssues', e.issues.join(' | ').slice(0, 900))] : []),
@@ -212,6 +213,8 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
         }
       }
     }
+    // Drawing candidates deliberately carry no quantity sets or schedule links.
+    if (e.origin === 'drawing') continue;
     // Base quantities, in metres.
     const q: string[] = [];
     const s = e.shape;

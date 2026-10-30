@@ -123,7 +123,8 @@ export function ExploreScene(props: Props) {
     )?.level;
     const base =
       props.model.levels.find((l) => l.id === floorLevel)?.elevation ?? 0;
-    const floorEls = props.model.elements.filter(
+    const renderElements = [...new Map([...props.model.elements, ...(props.model.drawingGeometry ?? [])].map(e => [e.id, e])).values()];
+    const floorEls = renderElements.filter(
       (e) => e.shape && e.status !== "demolished" && (e.origin !== "building" || e.level === floorLevel),
     );
     const box = new THREE.Box3();
@@ -184,7 +185,7 @@ export function ExploreScene(props: Props) {
       const edge = new THREE.LineSegments(
         new THREE.EdgesGeometry(g, 28),
         new THREE.LineBasicMaterial({
-          color: "#494d42",
+          color: e.origin === "drawing" ? "#9a794d" : "#494d42",
           transparent: true,
           opacity: 0.65,
         }),
@@ -430,7 +431,7 @@ export function ExploreScene(props: Props) {
         line.geometry.dispose();
         (line.material as THREE.Material).dispose();
       }
-      const chosen = live.current.model.elements.find(
+      const chosen = [...live.current.model.elements, ...(live.current.model.drawingGeometry ?? [])].find(
         (e) => e.id === live.current.selected,
       );
       const ref = chosen?.sources.find((s) => s.id === props.sheet.id && s.box);

@@ -7,7 +7,7 @@ or deployment is authorized by this checkpoint.
 
 ## Current source and integration
 
-Claude's source loader and extraction fixes are merged through `cc35e6f`.
+Claude's source loader and extraction fixes are merged through `cc35e6f`, with per-view scale `f42d95c` and schedule-row material classification `d874e4e`.
 Addendum 5 reissues structural drawings on PDF pages 19–34, dated September 16,
 including the new S0.3 schedule. These supersede the corresponding July sheets.
 The shared loader reads drawing-sized addendum pages, including added sheets,
@@ -47,7 +47,7 @@ credible zero lengths. Source-derived spans remain separate.
 - Four canopy B7 beams have centred plan ink, traced dogleg grid leaders and a
   drawn 20-vertex I-profile. Revised S5.0 corroborates the 6.623 m datum through
   the web; inferred steel bottom/top are 6.562675 / 6.769050 m.
-- Twenty-three foundations: four locally dimensioned pads, thirteen exterior piers,
+- Seventeen foundations: four locally dimensioned pads, seven exterior piers,
   two east MF2 mass footings, and four source-bounded SF1/SF2 spans. Revised
   pier tops are -0.250 m. Mass-footing depth is 400 mm and is not confused with
   adjacent 300 mm strip-footing notes. Pad/pier centres follow actual eccentric
@@ -58,6 +58,16 @@ credible zero lengths. Source-derived spans remain separate.
   leader; a middle-west 1.9219 m SF2 span uses a direct -1.200/-1.500 m leader.
   Revised pier geometry height 0.950 m explicitly conflicts
   with accepted H=1.200 m formulas; accepted quantities remain unchanged.
+- Six earlier pier solids were withdrawn after connected-footing review: their full
+  footprints did not have a recovered local pad or bounded strip support at the
+  required datum. A typical section alone does not establish each pier base.
+- Two MF3 foundations are recovered from closed revised plan outlines and the
+  6200 × 1500 × 400 mm schedule. They have no accepted takeoff records and live
+  separately in `model.drawingGeometry`: no quantities, materials or schedule
+  assignments. Left top -0.250 m is direct; right top -0.250 m is inferred through
+  the adjoining unstepped strip. Both bottoms are -0.650 m. Explore and Build
+  expose their drawing references and acceptance status. Model version 26 forces
+  older geometry to rebuild; imported accepted takeoffs remain unchanged.
 - Three WT-1 wall defaults are axes, not unsupported four-metre-high solids.
   Their complete footprints, opening cuts and vertical sections are unresolved.
 
@@ -69,6 +79,15 @@ voids. Indexed tessellation and collinear trace joins are corrected to avoid
 missing faces and coincident internal caps.
 
 ## Evidence and gates
+
+Latest independent v26 production replay: 119 accepted-source structural/foundation
+solids plus two drawing-only MF3 solids; all 2,108 accepted quantity tuples unchanged.
+A complete replay changes no recovered objects; removing all evidence withdraws
+all derived solids and candidates. Independent IFC validation creates all 121 closed
+solids without topology failures (maximum relative volume discrepancy 0.00345%).
+Drawing candidates have no IFC quantity sets. This verifies geometry integrity,
+not completeness against the drawings; the remaining source gaps below stay open.
+
 
 Private evidence remains under ignored `diag/explore` and `/tmp`; do not commit
 project PDFs or the test archive. Production audit uses `loadDrawingSources` and

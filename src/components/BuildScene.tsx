@@ -13,6 +13,7 @@ import type { BuildElement, BuildModel } from '../build/types';
  * parameter, seen from preset views.
  */
 
+type RenderState = ElementState | 'source';
 export type ElementState = | 'todo' | 'doing' | 'done' | 'existing' | 'removing' | 'gone';
 /**
  * Where the camera goes to show a box filling the view, looking along -dir: far enough that
@@ -84,7 +85,7 @@ interface Props {
 interface Item {
   mesh: THREE.Mesh;
   el: BuildElement;
-  state?: ElementState;
+  state?: RenderState;
   colour?: string;
   level: number;
 }
@@ -95,7 +96,7 @@ export function BuildScene(props: Props) {
   const items = useRef(new Map<string, Item>());
   const scene = useRef<{
     s: THREE.Scene;
-    mat: (colour: string, st: ElementState) => THREE.Material;
+    mat: (colour: string, st: RenderState) => THREE.Material;
     outline: THREE.Group;
     renderer: THREE.WebGLRenderer;
     camera: THREE.PerspectiveCamera;
@@ -180,7 +181,7 @@ export function BuildScene(props: Props) {
     // The section plane (keeps what is below it) and its materials.
     const plane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
     const cache = new Map<string, THREE.Material>();
-    const mat = (colour: string, st: ElementState) => {
+    const mat = (colour: string, st: RenderState) => {
       const k = `${colour}|${st}`;
       let m = cache.get(k);
       if (m) return m;
@@ -209,7 +210,7 @@ export function BuildScene(props: Props) {
     // The elements.
     items.current.clear();
     const levelIndex = new Map(model.levels.map((l, i) => [l.id, i]));
-    for (const e of model.elements) {
+    for (const e of [...new Map([...model.elements, ...(model.drawingGeometry ?? [])].map(e => [e.id, e])).values()]) {
       const g = geometryOf(e);
       if (!g) continue;
       const mesh = new THREE.Mesh(g, mat('#8fa3d6', 'todo'));
@@ -363,8 +364,9 @@ export function BuildScene(props: Props) {
     const lift = explode * Math.max(6, sc.span * 0.22);
     const layer = explodeSystems ? explode * 2.2 : 0;
     for (const x of items.current.values()) {
-      const st = stateOf(x.el);
-      const colour = colourOf(x.el);
+      // Source-only geometry has no accepted construction activity or date state.
+      const st: RenderState = x.el.origin === 'drawing' ? 'source' : stateOf(x.el);
+      const colour = x.el.origin === 'drawing' ? '#a99a80' : colourOf(x.el);
       const shown = !hidden.has(x.el.id) && (!isolate || isolate.has(x.el.id)) && st !== 'gone' && (showGhosts || st !== 'todo');
       x.mesh.visible = shown;
       if (st !== x.state || colour !== x.colour) {

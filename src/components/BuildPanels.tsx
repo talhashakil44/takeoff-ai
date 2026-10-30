@@ -228,6 +228,7 @@ export function ElementProperties(props: {
   onIsolate: () => void;
 }) {
   const { e, project, sections, act, t, state, render, onPickAct, onSection, onSource, onFrame, onIsolate } = props;
+  const drawingOnly = e.origin === 'drawing';
   const type = project.types.find((x) => x.id === e.typeId);
   const m = project.measurements.find((x) => x.id === e.measurementId);
   const sheet = project.sheets.find((s) => s.id === e.sheetId);
@@ -256,9 +257,9 @@ export function ElementProperties(props: {
         <h3>{e.name}</h3>
         {e.origin === 'building' && <p>Building context allowance — excluded from measured takeoff totals.</p>}
         <p className="bld-big">
-          {fmtN(e.quantity)} {e.unit}
-          <span className={`bld-state ${state}`}>{STATE[state]}</span>
+          {drawingOnly ? 'No accepted takeoff' : <>{fmtN(e.quantity)} {e.unit}<span className={`bld-state ${state}`}>{STATE[state]}</span></>}
         </p>
+        {drawingOnly && <p>Drawing-derived geometry. Excluded from takeoff totals, materials and schedule.</p>}
         <div className="bld-props-actions">
           <button onClick={onFrame}>
             <Icon name="fit" size={13} /> Zoom to
@@ -275,11 +276,16 @@ export function ElementProperties(props: {
       </div>
 
       <Group title="From the drawing">
-        <BlowUp el={e} project={project} render={render} onOpen={() => onSource(e.sources[0])} />
+        {drawingOnly ? e.sources.map((source, i) => (
+          <div key={`${source.id}-${source.page}-${i}`} className="bld-spec">
+            <button className="bld-spec-title" onClick={() => onSource(source)}>{source.label} · page {source.page}</button>
+            {source.quote && <p className="bld-excerpt">{source.quote}</p>}
+          </div>
+        )) : <BlowUp el={e} project={project} render={render} onOpen={() => onSource(e.sources[0])} />}
       </Group>
 
       <Group title="Identity">
-        <Prop k="Takeoff type">{e.typeName}</Prop>
+        <Prop k={drawingOnly ? "Drawing mark" : "Takeoff type"}>{e.typeName}</Prop>
         {type?.assemblyTitle && <Prop k="Assembly">{type.assemblyTitle}</Prop>}
         <Prop k="System">{trade?.name}</Prop>
         <Prop k="Division">{e.division || '—'}</Prop>
@@ -304,24 +310,26 @@ export function ElementProperties(props: {
         )}
         {sh?.type === 'surface' && (
           <>
-            <Prop k="Area">
-              {fmtN(e.quantity)} {e.unit}
-            </Prop>
+            {!drawingOnly && <Prop k="Area">{fmtN(e.quantity)} {e.unit}</Prop>}
             <Prop k="Elevation">{L(sh.z)}</Prop>
             <Prop k="Openings in it">{sh.holes.length}</Prop>
           </>
         )}
         {sh?.type === 'point' && (
           <>
-            <Prop k="Count">1 ea</Prop>
-            <Prop k="Mounting height">{L(sh.z)}</Prop>
+            {!drawingOnly && <Prop k="Count">1 ea</Prop>}
+            <Prop k="Width">{L(sh.size[0])}</Prop>
+            <Prop k="Depth">{L(sh.size[1])}</Prop>
+            <Prop k="Height">{L(sh.size[2])}</Prop>
+            <Prop k="Base elevation">{L(sh.z)}</Prop>
+            <Prop k="Top elevation">{L(sh.z + sh.size[2])}</Prop>
           </>
         )}
         {!sh && <p className="dim small">Not placed in the model.</p>}
         {type && type.height > 0 && <Prop k="Type height">{`${type.height} ${ft ? 'ft' : 'm'}`}</Prop>}
       </Group>
 
-      <Group title="Takeoff and materials">
+      {!drawingOnly && <Group title="Takeoff and materials">
         <Prop k="Quantity">
           {fmtN(e.quantity)} {e.unit}
         </Prop>
@@ -342,7 +350,7 @@ export function ElementProperties(props: {
           <p className="dim small">No materials on this takeoff type.</p>
         )}
         {type?.description && <p className="dim small bld-desc">{type.description}</p>}
-      </Group>
+      </Group>}
 
       <Group title="Specification" extra={<em className="bld-count">{secs.length}</em>}>
         {secs.length === 0 && <p className="dim small">No section linked to this type.</p>}
@@ -373,7 +381,7 @@ export function ElementProperties(props: {
         ))}
       </Group>
 
-      <Group title="Construction">
+      {!drawingOnly && <Group title="Construction">
         {act ? (
           <>
             <Prop k="Built by">
@@ -398,14 +406,14 @@ export function ElementProperties(props: {
         ) : (
           <p className="dim small">Not in the schedule.</p>
         )}
-      </Group>
+      </Group>}
 
       <Group title="Data quality" open={e.issues.length > 0}>
         <Prop k="Place">
           <Badge basis={e.placement} />
         </Prop>
-        <Prop k="Quantity">
-          <Badge basis={m ? 'documented' : 'unknown'} />
+        <Prop k={drawingOnly ? "Acceptance" : "Quantity"}>
+          {drawingOnly ? 'Not accepted takeoff' : <Badge basis={m ? 'documented' : 'unknown'} />}
         </Prop>
         {e.issues.length > 0 && (
           <ul className="bld-warn">

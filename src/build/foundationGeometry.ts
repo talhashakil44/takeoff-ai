@@ -893,6 +893,7 @@ export function recoverFoundationGeometry(
   texts: DrawingTexts,
   lines: DrawingLines = {},
 ): BuildModel {
+  if(model.drawingGeometry?.some(e=>e.id.startsWith('drawing:foundation:')))model={...model,drawingGeometry:model.drawingGeometry.filter(e=>!e.id.startsWith('drawing:foundation:'))};
   const revision = foundationRevisionPages(project);
   if (!revision.length)
     return recoverBaseFoundationGeometry(project, model, texts, lines);
@@ -949,7 +950,7 @@ export function recoverFoundationGeometry(
       };
     }),
   };
-  const recovered=recoverRevisedContinuousStrips(
+  const stripped=recoverRevisedContinuousStrips(
     project,
     model,
     recoverRevisedMassFootings(
@@ -971,6 +972,7 @@ export function recoverFoundationGeometry(
     lines,
     revision,
   );
+  const recovered=recoverRevisedPiers(project,model,recoverRevisedMassFootings(project,model,stripped,texts,lines,revision),texts,lines,revision);
   return {...recovered,elements:recovered.elements.map(e=>{
     if(e.measurementSource!=='foundations')return e;
     const resolved=e.issues.some(i=>i.startsWith('Foundation revision applied:'));
@@ -1461,6 +1463,7 @@ function recoverRevisedPiers(
         !/^P-?\d+\b/.test(e.typeName)
       )
         return e;
+      if(e.shape?.type==='point'&&e.issues.some(i=>i.startsWith('Foundation revision applied:')))return e;
       const old = original.elements.find((v) => v.id === e.id),
         at = old && atOf(old);
       if (!at) return e;
@@ -1566,8 +1569,18 @@ function recoverRevisedPiers(
         return strokes.length >= 2 ? [{ x0, x1, y0, y1, w, h }] : [];
       });
       if (rectangles.length !== 1) return e;
-      const r = rectangles[0],
-        width =
+      const r = rectangles[0];
+      const padSupported=revisedPad?.shape?.type==='point'&&revisedPad.issues.some(i=>i.startsWith('Foundation revision applied:'));
+      const supportingStrips=current.elements.filter(strip=>{
+        const sh=strip.shape;if(strip.sheetId!==plan.sheetId||sh?.type!=='run'||!/^SF-?\d+\b/.test(strip.typeName)||!strip.issues.some(i=>i.startsWith('Foundation revision applied:'))||Math.abs(sh.z0+sh.height-datum.z)>.002)return false;
+        const ps=sh.points.map(q=>sheetPoint(q,plan.frame));if(ps.length!==2)return false;
+        const horizontal=Math.abs(ps[0][1]-ps[1][1])<.1,vertical=Math.abs(ps[0][0]-ps[1][0])<.1;if(!horizontal&&!vertical)return false;
+        const axis=horizontal?0:1,cross=1-axis,lo=Math.min(ps[0][axis],ps[1][axis]),hi=Math.max(ps[0][axis],ps[1][axis]);
+        const qlo=horizontal?r.x0:r.y0,qhi=horizontal?r.x1:r.y1,clo=horizontal?r.y0:r.x0,chi=horizontal?r.y1:r.x1;
+        return qlo>=lo-.3&&qhi<=hi+.3&&clo<=ps[0][cross]+sh.thickness/scale/2&&chi>=ps[0][cross]-sh.thickness/scale/2;
+      });
+      if(!padSupported&&!supportingStrips.length)return {...e,issues:[...new Set([...e.issues,'Foundation revision unresolved: exterior pier footprint is known, but its local supporting footing top is not proven. Typical low-pier datum cannot cross an unresolved pad or footing step.'])]};
+      const width =
           Math.abs(r.w - section.width) < 0.015
             ? section.width
             : section.length,
@@ -1579,7 +1592,7 @@ function recoverRevisedPiers(
         id: plan.docId,
         page: plan.page,
         label: 'Revised foundation plan',
-        quote: `${key} actual closed pier outline; scheduled ${section.width} x ${section.length} m; exterior low-pier detail associated by ICF perimeter location (inferred).`,
+        quote: `${key} actual closed pier outline; scheduled ${section.width} x ${section.length} m; exterior low-pier detail associated by ICF perimeter location and source-backed local supporting footing datum (inferred).`,
         box: [r.x0, r.y0, r.x1, r.y1],
       };
       return {
@@ -1598,6 +1611,7 @@ function recoverRevisedPiers(
               section.source,
               toSpec(detail.source),
               ...datum.sources.map(toSpec),
+              ...(padSupported?revisedPad!.sources.filter(s=>s.kind==='spec'):supportingStrips.flatMap(v=>v.sources.filter(s=>s.kind==='spec'))),
               source,
             ].map((s) => [JSON.stringify(s), s]),
           ).values(),
@@ -1759,15 +1773,24 @@ function recoverRevisedMassFootings(
     return top < 0 && bottom < top ? [{ t, us: us[0], top, bottom }] : [];
   });
   const scale = Math.hypot(plan.frame.a, plan.frame.b);
-  return {
-    ...current,
-    elements: current.elements.map((e) => {
+  const massLeaders=localFootingLeaders(plan);
+  const candidates:BuildElement[]=plan.texts.flatMap(tag=>{
+    const code=normalized(tag.str), ss=sections.get(code);if(!ss)return [];
+    // Existing takeoff types remain exclusively in accepted elements. New source
+    // candidates have no fabricated project type, measurement, or quantity.
+    if(original.elements.some(e=>e.sheetId===plan.sheetId&&normalized(/^([A-Z]+-?\d+)/.exec(e.typeName)?.[1]??'')===code))return [];
+    const id=`drawing:foundation:${plan.docId}:${plan.page}:${code}:${tag.cx.toFixed(2)}:${tag.cy.toFixed(2)}`;
+    return [{id,measurementId:id,name:`${code} – Drawing-derived mass footing`,typeId:'',typeName:code,trade:'structure',division:'03',level:current.elements.find(e=>e.sheetId===plan.sheetId&&e.measurementSource==='foundations')?.level??null,sheetId:plan.sheetId,measurementSource:'foundations',origin:'drawing' as const,status:'new' as const,shape:null,quantity:0,unit:'',planningExcluded:'Drawing-derived geometry; no accepted takeoff quantity',placement:'inferred' as const,sources:[],specs:[],issues:['Drawing-derived geometry: no accepted takeoff quantity. Top continuity requires source review.']}];
+  });
+  const generated=new Map(candidates.map(e=>[e.id,plan.texts.find(t=>`drawing:foundation:${plan.docId}:${plan.page}:${normalized(t.str)}:${t.cx.toFixed(2)}:${t.cy.toFixed(2)}`===e.id)!]));
+  const resolved=[...current.elements,...candidates].map((e) => {
       if (
         e.measurementSource !== 'foundations' ||
         e.sheetId !== plan.sheetId ||
         !/^MF-?\d+\b/.test(e.typeName)
       )
         return e;
+      if(e.shape?.type==='point'&&e.issues.some(i=>i.startsWith('Foundation revision applied:')))return e;
       const code = normalized(/^([A-Z]+-?\d+)/.exec(e.typeName)![1]),
         ss = sections.get(code),
         section = ss?.[0];
@@ -1784,9 +1807,10 @@ function recoverRevisedMassFootings(
       const measurement = project.measurements.find(
         (m) => m.id === e.measurementId,
       );
-      if (measurement?.points.length !== 1) return e;
-      const hint = sheetPoint(
-        worldPoint(measurement.points[0], oldFrame),
+      const drawnTag=generated.get(e.id);
+      if (!drawnTag&&measurement?.points.length !== 1) return e;
+      const hint = drawnTag?[drawnTag.cx,drawnTag.cy]:sheetPoint(
+        worldPoint(measurement!.points[0], oldFrame),
         plan.frame,
       );
       const tags = plan.texts.filter(
@@ -1863,8 +1887,30 @@ function recoverRevisedMassFootings(
               ),
           ),
       );
-      if (local.length !== 1) return e;
-      const d = local[0],
+      // Only a directly dimensioned, source-bounded strip may seed this edge.
+      // This is top continuity, not copying the strip's underside or thickness.
+      const adjacent = current.elements.flatMap(strip => {
+        const sh=strip.shape;
+        if(sh?.type!=='run'||strip.sheetId!==plan.sheetId||!/^SF-?\d+\b/.test(strip.typeName)||sh.points.length!==2)return [];
+        const proof=strip.sources.find(s=>s.kind==='spec'&&s.id===plan.docId&&s.page===plan.page&&s.label==='Revised continuous strip footing'&&s.quote?.includes('Direct local elevation leader on this band.'));
+        if(!proof)return [];
+        const ps=sh.points.map(p=>sheetPoint(p,plan.frame));
+        const horizontal=Math.abs(ps[0][1]-ps[1][1])<.1,vertical=Math.abs(ps[0][0]-ps[1][0])<.1;
+        if(!horizontal&&!vertical)return [];
+        const half=sh.thickness/scale/2;
+        const touched=ps.some(p=>horizontal
+          ? Math.min(Math.abs(p[0]-r.x0),Math.abs(p[0]-r.x1))<.3&&p[1]-half>=r.y0-.3&&p[1]+half<=r.y1+.3
+          : Math.min(Math.abs(p[1]-r.y0),Math.abs(p[1]-r.y1))<.3&&p[0]-half>=r.x0-.3&&p[0]+half<=r.x1+.3);
+        if(!touched)return [];
+        if(plan.texts.some(t=>/^S\.?F\.?$/.test(t.str.trim())&&t.cx>=r.x0-20&&t.cx<=r.x1+20&&t.cy>=r.y0-20&&t.cy<=r.y1+20))return [];
+        return [{top:Math.round((sh.z0+sh.height)*1e6)/1e6,proof,strip}];
+      });
+      const directAtMass=massLeaders.filter(d=>onBoundary(d.tip));
+      const connected=adjacent.length>0&&adjacent.every(a=>Math.abs(a.top-adjacent[0].top)<.002)&&directAtMass.every(d=>Math.abs(d.top-adjacent[0].top)<.002&&Math.abs(d.top-d.bottom-section.depth)<.002);
+      const propagated=local.length===0&&connected;
+      if(local.length!==1&&!propagated)return e;
+      if(e.origin==='drawing'&&!connected)return e;
+      const d = local[0]??{top:adjacent[0].top,bottom:Math.round((adjacent[0].top-section.depth)*1e6)/1e6,t:{str:'inferred connected top',cx:tag.cx,cy:tag.cy},us:{str:'underside from own schedule thickness',cy:tag.cy}},
         width =
           Math.abs(r.w - section.width) < 0.015
             ? section.width
@@ -1875,7 +1921,7 @@ function recoverRevisedMassFootings(
         id: plan.docId,
         page: plan.page,
         label: 'Revised foundation plan',
-        quote: `${code} tag, closed mass-footing footprint and direct elevation leader: ${d.t.str}; ${d.us.str}.`,
+        quote: propagated ? `${code}: closed scheduled footprint meets directly dimensioned strip boundaries without an S.F. marker; top ${d.top} m propagated (inferred). Own mass schedule depth ${section.depth} m gives bottom ${d.bottom} m.` : `${code} tag, closed mass-footing footprint and direct elevation leader: ${d.t.str}; ${d.us.str}.`,
         box: [
           Math.min(r.x0, d.t.cx - 40),
           Math.min(r.y0, d.t.cy - 10),
@@ -1894,7 +1940,7 @@ function recoverRevisedMassFootings(
         },
         sources: [
           ...new Map(
-            [...e.sources, section.source, source].map((s) => [
+            [...e.sources, section.source, source, ...((propagated||e.origin==='drawing')?adjacent.flatMap(a=>a.strip.sources.filter(s=>s.kind==='spec')):[])].map((s) => [
               JSON.stringify(s),
               s,
             ]),
@@ -1904,11 +1950,13 @@ function recoverRevisedMassFootings(
           ...e.issues.filter(
             (i) => !i.startsWith('Foundation revision unresolved:'),
           ),
-          `Foundation revision applied: mass-footing tag and drawn footprint match the revised schedule and direct local top/underside leader. Top ${d.top} m; bottom ${d.bottom} m. Source quantity unchanged.`,
+          `Foundation revision applied: mass-footing tag and drawn footprint match the revised schedule; ${propagated?'top inferred from directly dimensioned adjoining strip, with own mass-footing schedule thickness and no S.F. marker':'direct local top/underside leader'}. Top ${d.top} m; bottom ${d.bottom} m. ${e.origin==='drawing'?'No accepted takeoff quantity.':'Source quantity unchanged.'}`,
         ],
       };
-    }),
-  };
+    });
+  const drawing=resolved.filter(e=>generated.has(e.id)&&e.shape?.type==='point');
+  const retained=(current.drawingGeometry??[]).filter(e=>!e.id.startsWith('drawing:foundation:'));
+  return {...current,elements:resolved.filter(e=>!generated.has(e.id)),...((drawing.length||current.drawingGeometry)?{drawingGeometry:[...retained,...drawing]}:{})};
 }
 
 function pierQuantityDiscrepancy(project:Project,element:BuildElement,geometryHeight:number):string[] {

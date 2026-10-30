@@ -270,5 +270,8 @@ describe('canopy viewport registration', () => {
       expect(Object.keys(result).length).toBeGreaterThan(0);
       for (const r of Object.values(result)) expect(r.topDatum).toBe(6.623);
     },
+    // This optional integration fixture includes full PDF vectors and can run
+    // alongside the unit workers; allow bounded parsing/extraction time.
+    30_000,
   );
 });

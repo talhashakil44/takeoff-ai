@@ -796,6 +796,11 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
     recoverFoundationGeometry(p, recovered, pierSource, pierLines),
   ).toEqual(recovered);
 
+  const pierWithoutLocalPad={'spec:revision:21':[...filled,...filled.slice(0,2).map(l=>({...l,filled:false,width:1,sub:101}))]};
+  const unsupportedPier=recoverFoundationGeometry(p,{...m,elements:[run,located,pier,wall]},pierSource,pierWithoutLocalPad).elements[2];
+  expect(unsupportedPier.shape?.type).toBe('locator');
+  expect(unsupportedPier.issues.join(' ')).toContain('local supporting footing top is not proven');
+
   expect(recovered.elements[2].issues.join(' ')).toContain('Foundation revision discrepancy: accepted takeoff type H=1.200 m');
   expect(recovered.elements[2].issues.join(' ')).toContain('geometry height is 0.950 m');
   expect(recovered.elements[2].quantity).toBe(pier.quantity);
@@ -1016,6 +1021,33 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
   expect(directOut.elements[1].quantity).toBe(strip2.quantity);
   expect(recoverFoundationGeometry(sp,directOut,directSource,directLines)).toEqual(directOut);
   expect(recoverFoundationGeometry(sp,directModel,directSource,{'spec:revision:21':directLines['spec:revision:21'].filter(l=>!l.filled)}).elements[1].shape?.type).toBe('axis');
+
+  // A separately scheduled mass meeting the bounded strip inherits only its top.
+  const massRight=200+5/scale, massLow=100-.9/scale, massHigh=100+.9/scale;
+  const ring=[[200,massLow],[massRight,massLow],[massRight,massHigh],[200,massHigh],[200,massLow]];
+  const massEdges=ring.slice(1).map((q,i)=>({x1:ring[i][0],y1:ring[i][1],x2:q[0],y2:q[1],filled:true,width:0,sub:800}));
+  const joinedProject={...sp,measurements:[...sp.measurements,{id:'mass',sheetId:'plan',points:[[220,90]]}]} as Project;
+  const joinedSource={...directSource,'spec:revision:19':ms['spec:revision:19'],'spec:revision:21':[...directSource['spec:revision:21'],text('MF2',220,90)]};
+  const joinedLines={'spec:revision:21':[...directLines['spec:revision:21'],...massEdges]};
+  const joinedModel={...directModel,elements:[...directModel.elements,mass]};
+  const massJoined=recoverFoundationGeometry(joinedProject,joinedModel,joinedSource,joinedLines);
+  expect(massJoined.elements[2].shape).toMatchObject({type:'point',size:[5,1.8,.4]});
+  if(massJoined.elements[2].shape?.type==='point')expect(massJoined.elements[2].shape.z).toBeCloseTo(-.65,8);
+  expect(massJoined.elements[2].issues.join(' ')).toContain('top inferred from directly dimensioned adjoining strip');
+  expect(massJoined.elements[2].quantity).toBe(mass.quantity);
+  expect(recoverFoundationGeometry(joinedProject,massJoined,joinedSource,joinedLines)).toEqual(massJoined);
+  const drawingOnly=recoverFoundationGeometry(sp,directModel,joinedSource,joinedLines);
+  expect(drawingOnly.elements).toEqual(recoverFoundationGeometry(sp,directModel,joinedSource,directLines).elements);
+  expect(drawingOnly.drawingGeometry).toHaveLength(1);
+  expect(drawingOnly.drawingGeometry![0]).toMatchObject({origin:'drawing',quantity:0,unit:'',typeId:'',planningExcluded:'Drawing-derived geometry; no accepted takeoff quantity'});
+  expect(drawingOnly.drawingGeometry![0].id).toMatch(/^drawing:foundation:/);
+  expect(drawingOnly.drawingGeometry![0].production).toBeUndefined();
+  expect(recoverFoundationGeometry(sp,drawingOnly,joinedSource,joinedLines)).toEqual(drawingOnly);
+  expect(recoverFoundationGeometry(sp,drawingOnly,joinedSource,directLines).drawingGeometry).toEqual([]);
+  const steppedSource={...joinedSource,'spec:revision:21':[...joinedSource['spec:revision:21'],text('S.F.',210,125)]};
+  expect(recoverFoundationGeometry(joinedProject,joinedModel,steppedSource,joinedLines).elements[2].shape?.type).toBe('locator');
+  const separatedLines={'spec:revision:21':[...directLines['spec:revision:21'],...massEdges.map(l=>({...l,x1:l.x1+2,x2:l.x2+2}))]};
+  expect(recoverFoundationGeometry(joinedProject,joinedModel,joinedSource,separatedLines).elements[2].shape?.type).toBe('locator');
 
   p.specs![0].book!.changes!.push({page:3,text:'Question about foundation coordination',label:'Q',y:0,sections:[],sheets:[],action:'clarified'});
   const polluted={...directModel,elements:directModel.elements.map(e=>({...e,sources:[...e.sources,{kind:'spec' as const,id:'revision',page:3,label:'Addendum5',quote:'Newer foundation drawing contains explicit local footing elevations; supersedes generic original-sheet datum.'},{kind:'spec' as const,id:'revision',page:31,label:'Revised foundation detail (stale)',quote:'T/O FOOTING -1200 mm; FIN. GROUND FLOOR 0'}]}))};

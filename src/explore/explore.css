@@ -1114,3 +1114,9 @@
 .ex-details > button{display:block;width:100%;text-align:left;margin:6px 0;padding:7px 9px;line-height:1.5}
 .ex-structural-proof dl{display:grid;grid-template-columns:1fr auto;gap:8px;margin:10px 0 16px}
 .ex-structural-proof dt,.ex-structural-proof dd{margin:0;padding:0;font-size:12px}
+
+/* Three scope tabs and long source labels must fit the narrow model sidebar. */
+.ex-scope-tabs { flex-wrap: wrap; }
+.ex-scope-tabs button { min-width: 0; white-space: normal; }
+.ex-room-list button.ex-element-row { display: block; white-space: normal; overflow-wrap: anywhere; }
+.ex-room-list button.ex-element-row > span { display: block; }
