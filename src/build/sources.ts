@@ -194,7 +194,7 @@ export interface RevisionSheet {
   title?: string;
   width: number;
   height: number;
-  /** The live project sheet with that number and size. */
+  /** The live project sheet with that number and size; unset for a sheet the addendum adds. */
   revises?: string;
   /** The file it was issued in. */
   issue: string;
@@ -233,7 +233,7 @@ export function reissuedSheetOf(
   width: number,
   height: number,
   sheets: Pick<Sheet, 'id' | 'name' | 'width' | 'height' | 'superseded'>[],
-): { sheet: Pick<Sheet, 'id' | 'name'>; dated?: string } | null {
+): { sheet: Pick<Sheet, 'id' | 'name'>; dated?: string } | { sheet?: undefined; name: string; dated?: string } | null {
   if (Math.max(width, height) < 1000) return null;
   const live = sheets.filter((s) => !s.superseded && Math.abs(s.width - width) < 1 && Math.abs(s.height - height) < 1);
   const corner = texts.filter((t) => t.cx > width * 0.85 && t.cy > height * 0.8);
@@ -241,10 +241,20 @@ export function reissuedSheetOf(
     .map((t) => ({ t, s: live.find((s) => s.name.trim().toUpperCase() === t.str.trim().toUpperCase()) }))
     .filter((x) => x.s)
     .sort((a, b) => b.t.cx + b.t.cy - (a.t.cx + a.t.cy))[0];
-  if (!hit) return null;
+  // A sheet the addendum adds (Kelso's S0.3 schedules): a sheet number in the title block, of a
+  // discipline the set has at this size.
+  const added = hit
+    ? null
+    : corner
+        .filter((t) => SHEET_NO.test(t.str.trim()) && live.some((s) => prefixOf(s.name) === prefixOf(t.str.trim())))
+        .sort((a, b) => b.cx + b.cy - (a.cx + a.cy))[0];
+  if (!hit && !added) return null;
   const dated = texts.filter((t) => t.cx > width * 0.75 && t.cy > height * 0.6 && DATE.test(t.str.trim()))[0]?.str.trim();
-  return { sheet: hit.s!, dated };
+  return hit ? { sheet: hit.s!, dated } : { name: added!.str.trim().toUpperCase(), dated };
 }
+
+const SHEET_NO = /^[A-Z]{1,2}-?\d{1,3}(?:[.-]\d{1,3})?[A-Z]?$/i;
+const prefixOf = (name: string) => /^[A-Z]+/i.exec(name.trim())?.[0].toUpperCase() ?? '';
 
 /** A re-issued sheet's scale: its own notes, else the sheet it revises where that scale is among its notes. */
 function revisionScale(texts: DrawingText[], lines: Segment[] | null, old: Sheet | undefined, units: Project['units']): { metersPerPoint: number | null; scaleLabel: string | null } {
@@ -337,12 +347,13 @@ async function loadRevisions(
       }
       const found = reissuedSheetOf(texts, size.width, size.height, project.sheets);
       if (!found) continue;
-      const old = project.sheets.find((s) => s.id === found.sheet.id)!;
+      const old = found.sheet ? project.sheets.find((s) => s.id === found.sheet.id) : undefined;
+      const name = old?.name ?? ('name' in found ? found.name : '');
       const id = `spec:${doc.id}:${page}`;
       out.texts[id] = texts;
       out.hints[id] = titleWords(texts, size.width, size.height);
       let lines: Segment[] | null = null;
-      if (access.lines && (needsLines(old, plans) || /^S[-\d.]/i.test(old.name))) {
+      if (access.lines && ((old && needsLines(old, plans)) || /^S[-\d.]/i.test(name))) {
         const packed = useCache ? await get<PackedLines | undefined>(lineKey(at)).catch(() => undefined) : undefined;
         if (packed?.v === CACHE_VERSION) lines = unpackLines(packed);
         else {
@@ -355,16 +366,16 @@ async function loadRevisions(
         if (lines) out.lines[id] = lines;
       }
       // A later addendum re-issuing the same sheet supersedes this one's predecessors.
-      for (const r of out.revisions) if (r.revises === old.id) r.superseded = true;
+      for (const r of out.revisions) if (r.name === name) r.superseded = true;
       out.revisions.push({
         id,
         docId: doc.id,
         page,
-        name: old.name,
-        title: old.title,
+        name,
+        title: old?.title,
         width: size.width,
         height: size.height,
-        revises: old.id,
+        revises: old?.id,
         issue: doc.name.replace(/\.pdf$/i, ''),
         dated: found.dated,
         ...revisionScale(texts, lines, old, project.units ?? 'metric'),

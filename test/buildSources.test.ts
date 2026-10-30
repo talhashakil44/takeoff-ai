@@ -114,7 +114,10 @@ describe('written dates', () => {
       expect(reissuedSheetOf(block('S1.0'), 2592, 1728, sheets)).toEqual({ sheet: sheets[0], dated: 'Sep. 16, 2026' });
       expect(reissuedSheetOf(block('S1.0'), 612, 792, sheets)).toBeNull();
       expect(reissuedSheetOf(block('S1.0'), 3024, 2160, sheets)).toBeNull();
-      expect(reissuedSheetOf(block('S9.9'), 2592, 1728, sheets)).toBeNull();
+      // A sheet the addendum adds (S0.3 schedules), of a discipline the set has at this size.
+      expect(reissuedSheetOf(block('S0.3'), 2592, 1728, sheets)).toEqual({ name: 'S0.3', dated: 'Sep. 16, 2026' });
+      expect(reissuedSheetOf(block('M9.9'), 2592, 1728, sheets)).toBeNull();
+      expect(reissuedSheetOf(block('TA-5759-25'), 2592, 1728, sheets)).toBeNull();
     });
 
     it('takes addendum and revision files only, in issue order', () => {
@@ -129,7 +132,7 @@ describe('written dates', () => {
     it('reads the re-issued pages under their own ids, and a later addendum supersedes an earlier one', async () => {
       const pages: Record<string, { width: number; height: number; texts: ReturnType<typeof block> }[]> = {
         a2: [{ width: 612, height: 792, texts: [] }, { width: 2592, height: 1728, texts: block('S1.0', 'Aug. 30, 2026') }],
-        a5: [{ width: 612, height: 792, texts: [] }, { width: 2592, height: 1728, texts: block('S1.0') }, { width: 2592, height: 1728, texts: block('S1.1') }],
+        a5: [{ width: 612, height: 792, texts: [] }, { width: 2592, height: 1728, texts: block('S1.0') }, { width: 2592, height: 1728, texts: block('S1.1') }, { width: 2592, height: 1728, texts: block('S0.3') }],
       };
       const read: string[] = [];
       const src = await loadDrawingSources({
@@ -145,11 +148,12 @@ describe('written dates', () => {
         },
       });
       // Letter pages are not read for text.
-      expect(read).toEqual(['a2:2', 'a5:2', 'a5:3']);
+      expect(read).toEqual(['a2:2', 'a5:2', 'a5:3', 'a5:4']);
       expect(src.revisions.map((r) => [r.id, r.name, r.revises, r.issue, r.dated, r.superseded ?? false])).toEqual([
         ['spec:a2:2', 'S1.0', 's10', 'Addendum 2', 'Aug. 30, 2026', true],
         ['spec:a5:2', 'S1.0', 's10', 'Addendum 5', 'Sep. 16, 2026', false],
         ['spec:a5:3', 'S1.1', 's11', 'Addendum 5', 'Sep. 16, 2026', false],
+        ['spec:a5:4', 'S0.3', undefined, 'Addendum 5', 'Sep. 16, 2026', false],
       ]);
       expect(src.revisions[1].metersPerPoint).toBeCloseTo(0.035277777777777776);
       expect(src.texts['spec:a5:2']?.[0].str).toBe('S1.0');
