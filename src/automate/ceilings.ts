@@ -52,6 +52,8 @@ export async function automateCeilings(p: Project, access: SetAccess, current: S
       const page = read.areas.some((a) => a.source !== 'tag') ? await access.page(x) : null;
       const tone = page ? await toneMap(page) : null;
       if (tone) read.areas = read.areas.filter((a) => a.source === 'tag' || toneShare(a.points, tone) <= 0.6);
+      // On a tagged plan, an untagged area with nothing drawn in it (an open stair, a shaft) has no ceiling to take off.
+      if (read.tagged) read.areas = read.areas.filter((a) => a.code || a.legend || a.kind !== 'plain');
       if (read.areas.length) found.push({ sheet: x, read });
     });
   }

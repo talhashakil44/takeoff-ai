@@ -382,6 +382,8 @@ export function readCeilingNotes(input: PageText[]): CeilingNotes {
     // A note saying what ceiling to build or finish, not a general note about all of them.
     if (!CEILING_NOTE.test(note) || NOT_A_CEILING_NOTE.test(note) || !/\b(install|new|provide|construct|replace|paint|finish)/i.test(note) || /^(all|where|refer|the|contractor|verify|coordinate|confirm|finished ceiling heights?)\b/i.test(note) || /unless (noted|otherwise)|\bu\.?n\.?o\b/i.test(note)) return;
     const code = it.n.str.trim().replace(/\.$/, '');
+    // A note 0, or a symbol legend's pointers to other sheets ("See A000 series Sheets … See Sheet A501"), is no ceiling note.
+    if (/^0+$/.test(code) || (note.match(/\bsee\b/gi)?.length ?? 0) >= 2) return;
     defs.push({ code, key: code, description: note.replace(/\s*(to height shown on r\.?c\.?p\.?|refer to .*)$/i, '').replace(/[.;,]\s*$/, ''), at: [it.n.cx, it.n.cy] });
   });
   const h = best[0].n.h;
