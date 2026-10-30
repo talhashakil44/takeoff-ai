@@ -188,7 +188,11 @@
         "build"
       ],
       "prompt": "Explore Drawing (src/explore, worktree /Users/talhashakeel/.codex/worktrees/explore-drawing). Beyond the gates: source-to-model alignment checks, dimension/placement provenance, and a live visual review before review status.",
-      "stream": "gpt-explore"
+      "stream": "gpt-explore",
+      "notes": [
+        "2026-10-30T17:54 gpt-explore: Active continuous drawing reconciliation with Claude: Addendum5 revised structural plans and sections take precedence; correct floor bearing spans, roof grid-A beam sizes, and local foundation levels before visual acceptance. Tests alone do not close task."
+      ],
+      "updated": "2026-10-30T17:54:37.157Z"
     },
     {
       "status": "done",
