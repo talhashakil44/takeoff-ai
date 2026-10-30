@@ -350,7 +350,7 @@
       "evidence": "claude/integration@affae9c"
     },
     {
-      "status": "doing",
+      "status": "todo",
       "depends": [
         "T15"
       ],
@@ -366,8 +366,8 @@
       "title": "Register each viewport of a two-viewport sheet to the architectural grid by its own grid bubbles, then place its pipes/ducts in 3D",
       "added": "2026-10-30T04:54:31.831Z",
       "by": "claude",
-      "branch": "codex/build-it-viewport-grid",
-      "updated": "2026-10-30T05:03:53.685Z"
+      "branch": "codex/build-it-viewport-grid@9972017",
+      "updated": "2026-10-30T05:09:07.046Z"
     },
     {
       "status": "todo",
