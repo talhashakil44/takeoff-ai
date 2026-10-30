@@ -3239,7 +3239,7 @@ export function App() {
           onDeleteMany={deleteMeasurements}
           onAdd={addMeasurement}
           onReplacePoints={(id, points, source = 'Fill room', openings) =>
-            commit((p) => ({ ...p, measurements: p.measurements.map((m) => (m.id === id ? { ...m, points, openings } : m)) }), source)
+            commit((p) => ({ ...p, measurements: p.measurements.map((m) => (m.id === id ? { ...m, points, openings, statedLength: undefined } : m)) }), source)
           }
           onMoveTakeoff={(id, points, holes) =>
             commit((p) => ({ ...p, measurements: p.measurements.map((m) => (m.id === id ? { ...m, points, holes } : m)) }), 'Move takeoff')

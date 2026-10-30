@@ -54,6 +54,11 @@ export function formulaVars(vars: Vars, type: TakeoffType): Record<string, numbe
 export function measurementVars(m: Measurement, type: TakeoffType, sheet: Sheet, units: Units): Vars | null {
   const H = type.height;
   if (type.kind === 'count') return { L: 0, H, A: 0, P: 0, N: 1, I: 0 };
+  // A length the drawing writes needs no scale.
+  if (type.kind === 'linear' && m.statedLength !== undefined) {
+    const L = toLength(m.statedLength, units);
+    return { L, H, A: L * H, P: 0, N: 1, I: 0 };
+  }
   const mpp = sheet.metersPerPoint;
   if (mpp === null) return null;
   if (type.kind === 'linear') {

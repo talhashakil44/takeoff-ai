@@ -1,5 +1,6 @@
 import { automateFoundations } from '../automate/foundations';
 import { automateStructure } from '../automate/structure';
+import { automateSite } from '../automate/site';
 import type { Automation } from '../automate/result';
 import { sheetEdges, type DrawingGraph } from '../graph/graph';
 import type { ProjectMap } from '../spec/links';
@@ -103,7 +104,7 @@ const str = (description: string, extra: Record<string, unknown> = {}) => ({ typ
 const num = (description: string) => ({ type: 'number', description });
 const point = { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 };
 
-export const AUTOMATIONS = ['rooms', 'walls', 'doors', 'windows', 'ceilings', 'sprinklers', 'symbols', 'finishes', 'ductwork_piping', 'trade_counts', 'keynotes_demolition', 'foundations', 'structure'] as const;
+export const AUTOMATIONS = ['rooms', 'walls', 'doors', 'windows', 'ceilings', 'sprinklers', 'symbols', 'finishes', 'ductwork_piping', 'trade_counts', 'keynotes_demolition', 'foundations', 'structure', 'site'] as const;
 type AutomationKind = (typeof AUTOMATIONS)[number];
 
 export const TOOL_DEFS: ToolDef[] = [
@@ -271,6 +272,7 @@ export const TOOL_DEFS: ToolDef[] = [
       'trade_counts: devices, light fixtures by type, plumbing fixtures, equipment and grilles on the trade plans, from their legends and schedules.',
       'keynotes_demolition: the architect\'s keynotes counted where tagged; on demolition plans, removals by keynote (flooring and ceilings as room areas) and walls drawn dashed.',
       'foundations: off the foundation plan and structural schedules: pad footings, piers and mass footings by tag with their schedule sizes, foundation walls and their strip footings along the tagged runs, the slab on grade and the excavation (depth assumed).',
+      'site: pipe and culvert runs at the lengths the civil drawings label them (by size, material and service; existing runs left out), and roads by their plan-and-profile chainage.',
       'structure: beams, columns, lintels, braces and base plates counted by tag on the structural plans with their schedule sizes, and structural walls along their tagged runs.',
       'Set scales first. Then check the result with get_sheet_image.',
     ].join(' '),
@@ -875,6 +877,9 @@ async function automation(ctx: McpContext, a: Record<string, unknown>): Promise<
       break;
     case 'structure':
       r = await automateStructure(p, access, ctx.maxOpening());
+      break;
+    case 'site':
+      r = await automateSite(p, access);
       break;
     case 'symbols': {
       const t = await symbolTallies(p, access);

@@ -15,6 +15,7 @@ import { planShift as planShiftKnown, repeatedRuns } from './overlap';
 import { findRoomLabels } from '../fill/rooms';
 import { automateFoundations } from './foundations';
 import { automateStructure } from './structure';
+import { automateSite } from './site';
 import type { Project, Pt, Sheet } from '../model';
 import type { PDFDocumentProxy } from '../pdf';
 import { classifySheet, tradeOfNumber, type SheetKind } from '../sheetKind';
@@ -278,6 +279,16 @@ export async function takeOffWholeSet(
     await pause();
     const r = await automateStructure(project, access, opts.maxOpening);
     apply('structure', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('site works', async () => {
+    say('Whole set: site services and roads…');
+    await pause();
+    const r = await automateSite(project, access);
+    apply('site', r);
     await hold();
     for (const c of r.checks) review.push({ kind: 'check', text: c });
     return r.message;
