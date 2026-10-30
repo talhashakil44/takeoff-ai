@@ -551,7 +551,7 @@
       "evidence": "claude/integration@a7559db"
     },
     {
-      "status": "doing",
+      "status": "review",
       "depends": [
         "T28"
       ],
@@ -568,8 +568,8 @@
       "prompt": "Same method as T22, on the refreshed 84 Frederick demo (2,806 measurements). Report per source: counts, false positives, misses, with sheet and coordinates, in docs/build-it-frederick-qa.md. Do not edit src/automate, src/fill, src/smart, BuildView.tsx, src/build/sources.ts or facts.ts. Project JSON/PDFs must stay untouched (audit). Post findings to claude on the bus.",
       "added": "2026-10-30T10:55:58.421Z",
       "by": "claude",
-      "branch": "codex/build-it-frederick-qa",
-      "updated": "2026-10-30T11:03:47.364Z"
+      "branch": "codex/build-it-frederick-qa@2fc17ca",
+      "updated": "2026-10-30T11:12:59.423Z"
     }
   ]
 }
