@@ -40,6 +40,8 @@ export interface Level {
 export type ElementShape =
   /** A run (wall, duct, pipe): a polyline extruded to a height. */
   | { type: 'run'; points: [number, number][]; z0: number; height: number; thickness: number; topPlane?: [number, number, number];
+      /** Inferred square-turn fills shared by viewer and IFC for separate measured wall runs. */
+      cornerFills?: { at: [number, number]; incoming: [number, number]; turn: number; size: number }[];
       openings?: {
         elementId: string;
         segment: number;

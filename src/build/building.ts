@@ -338,6 +338,7 @@ export function levelDatums(project: Project, texts: DrawingTexts): Record<strin
 
 /** Associate measured door/window tags with the nearest wall, without changing their takeoff. */
 export function cutOpenings(model: BuildModel) {
+  const inferredHosts: BuildElement[] = [];
   for (const e of model.elements.filter((e) => e.trade === 'doors' && e.shape?.type === 'point')) {
     const sh = e.shape;
     if (sh?.type !== 'point') continue;
@@ -406,6 +407,69 @@ export function cutOpenings(model: BuildModel) {
     sh.size[1] = run.thickness;
     sh.z = run.z0 + sill;
     sh.size[2] = height;
-    e.issues.push(e.opening ? 'Opening hosted to wall; dimensions linked to source detail.' : 'Opening host inferred from proximity; width, sill and head require door/window schedule verification.');
+    if (!e.opening) inferredHosts.push(e);
+  }
+  if (inferredHosts.length)
+    model.issues.push({
+      id: 'opening-host-assumptions',
+      severity: 'warning',
+      text: `${inferredHosts.length} openings were hosted to nearby walls by proximity. Their default width, sill and head need door/window schedule verification.`,
+      refs: inferredHosts.map((e) => e.id),
+      sources: inferredHosts.slice(0, 3).flatMap((e) => e.sources),
+    });
+}
+
+/** Fill documented square turns where two separate measured wall runs actually meet. */
+export function sealWallCorners(model: BuildModel) {
+  type Run = Extract<NonNullable<BuildElement['shape']>, { type: 'run' }>;
+  type End = {
+    element: BuildElement;
+    run: Run;
+    at: Pt;
+    incoming: Pt;
+    outgoing: Pt;
+    segment: number;
+    offset: number;
+    length: number;
+  };
+  const ends: End[] = [];
+  for (const element of model.elements) {
+    const run = element.shape;
+    if (element.origin === 'building' || run?.type !== 'run' || !['partitions', 'structure', 'envelope'].includes(element.trade)) continue;
+    if (run.points.length < 2 || run.thickness <= 0) continue;
+    const first = run.points[0], second = run.points[1];
+    const last = run.points.at(-1)!, previous = run.points.at(-2)!;
+    if (Math.hypot(first[0] - last[0], first[1] - last[1]) < 0.001) continue;
+    const startLength = Math.hypot(second[0] - first[0], second[1] - first[1]);
+    const endLength = Math.hypot(last[0] - previous[0], last[1] - previous[1]);
+    if (startLength < 0.02 || endLength < 0.02) continue;
+    const startOutgoing: Pt = [(second[0] - first[0]) / startLength, (second[1] - first[1]) / startLength];
+    const endIncoming: Pt = [(last[0] - previous[0]) / endLength, (last[1] - previous[1]) / endLength];
+    ends.push({ element, run, at: first, incoming: [-startOutgoing[0], -startOutgoing[1]], outgoing: startOutgoing, segment: 0, offset: 0, length: startLength });
+    ends.push({ element, run, at: last, incoming: endIncoming, outgoing: [-endIncoming[0], -endIncoming[1]], segment: run.points.length - 2, offset: endLength, length: endLength });
+  }
+  const head = (end: End) => end.run.topPlane
+    ? end.run.topPlane[0] * end.at[0] + end.run.topPlane[1] * end.at[1] + end.run.topPlane[2]
+    : end.run.z0 + end.run.height;
+  const close = (a: End, b: End) => a.element !== b.element && a.element.level === b.element.level &&
+    a.element.status === b.element.status &&
+    Math.hypot(a.at[0] - b.at[0], a.at[1] - b.at[1]) < 0.015 &&
+    Math.abs(a.run.z0 - b.run.z0) < 0.05 && Math.abs(head(a) - head(b)) < 0.05 &&
+    Math.abs(a.run.thickness - b.run.thickness) < 0.025;
+  for (let i = 0; i < ends.length; i++) {
+    const a = ends[i];
+    const matches = ends.map((end, index) => ({ end, index })).filter(({ end, index }) => index !== i && close(a, end));
+    // Do not guess a join at a T intersection or stacked/duplicate walls.
+    if (matches.length !== 1 || matches[0].index < i) continue;
+    const b = matches[0].end;
+    if (ends.filter((end, index) => index !== matches[0].index && close(b, end)).length !== 1) continue;
+    const dot = a.incoming[0] * b.outgoing[0] + a.incoming[1] * b.outgoing[1];
+    if (Math.abs(dot) > 0.1) continue;
+    const size = Math.min(a.run.thickness, b.run.thickness);
+    const blocked = (end: End) => (end.run.openings ?? []).some((opening) => opening.segment === end.segment &&
+      Math.abs(opening.offset - end.offset) < opening.width / 2 + size / 2);
+    if (blocked(a) || blocked(b)) continue;
+    const turn = a.incoming[0] * b.outgoing[1] - a.incoming[1] * b.outgoing[0];
+    a.run.cornerFills = [...(a.run.cornerFills ?? []), { at: a.at, incoming: a.incoming, turn, size }];
   }
 }

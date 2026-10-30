@@ -12,6 +12,20 @@ export function runSolids(run: Extract<ElementShape, { type: 'run' }>) {
     endHeight: number;
     thickness: number;
   }[] = [];
+  const addCornerFill = (at: [number, number], dx: number, dy: number, turn: number, size: number) => {
+    const outwardX = Math.sign(turn) * dy;
+    const outwardY = -Math.sign(turn) * dx;
+    const x = at[0] + outwardX * size / 4;
+    const y = at[1] + outwardY * size / 4;
+    const fillLength = size / 2;
+    const head = (px: number, py: number) => run.topPlane
+      ? Math.max(0, run.topPlane[0] * px + run.topPlane[1] * py + run.topPlane[2] - run.z0)
+      : run.height;
+    const height = head(x, y);
+    const endHeight = head(x + dx * fillLength, y + dy * fillLength);
+    if (Math.max(height, endHeight) < 0.001) return;
+    parts.push({ x, y, dx, dy, length: fillLength, z: run.z0, height, endHeight, thickness: fillLength });
+  };
   for (let i = 1; i < run.points.length; i++) {
     const [x, y] = run.points[i - 1],
       [endX, endY] = run.points[i];
@@ -62,5 +76,38 @@ export function runSolids(run: Extract<ElementShape, { type: 'run' }>) {
         });
       }
   }
+  // Butt-ended segment boxes leave a quarter-width void outside a square turn.
+  // A small shared solid closes it in both the viewer and the IFC export.
+  const closed = run.points.length > 3 && Math.hypot(
+    run.points[0][0] - run.points.at(-1)![0],
+    run.points[0][1] - run.points.at(-1)![1],
+  ) < 0.001;
+  const joints = Array.from({ length: run.points.length - 2 }, (_, i) => i + 1);
+  if (closed) joints.push(0);
+  for (const i of joints) {
+    const prev = run.points[i === 0 ? run.points.length - 2 : i - 1];
+    const at = run.points[i];
+    const next = run.points[i + 1];
+    const beforeLength = Math.hypot(at[0] - prev[0], at[1] - prev[1]);
+    const afterLength = Math.hypot(next[0] - at[0], next[1] - at[1]);
+    if (beforeLength < 0.02 || afterLength < 0.02 || run.thickness <= 0) continue;
+    const dx = (at[0] - prev[0]) / beforeLength;
+    const dy = (at[1] - prev[1]) / beforeLength;
+    const nextDx = (next[0] - at[0]) / afterLength;
+    const nextDy = (next[1] - at[1]) / afterLength;
+    const turn = dx * nextDy - dy * nextDx;
+    // The quarter-width fill below is exact for a square turn. Other angles
+    // need a proper mitre profile and should keep their source geometry.
+    if (Math.abs(dx * nextDx + dy * nextDy) > 0.1) continue;
+    const beforeSegment = i === 0 ? run.points.length - 2 : i - 1;
+    const afterSegment = i;
+    if ((run.openings ?? []).some((o) =>
+      (o.segment === beforeSegment && o.offset + o.width / 2 > beforeLength - run.thickness / 2) ||
+      (o.segment === afterSegment && o.offset - o.width / 2 < run.thickness / 2)
+    )) continue;
+    addCornerFill(at, dx, dy, turn, run.thickness);
+  }
+  for (const fill of run.cornerFills ?? [])
+    addCornerFill(fill.at, fill.incoming[0], fill.incoming[1], fill.turn, fill.size);
   return parts;
 }

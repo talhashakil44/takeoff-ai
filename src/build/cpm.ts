@@ -32,12 +32,12 @@ export class Calendar {
     }
   }
   private next(iso: string) {
-    const d = new Date(`${iso}T12:00:00`);
-    d.setDate(d.getDate() + 1);
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
     return d.toISOString().slice(0, 10);
   }
   isWork(iso: string) {
-    return this.work.has(new Date(`${iso}T12:00:00`).getDay()) && !this.off.has(iso);
+    return this.work.has(new Date(`${iso}T00:00:00Z`).getUTCDay()) && !this.off.has(iso);
   }
   /** The date of working day i (0 = the first working day on or after the start). */
   date(i: number): string {
@@ -87,6 +87,35 @@ export function schedule(acts: Activity[], setup: PlanSetup): Schedule {
   const es = new Map<string, number>();
   const ef = new Map<string, number>();
   const driver = new Map<string, string | null>();
+  const productionDays = new Map(acts.map((x) => [x.id, x.duration]));
+  const elapsedDays = (x: Activity, start: number): number => {
+    const production = productionDays.get(x.id) ?? x.duration;
+    if (!x.weather || production <= 0) return production;
+    let earned = 0, elapsed = 0;
+    while (earned < production) {
+      const month = Number(cal.date(start + elapsed).slice(5, 7));
+      // Ontario planning assumption, not a forecast: roof work pauses in
+      // Dec–Feb; site/structure use winter protection at 60% output.
+      const winter = month === 12 || month <= 2;
+      earned += winter ? (x.weather === 'roof' ? 0 : 0.6) : (month === 3 || month === 11 ? 0.85 : 1);
+      elapsed++;
+    }
+    return elapsed;
+  };
+  const finishAt = (x: Activity, start: number) => start + elapsedDays(x, start);
+  // Weather can change the elapsed duration when an activity moves. Search for
+  // the latest feasible start against each successor's actual start constraint.
+  const latestStartForFinish = (x: Activity, deadline: number): number => {
+    if (!x.weather) return deadline - (productionDays.get(x.id) ?? x.duration);
+    if (deadline < 0 || finishAt(x, 0) > deadline) return -1;
+    let low = 0, high = deadline;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (finishAt(x, middle) <= deadline) low = middle;
+      else high = middle - 1;
+    }
+    return low;
+  };
   for (const x of order) {
     let start = 0;
     let drv: string | null = null;
@@ -100,37 +129,26 @@ export function schedule(acts: Activity[], setup: PlanSetup): Schedule {
     }
     if (x.weather && x.duration > 0) {
       const production = x.duration;
-      let earned = 0, elapsed = 0;
-      while (earned < production) {
-        const month = Number(cal.date(start + elapsed).slice(5, 7));
-        // Ontario planning assumption, not a forecast: roof work pauses in
-        // Dec–Feb; site/structure use winter protection at 60% output.
-        const winter = month === 12 || month <= 2;
-        earned += winter ? (x.weather === 'roof' ? 0 : 0.6) : (month === 3 || month === 11 ? 0.85 : 1);
-        elapsed++;
-      }
-      x.duration = elapsed;
-      if (elapsed > production) x.durationWhy += ` · Ontario weather allowance: ${elapsed - production} working days; winter protection/site access assumption`;
+      x.duration = elapsedDays(x, start);
+      if (x.duration > production) x.durationWhy += ` · Ontario weather allowance: ${x.duration - production} working days; winter protection/site access assumption`;
     }
     es.set(x.id, start);
     ef.set(x.id, start + x.duration);
     driver.set(x.id, drv);
   }
   const finish = Math.max(0, ...ef.values());
-  // Backward pass: the latest each can start and finish without moving the finish.
+  // Backward pass: recompute weather from each candidate latest start.
   const lf = new Map<string, number>();
   const ls = new Map<string, number>();
   for (const x of [...order].reverse()) {
-    let late = finish;
+    let latest = latestStartForFinish(x, finish);
     for (const s of succ.get(x.id) ?? []) {
-      const sx = byId.get(s)!;
-      const d = sx.deps.find((y) => y.from === x.id)!;
+      const d = byId.get(s)!.deps.find((y) => y.from === x.id)!;
       if (!ls.has(s)) continue;
-      const t = d.type === 'SS' ? ls.get(s)! - d.lag + x.duration : ls.get(s)! - d.lag;
-      late = Math.min(late, t);
+      latest = Math.min(latest, d.type === 'SS' ? ls.get(s)! - d.lag : latestStartForFinish(x, ls.get(s)! - d.lag));
     }
-    lf.set(x.id, late);
-    ls.set(x.id, late - x.duration);
+    ls.set(x.id, latest);
+    lf.set(x.id, finishAt(x, latest));
   }
 
   const target = setup.target.value;
@@ -145,20 +163,18 @@ export function schedule(acts: Activity[], setup: PlanSetup): Schedule {
     for (const d of byId.get(id)?.deps ?? []) walk(d.from);
   };
   walk(targetFor);
-  // Latest finishes that still meet the target (a backward pass from the target milestone).
-  const lfT = new Map<string, number>();
+  // Latest starts that still meet the target, with weather recomputed there too.
+  const lsT = new Map<string, number>();
   if (targetIdx !== null)
     for (const x of [...order].reverse()) {
       if (!before.has(x.id)) continue;
-      let late = x.id === targetFor ? targetIdx : Infinity;
+      let latest = x.id === targetFor ? latestStartForFinish(x, targetIdx) : Infinity;
       for (const sId of succ.get(x.id) ?? []) {
-        if (!lfT.has(sId)) continue;
-        const sx = byId.get(sId)!;
-        const d = sx.deps.find((y) => y.from === x.id)!;
-        const lsS = lfT.get(sId)! - sx.duration;
-        late = Math.min(late, d.type === 'SS' ? lsS - d.lag + x.duration : lsS - d.lag);
+        if (!lsT.has(sId)) continue;
+        const d = byId.get(sId)!.deps.find((y) => y.from === x.id)!;
+        latest = Math.min(latest, d.type === 'SS' ? lsT.get(sId)! - d.lag : latestStartForFinish(x, lsT.get(sId)! - d.lag));
       }
-      lfT.set(x.id, late);
+      lsT.set(x.id, latest);
     }
 
   const times: Record<string, Scheduled> = {};
@@ -178,7 +194,7 @@ export function schedule(acts: Activity[], setup: PlanSetup): Schedule {
       critical: fl === 0,
       driver: driver.get(x.id) ?? null,
       // It can't make the target if its slack (to the target milestone) is less than the overrun.
-      late: lfT.has(x.id) && f > lfT.get(x.id)!,
+      late: lsT.has(x.id) && s > lsT.get(x.id)!,
     };
   }
 

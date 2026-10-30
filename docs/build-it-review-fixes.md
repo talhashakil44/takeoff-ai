@@ -1,5 +1,8 @@
 # Build It review fixes — Codex scheduling and evidence pass
 
+**Update:** [Weather and geometry follow-up](build-it-review-finish.md) follows
+Claude's `e817d11` and supersedes the pending-finding notes below.
+
 Date: 2026-10-29. Branch: `codex/build-it-rework`. This follows checkpoint
 `e5ecd0d` and Claude's read-only review. It is a development checkpoint, not a
 merge or release. Claude's performance and timezone fixes are separately owned.

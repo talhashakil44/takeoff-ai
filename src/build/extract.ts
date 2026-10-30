@@ -7,6 +7,7 @@ import { drawingFingerprint } from './sources';
 import {
   addBuilding,
   cutOpenings,
+  sealWallCorners,
   registerSheets,
   levelDatums,
   type DrawingTexts,
@@ -23,7 +24,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 10;
+export const MODEL_VERSION = 11;
 
 export interface Trade {
   key: string;
@@ -490,5 +491,6 @@ export function extractModel(input: ExtractInput): BuildModel {
   recoverFacadeOpenings(model, project, input.drawingTexts ?? {}, input.drawingLines ?? {}, modelOrigin);
   rejectUnsupportedCurtainWalls(model);
   cutOpenings(model);
+  sealWallCorners(model);
   return model;
 }

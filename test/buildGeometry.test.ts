@@ -1,13 +1,14 @@
 import { rejectUnsupportedCurtainWalls } from '../src/build/facades';
 import type { BuildModel } from '../src/build/types';
 import { wallFootprint } from '../src/build/footprint';
-import { polygonArea } from '../src/build/building';
+import { polygonArea, sealWallCorners } from '../src/build/building';
 import { frameRectangles } from '../src/build/openingDetails';
 import { imperialFeet } from '../src/build/datumEvidence';
 import type { Project } from '../src/model';
 import { gridAxes, registerSheets } from '../src/build/building';
 import { describe, expect, it } from 'vitest';
 import { geometryOf } from '../src/build/sceneGeometry';
+import { runSolids } from '../src/build/solids';
 import type { BuildElement } from '../src/build/types';
 const element = (shape: BuildElement['shape']) => ({ shape }) as BuildElement;
 describe('shared building geometry', () => {
@@ -59,6 +60,47 @@ describe('shared building geometry', () => {
     expect(g.boundingBox!.min.y).toBeCloseTo(4);
     expect(g.boundingBox!.max.y).toBeCloseTo(7);
     g.dispose();
+  });
+  it('fills an orthogonal wall corner in shared viewer and IFC solids', () => {
+    const parts = runSolids({
+      type: 'run', points: [[0, 0], [10, 0], [10, 10]], z0: 0, height: 3, thickness: 0.2,
+    });
+    const contains = (x: number, y: number) => parts.some((p) => {
+      const along = (x - p.x) * p.dx + (y - p.y) * p.dy;
+      const across = -(x - p.x) * p.dy + (y - p.y) * p.dx;
+      return along >= 0 && along <= p.length && Math.abs(across) <= p.thickness / 2;
+    });
+    expect(parts).toHaveLength(3);
+    expect(contains(10.05, -0.05)).toBe(true);
+    expect(contains(10.2, -0.2)).toBe(false);
+  });
+  it('fills a square corner across two separate measured wall runs', () => {
+    const wall = (id: string, points: [number, number][]) => ({
+      id, origin: 'takeoff', trade: 'partitions', level: 'L1', status: 'new',
+      shape: { type: 'run', points, z0: 0, height: 3, thickness: 0.2 },
+    }) as BuildElement;
+    const a = wall('a', [[0, 0], [10, 0]]);
+    const b = wall('b', [[10, 0], [10, 10]]);
+    const model = { elements: [a, b] } as BuildModel;
+    sealWallCorners(model);
+    expect(a.shape?.type === 'run' && a.shape.cornerFills).toHaveLength(1);
+    expect(b.shape?.type === 'run' && b.shape.cornerFills).toBeFalsy();
+    expect(a.shape?.type === 'run' && runSolids(a.shape)).toHaveLength(2);
+  });
+  it('does not fill an ambiguous T junction or a corner occupied by an opening', () => {
+    const wall = (id: string, points: [number, number][]) => ({
+      id, origin: 'takeoff', trade: 'partitions', level: 'L1', status: 'new',
+      shape: { type: 'run', points, z0: 0, height: 3, thickness: 0.2 },
+    }) as BuildElement;
+    const a = wall('a', [[0, 0], [10, 0]]);
+    const b = wall('b', [[10, 0], [10, 10]]);
+    const c = wall('c', [[10, 0], [10, -10]]);
+    sealWallCorners({ elements: [a, b, c] } as BuildModel);
+    expect(a.shape?.type === 'run' && a.shape.cornerFills).toBeFalsy();
+    if (a.shape?.type !== 'run') throw Error('run missing');
+    a.shape.openings = [{ elementId: 'door', segment: 0, offset: 9.95, width: 0.1, sill: 0, height: 2 }];
+    sealWallCorners({ elements: [a, b] } as BuildModel);
+    expect(a.shape.cornerFills).toBeFalsy();
   });
   it('keeps rotated wall runs and hosted openings on the same coordinates', () => {
     const g = geometryOf(
