@@ -527,6 +527,25 @@
       "branch": "claude/integration@dde9a97",
       "evidence": "claude/integration@dde9a97",
       "updated": "2026-10-30T08:33:24.226Z"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T27"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T28",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Roofing quantity from the recovered roof when no roof takeoff exists (Kelso A2.3): roof plan area from registered grid extents / roof recovery, used for the roofing activity instead of the GFA allowance proxy",
+      "prompt": "Kelso has no roof measurement: Claude's envelope proxy needs exterior walls that enclose a footprint, and a direct outline off A2.3 leaks through grid lines, dimension strings and section lines (tried, dropped). Build It already recovers a roof (src/build/roof.ts) and registers A2.3 to the grid. Derive the roof plan area from that (outer grid/roof edge extents, mech-roof well R2A/R2B kept separate if registerable), label it as derived not measured, use it for roofing duration only when no roof takeoff or saved allowance exists, and report the Kelso area and any schedule change. Never modify original project data; no Claude-owned files.",
+      "added": "2026-10-30T08:33:47.958Z",
+      "by": "claude"
     }
   ]
 }
