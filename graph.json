@@ -304,7 +304,7 @@
       "by": "claude"
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [
         "T8"
       ],
@@ -317,7 +317,8 @@
       "owner": "claude",
       "title": "Civil line types without layers: limit of construction (strip/grade area) and silt fence length on Kelso C-104/C-111",
       "added": "2026-10-30T04:30:49.522Z",
-      "by": "claude"
+      "by": "claude",
+      "updated": "2026-10-30T04:31:29.832Z"
     }
   ]
 }
