@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { background, leaderTip, oneRunPerPipe, pipeTag, spreadLabels } from '../src/automate/pipes';
+import { background, inlineRun, leaderTip, oneRunPerPipe, pipeTag, spreadLabels } from '../src/automate/pipes';
 import type { InkRun } from '../src/fill/inkRuns';
 import type { Segment } from '../src/fill/vectors';
 import type { PageText } from '../src/pageText';
@@ -48,5 +48,16 @@ describe('pipes by label', () => {
   it('reads a pipe drawn double as one run', () => {
     const runs = [run(0, 10, 100, 10, 3), run(0, 9, 100, 9, 1), run(0, 11.2, 98, 11.2, 1), run(0, 30, 100, 30, 1.3)];
     expect(oneRunPerPipe(runs)).toEqual([runs[0], runs[3]]);
+  });
+  it('finds the pipe a label is written in the line of', () => {
+    // "75Ø SAN" written vertically in a pipe's line, breaking it at y 100–130.
+    const t: PageText = { str: '75Ø SAN', cx: 200, cy: 115, w: 30, h: 5, angle: Math.PI / 2 };
+    const runs: InkRun[] = [
+      { a: [200, 20], b: [200, 98], width: 2 }, // the pipe above the label
+      { a: [208, 132], b: [208, 220], width: 2 }, // a pipe beside, off its centreline
+      { a: [140, 100], b: [196, 100], width: 2 }, // a pipe ending at the label, across it
+    ];
+    expect(inlineRun(t, runs)).toBe(0);
+    expect(inlineRun(t, runs.slice(1))).toBe(-1);
   });
 });

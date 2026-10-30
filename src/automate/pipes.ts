@@ -307,6 +307,37 @@ function isPipePlan(s: Sheet): boolean {
   return !/\b(DETAILS?|SCHEDULES?|DIAGRAMS?|RISER|SECTIONS?|ELEVATIONS?|LEGEND|NOTES|ASSEMBLY)\b/i.test(s.title ?? '') || /\bPLANS?\b/i.test(s.title ?? '');
 }
 
+/**
+ * The run a label written in the pipe's own line belongs to ("75Ø SAN" breaking the pipe it
+ * names): a run along the label's baseline, on its centreline, leading away from one of its ends.
+ * -1 when there is none.
+ */
+export function inlineRun(t: PageText, runs: InkRun[]): number {
+  const ux = Math.cos(t.angle ?? 0);
+  const uy = Math.sin(t.angle ?? 0);
+  let best = -1;
+  let bd = Infinity;
+  runs.forEach((r, j) => {
+    const dx = r.b[0] - r.a[0];
+    const dy = r.b[1] - r.a[1];
+    const l = Math.hypot(dx, dy);
+    if (!l || Math.abs((dx / l) * uy - (dy / l) * ux) > 0.1) return;
+    for (const [e, o] of [[r.a, r.b], [r.b, r.a]] as const) {
+      const along = (e[0] - t.cx) * ux + (e[1] - t.cy) * uy;
+      const off = Math.abs(-(e[0] - t.cx) * uy + (e[1] - t.cy) * ux);
+      if (off > Math.max(t.h * 0.8, r.width)) continue;
+      const gap = Math.abs(along) - t.w / 2;
+      if (gap > 6 || gap < -t.w / 4) continue;
+      if (Math.abs((o[0] - t.cx) * ux + (o[1] - t.cy) * uy) < Math.abs(along)) continue;
+      if (gap < bd) {
+        bd = gap;
+        best = j;
+      }
+    }
+  });
+  return best;
+}
+
 export async function automatePipes(p: Project, access: SetAccess): Promise<PipesResult> {
   const metric = p.units === 'metric';
   const checks: string[] = [];
@@ -377,6 +408,11 @@ export async function automatePipes(p: Project, access: SetAccess): Promise<Pipe
             best = j;
           }
         });
+        if ((best < 0 || bd > reach) && !tip) {
+          // No leader and no run beside it: a label written in the pipe's own line.
+          best = inlineRun(t, runs);
+          bd = reach;
+        }
         if (best < 0 || bd > reach) return;
         if (!seeds.has(best) || bd < seedDist.get(best)!) {
           seeds.set(best, k);

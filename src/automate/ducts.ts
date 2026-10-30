@@ -1,5 +1,5 @@
 import { inkRuns, type InkRun } from '../fill/inkRuns';
-import { ductSizes, joinRuns, sizeRuns, type PairedRun } from '../fill/runs';
+import { ductSizes, joinRuns, sizeRuns, type DuctSize, type PairedRun } from '../fill/runs';
 import { newId, type Measurement, type Project, type Pt, type Sheet, type TakeoffType } from '../model';
 import { tradeOfNumber } from '../sheetKind';
 import { titleBlockBox } from '../titleBlock';
@@ -59,6 +59,54 @@ export function sideBySide(runs: InkRun[]): { run: InkRun; of: [number, number] 
   return out;
 }
 
+/**
+ * A duct drawn over (furniture, leaders, tags across it) reads as pieces along one line. A sized
+ * piece and the next piece of its width on the same line, `maxGap` or less apart with the gap
+ * mostly covered by narrower pieces of tone (the duct showing between what is drawn over it),
+ * are one duct: the piece takes the size and the gap is returned as a run of that size too.
+ */
+export function bridgeRuns(runs: InkRun[], sizes: (DuctSize | null)[], maxGap: number): { run: InkRun; size: DuctSize }[] {
+  const horiz = (r: InkRun) => Math.abs(r.b[1] - r.a[1]) < Math.abs(r.b[0] - r.a[0]);
+  const band = (r: InkRun) => {
+    const h = horiz(r);
+    return { h, at: h ? (r.a[1] + r.b[1]) / 2 : (r.a[0] + r.b[0]) / 2, lo: h ? Math.min(r.a[0], r.b[0]) : Math.min(r.a[1], r.b[1]), hi: h ? Math.max(r.a[0], r.b[0]) : Math.max(r.a[1], r.b[1]), w: r.width };
+  };
+  const bs = runs.map(band);
+  const out: { run: InkRun; size: DuctSize }[] = [];
+  const done = new Set<string>();
+  for (let changed = true; changed; ) {
+    changed = false;
+    bs.forEach((a, i) => {
+      const z = sizes[i];
+      if (!z) return;
+      bs.forEach((b, j) => {
+        if (i === j || a.h !== b.h || done.has(`${Math.min(i, j)}:${Math.max(i, j)}`)) return;
+        if (Math.abs(a.at - b.at) > Math.max(1.5, 0.15 * a.w) || Math.abs(a.w - b.w) > Math.max(1, 0.08 * a.w)) return;
+        if (sizes[j] && sizes[j]!.text !== z.text) return;
+        const [g0, g1] = b.lo > a.hi ? [a.hi, b.lo] : a.lo > b.hi ? [b.hi, a.lo] : [0, 0];
+        if (g1 - g0 <= 0 || g1 - g0 > maxGap) return;
+        // How much of the gap narrower tone covers, within the duct's two sides.
+        const cover = bs
+          .filter((c) => c.h === a.h && c.w < a.w * 1.1 && Math.abs(c.at - a.at) <= a.w / 2 && c.hi > g0 && c.lo < g1)
+          .map((c) => [Math.max(c.lo, g0), Math.min(c.hi, g1)] as [number, number])
+          .sort((x, y) => x[0] - y[0]);
+        let covered = 0;
+        let end = g0;
+        for (const [x0, x1] of cover) {
+          if (x1 > end) covered += x1 - Math.max(x0, end);
+          end = Math.max(end, x1);
+        }
+        if (covered < 0.5 * (g1 - g0)) return;
+        done.add(`${Math.min(i, j)}:${Math.max(i, j)}`);
+        if (!sizes[j]) sizes[j] = z;
+        out.push({ run: { a: a.h ? [g0, a.at] : [a.at, g0], b: a.h ? [g1, a.at] : [a.at, g1], width: a.w }, size: z });
+        changed = true;
+      });
+    });
+  }
+  return out;
+}
+
 export async function automateDucts(p: Project, access: SetAccess): Promise<DuctsResult> {
   const metric = p.units === 'metric';
   const checks: string[] = [];
@@ -83,7 +131,7 @@ export async function automateDucts(p: Project, access: SetAccess): Promise<Duct
       const mpp = s.metersPerPoint!;
       const pt = (m: number) => m / mpp;
       const tb = titleBlockBox(texts, s.width, s.height);
-      const bands = await inkRuns(page as never, { minLength: pt(0.4), maxWidth: Math.min(pt(1.3), 60), tone: { lo: 150, hi: 240, minWidth: Math.max(pt(0.08), 2) }, skip: tb ? [tb] : [] });
+      const bands = await inkRuns(page as never, { minLength: pt(0.4), maxWidth: Math.min(pt(1.3), 60), tone: { lo: 150, hi: 253, minWidth: Math.max(pt(0.08), 2) }, skip: tb ? [tb] : [] });
       if (!bands?.length) return;
       read++;
       const unit = metric ? pt(0.001) : pt(0.0254);
@@ -93,6 +141,11 @@ export async function automateDucts(p: Project, access: SetAccess): Promise<Duct
       const runs: PairedRun[] = [];
       const sized: (typeof first)[number][] = [];
       const used = new Set<number>();
+      // Ducts drawn over, read in pieces: the pieces joined across what is drawn over them.
+      for (const g of bridgeRuns(bands, first, pt(2.5))) {
+        runs.push(asRun(g.run));
+        sized.push(g.size);
+      }
       bands.forEach((b, k) => {
         if (first[k]) {
           runs.push(asRun(b));
