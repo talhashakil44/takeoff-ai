@@ -42,6 +42,8 @@ const KIND: [RegExp, MemberKind][] = [
   [/STRUCTURAL\s+WALL|SHEAR\s+WALL|BEARING\s+WALL|STUD\s+WALL/, 'wall'],
 ];
 
+const MATERIAL = /\b(?:GLULAM|LVL|PSL|LSL|CLT|SPF|D\.?\s?FIR|TIMBER|HSS|STEEL|CONCRETE|CONC\.?|CMU|MASONRY)\b/i;
+
 /** The members the structural schedules list, foundations left to the foundation step. */
 export function structuralMembers(schedules: Schedule[]): Member[] {
   const out: Member[] = [];
@@ -54,20 +56,31 @@ export function structuralMembers(schedules: Schedule[]): Member[] {
     for (const r of s.rows) {
       const mark = MARK.test(r.mark) && !/^\d+M$/.test(r.mark) ? r.mark : r.cells.find((c) => MARK.test(c.trim()))?.trim();
       if (!mark || out.some((o) => norm(o.mark) === norm(mark))) continue;
-      const size = (sizeCol >= 0 ? r.cells[sizeCol] : r.cells.filter(Boolean).slice(1, 3).join(' ')) ?? '';
-      out.push({ mark, kind, size: size.trim(), schedule: s.title });
+      let size = ((sizeCol >= 0 ? r.cells[sizeCol] : r.cells.filter(Boolean).slice(1, 3).join(' ')) ?? '').trim();
+      // A size given as bare dimensions ("265 x 342") takes its material from the row's
+      // description ("GLULAM COLUMN"): what it is made of decides the trade that prices it.
+      if (!MATERIAL.test(size) && !materialOf(size)) {
+        const made = r.cells.join(' ').toUpperCase().match(MATERIAL)?.[0];
+        if (made) size = `${size} ${made}`.trim();
+      }
+      out.push({ mark, kind, size, schedule: s.title });
     }
   }
   return out;
 }
 
-/** The division a member is priced in, by what it is made of. */
-export function divisionOf(size: string): string {
+/** The division a member's size names its material by, or null when the size is bare dimensions. */
+function materialOf(size: string): string | null {
   const s = size.toUpperCase();
   if (/GLULAM|LVL|PSL|LSL|\bPLY\b|SPF|D\.?FIR|TIMBER|CLT|OSB|\b38\s*[xX]|\(2X\d+\)|NAIL/.test(s)) return '06 Wood, Plastics & Composites';
   if (/\bW\s*\d|HSS|\bL\s*\d|\bC\s*\d+\s*[xX]|PLATE|STEEL|ANCHOR|ROD|PL\s*\d/.test(s)) return '05 Metals';
   if (/CONC|CMU|BLOCK|MASONRY|BRICK/.test(s)) return /CONC/.test(s) ? '03 Concrete' : '04 Masonry';
-  return '05 Metals';
+  return null;
+}
+
+/** The division a member is priced in, by what it is made of. */
+export function divisionOf(size: string): string {
+  return materialOf(size) ?? '05 Metals';
 }
 
 const NAMES: Record<MemberKind, string> = {

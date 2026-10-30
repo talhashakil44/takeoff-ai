@@ -92,6 +92,10 @@ describe('structure', () => {
       ['WT-1', 'wall'],
     ]);
     expect(divisionOf('265 x 608 GLULAM')).toMatch(/^06/);
+    // A size of bare dimensions takes its material from the row (Kelso C1: 265 x 342 | GLULAM COLUMN).
+    const [c1] = structuralMembers([sched('COLUMN SCHEDULE', [['MARK'], ['SIZE'], ['DESCRIPTION']], [['C1', ['C1', '265 x 342', 'GLULAM COLUMN']]])]);
+    expect(c1.size).toBe('265 x 342 GLULAM');
+    expect(divisionOf(c1.size)).toMatch(/^06/);
     expect(divisionOf('HSS 127 x 127 x 9.5')).toMatch(/^05/);
     expect(divisionOf('W 200 x 27')).toMatch(/^05/);
   });
