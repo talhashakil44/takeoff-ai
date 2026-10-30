@@ -591,6 +591,24 @@
       "prompt": "The 2,803 original Frederick measurements are the user's saved takeoff and must not be edited. Handle T29 findings 1-4, 6, 7 in Build It interpretation only: (3) generic Rooms areas are floor area, not ceiling work; (4) elevation window marks do not add to plan counts and never get a level from an elevation title; (7) coincident marks across sheet views of the same level count once, roof-plan items go to Roof, 'as exist' marks are not new; (1, 2, 6) A011 egress-diagram demolition, types whose label is concatenated legend text (Demo 0, '0 – See A000…') and 'Ceiling – open / none shown' are excluded from new work with a schedule issue listing them for user review. Report Frederick finish before/after and per-trade quantity changes. Claude will fix the engine side (T31) separately.",
       "added": "2026-10-30T11:15:01.332Z",
       "by": "claude"
+    },
+    {
+      "status": "doing",
+      "depends": [
+        "T29"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T31",
+      "owner": "claude",
+      "stream": "claude",
+      "title": "Engine side of T29: demolition skips egress/code-diagram sheets; removal and ceiling type labels never built from concatenated legend text; open/none ceilings not new; rebuild refreshed Frederick (de-duplicated M102 pipes)",
+      "added": "2026-10-30T11:15:03.408Z",
+      "by": "claude"
     }
   ]
 }
