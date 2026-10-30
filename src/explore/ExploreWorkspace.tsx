@@ -1097,7 +1097,7 @@ export function ExploreWorkspace({
                   </>
                 )}
                 <div>
-                  <dt>Trade</dt>
+                  <dt>Takeoff trade</dt>
                   <dd>{element.division || element.trade}</dd>
                 </div>
               </dl>
@@ -1110,14 +1110,17 @@ export function ExploreWorkspace({
                   aria-label="Structural geometry evidence"
                 >
                   <h3>STRUCTURAL GEOMETRY</h3>
-                  {selectedShape?.type === "run" && (
+                  {(selectedShape?.type === "run" || selectedShape?.type === "point") && (
                     <button
                       onClick={() => {
-                        const points = selectedShape.points;
-                        setFocus([
-                          (points[0][0] + points.at(-1)![0]) / 2,
-                          (points[0][1] + points.at(-1)![1]) / 2,
-                        ]);
+                        if (selectedShape.type === "point") setFocus(selectedShape.at);
+                        else {
+                          const points = selectedShape.points;
+                          setFocus([
+                            (points[0][0] + points.at(-1)![0]) / 2,
+                            (points[0][1] + points.at(-1)![1]) / 2,
+                          ]);
+                        }
                         setStructureOnly(true);
                         setMode("lift");
                       }}
@@ -1138,6 +1141,18 @@ export function ExploreWorkspace({
                       <dd>{selectedShape.bottomPlane ? selectedShape.points.map(p => (selectedShape.bottomPlane![0]*p[0]+selectedShape.bottomPlane![1]*p[1]+selectedShape.bottomPlane![2]).toFixed(3)).filter((v,i,a)=>a.indexOf(v)===i).join(" → ") : selectedShape.z0.toFixed(3)} m</dd>
                       <dt>Top datum</dt>
                       <dd>{selectedShape.topPlane ? selectedShape.points.map(p => (selectedShape.topPlane![0]*p[0]+selectedShape.topPlane![1]*p[1]+selectedShape.topPlane![2]).toFixed(3)).filter((v,i,a)=>a.indexOf(v)===i).join(" → ") : (selectedShape.z0+selectedShape.height).toFixed(3)} m</dd>
+                    </dl>
+                  )}
+                  {selectedShape?.type === "point" && (
+                    <dl>
+                      <dt>Section width × depth</dt>
+                      <dd>{num(selectedShape.size[0] * 1000)} × {num(selectedShape.size[1] * 1000)} mm</dd>
+                      <dt>Drawn height</dt>
+                      <dd>{selectedShape.size[2].toFixed(3)} m</dd>
+                      <dt>Bottom datum</dt>
+                      <dd>{selectedShape.z.toFixed(3)} m</dd>
+                      <dt>Top datum</dt>
+                      <dd>{(selectedShape.z + selectedShape.size[2]).toFixed(3)} m</dd>
                     </dl>
                   )}
                   {structuralReviews?.[element.id]?.fingerprint ===
