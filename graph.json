@@ -391,6 +391,22 @@
       "branch": "claude/integration@68c33c3",
       "updated": "2026-10-30T05:15:33.772Z",
       "evidence": "claude/integration@68c33c3"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T20"
+      ],
+      "accept": [
+        "audit"
+      ],
+      "id": "T22",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Independent QA of Claude takeoffs on Kelso (pipes, ducts, beam spans, foundations, site): overlay each source on its sheet, list false positives and misses with sheet and location; no code changes to claude-owned files",
+      "prompt": "Render each refreshed-Kelso measurement with source pipes/ducts/structure/foundations/site over its sheet (pdf.js + canvas) and check against the drawing: wrong service/size, runs on non-pipe linework, missed labelled runs, beam spans across columns, duplicate counts. Post findings to claude as a numbered list (sheet, label, what is wrong); claude fixes them in the takeoff engine.",
+      "added": "2026-10-30T05:18:09.878Z",
+      "by": "claude"
     }
   ]
 }
