@@ -179,6 +179,15 @@ export interface TradeSetup {
   leadDays: number;
 }
 
+/** User-entered scope that has not been taken off. No source element or geometry is implied. */
+export interface ScopeAllowance {
+  quantity: number;
+  unit: string;
+  /** Quantity installed by one crew in one working day. */
+  rate: number;
+  provisional: boolean;
+}
+
 export interface PlanSetup {
   start: Assumption<string>;
   /** The finish wanted: a target, never a reason to compress work arbitrarily. */
@@ -197,13 +206,15 @@ export interface PlanSetup {
   commissioningDays: Assumption;
   closeoutDays: Assumption;
   trades: Record<string, Assumption<TradeSetup>>;
+  /** Keyed by a Build It trade, or `foundations` for work before above-grade structure. */
+  allowances: Assumption<Record<string, ScopeAllowance>>;
   /** Which milestone the target is for: the documented substantial performance date, or the project's finish. */
   targetFor: 'ms:substantial' | 'ms:finish';
 }
 
 /** What the user changed: kept with the project, applied over each rebuild. */
 export interface BuildEdits {
-  setup?: Partial<Record<keyof PlanSetup, unknown>> & { trades?: Record<string, Partial<TradeSetup>> };
+  setup?: Partial<Record<keyof PlanSetup, unknown>> & { trades?: Record<string, Partial<TradeSetup>>; allowances?: Record<string, ScopeAllowance> };
   activities?: Record<string, { duration?: number; crews?: number; addDeps?: { from: string; lag?: number }[]; dropDeps?: string[] }>;
   /** A plan sheet's level, set by hand. */
   levels?: Record<string, string>;

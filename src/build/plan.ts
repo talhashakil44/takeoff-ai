@@ -1,6 +1,7 @@
 import type { SpecSection } from '../spec/parse';
 import { TRADES, tradeByKey } from './extract';
-import type { Activity, Assumption, Basis, BuildEdits, BuildModel, Dependency, PlanSetup, SourceRef, SpecFact, TradeSetup } from './types';
+import { activeAllowances } from './scope';
+import type { Activity, Assumption, Basis, BuildEdits, BuildModel, Dependency, PlanSetup, ScopeAllowance, SourceRef, SpecFact, TradeSetup } from './types';
 
 /**
  * The plan: activities for measured work, including items that cannot be placed in 3D,
@@ -91,6 +92,7 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
     commissioningDays: a(10, 'assumed', 'Commissioning of building systems'),
     closeoutDays: a(15, 'assumed', 'Closeout documents, O&M manuals, as-builts'),
     trades,
+    allowances: a<Record<string, ScopeAllowance>>({}, 'unknown', 'No unmeasured scope allowances entered'),
   };
 }
 
@@ -245,18 +247,75 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
       x.deps.push(dep('work:site:earthwork', 'Excavation before foundation construction'));
   }
 
+  // User-entered work that is absent from the takeoff stays separate from measured elements.
+  // It has no model geometry or inferred quantity, and only enters the plan when the user
+  // supplies a positive quantity and production rate in Build setup.
+  const measuredWork = acts.filter((x) => x.kind === 'work');
+  const lastMeasured = (trade: string) => measuredWork.filter((x) => x.trade === trade).at(-1)?.id;
+  const follows = (trade: string, prior: string, seen = new Set<string>()): boolean =>
+    (AFTER[trade] ?? []).some((p) => p === prior || (!seen.has(p) && (seen.add(p), follows(p, prior, seen))));
+  const allowanceEntries = activeAllowances(setup).sort(([a], [b]) =>
+    (a === 'site' ? 0 : a === 'foundations' ? 1 : a === 'structure' ? 2 : 3) -
+    (b === 'site' ? 0 : b === 'foundations' ? 1 : b === 'structure' ? 2 : 3));
+  const allowanceIds = new Set(allowanceEntries.map(([key]) => `allowance:${key}`));
+  for (const [key, value] of allowanceEntries) {
+    const predecessors = new Set<string>();
+    if (key === 'site') {
+      predecessors.add('mobilize');
+    } else if (key === 'foundations') {
+      predecessors.add(has.has('work:structure:fdn') ? 'work:structure:fdn' : has.has('work:site:earthwork') ? 'work:site:earthwork' : 'mobilize');
+      if (!has.has('work:structure:fdn') && has.has('proc:structure')) predecessors.add('proc:structure');
+    } else if (key === 'structure') {
+      predecessors.add(lastMeasured('structure') ?? (has.has('work:site:earthwork') ? 'work:site:earthwork' : 'mobilize'));
+      if (allowanceIds.has('allowance:foundations')) predecessors.add('allowance:foundations');
+    } else {
+      predecessors.add(lastMeasured(key) ?? 'mobilize');
+      if (!lastMeasured(key)) {
+        for (const prior of AFTER[key] ?? []) {
+          const work = lastMeasured(prior);
+          if (work) predecessors.add(work);
+        }
+      }
+    }
+    if (key !== 'foundations')
+      for (const [prior] of allowanceEntries)
+        if (prior !== key && allowanceIds.has(`allowance:${prior}`) && follows(key, prior)) predecessors.add(`allowance:${prior}`);
+    add({
+      id: `allowance:${key}`,
+      name: `${key === 'foundations' ? 'Foundations' : tradeByKey.get(key)?.name ?? key} — unmeasured scope allowance`,
+      kind: 'work',
+      trade: key === 'foundations' ? 'structure' : key,
+      level: null,
+      elements: [],
+      quantities: { [value.unit]: value.quantity },
+      rates: { [value.unit]: value.rate },
+      crews: 1,
+      duration: Math.max(1, Math.ceil(value.quantity / value.rate)),
+      durationBasis: 'assumed',
+      durationWhy: `${value.quantity} ${value.unit} at ${value.rate} ${value.unit} per crew-day · ${value.provisional ? 'provisional' : 'confirmed by you'} unmeasured scope, entered in Build setup`,
+      deps: [...predecessors].map((from) => dep(from, 'Scope allowance after prerequisite work')),
+      specs: [],
+      sources: [],
+    });
+  }
+  for (const x of measuredWork) {
+    for (const [key] of allowanceEntries) {
+      if (key === 'site') continue;
+      const required = key === 'foundations'
+        ? (x.trade === 'structure' && x.level !== 'fdn') || follows(x.trade!, 'structure')
+        : x.trade !== key && follows(x.trade!, key);
+      if (required && !x.deps.some((d) => d.from === `allowance:${key}`))
+        x.deps.push(dep(`allowance:${key}`, `Unmeasured ${key} scope before this work`));
+    }
+  }
+
   // Testing and inspection where a trade's sections call for it.
-  const lastWork = (t: string) => {
-    const ws = acts.filter((x) => x.kind === 'work' && x.trade === t);
-    return ws[ws.length - 1];
-  };
   const tests: string[] = [];
   for (const t of tradesUsed) {
-    const lw = lastWork(t.key);
-    if (!lw || t.key === 'demolition') continue;
-    const secs = lw.specs.map((k) => secByKey.get(k)).filter((s): s is SpecSection => !!s && s.articles.some((x) => TESTS.test(x.title)));
-    if (!secs.length) continue;
     const ws = acts.filter((x) => x.kind === 'work' && x.trade === t.key);
+    if (!ws.length || t.key === 'demolition') continue;
+    const secs = [...new Set(ws.flatMap((w) => w.specs))].map((k) => secByKey.get(k)).filter((s): s is SpecSection => !!s && s.articles.some((x) => TESTS.test(x.title)));
+    if (!secs.length) continue;
     tests.push(
       add({
         id: `test:${t.key}`,
