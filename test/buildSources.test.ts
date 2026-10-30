@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { doorSheets, drawingFingerprint, needsLines, needsText, packLines, slimLines, unpackLines } from '../src/build/sources';
+import { doorSheets, drawingFingerprint, markPolylineArcs, needsLines, needsText, packLines, slimLines, unpackLines } from '../src/build/sources';
 import { sourceHashOf } from '../src/build/extract';
 import { writtenDate } from '../src/build/facts';
 import type { Segment } from '../src/fill/vectors';
@@ -31,6 +31,17 @@ describe('Build It drawing evidence', () => {
     expect([...doors].sort()).toEqual(['p1', 'p2']);
     expect(needsLines({ id: 'p1', title: 'GROUND FLOOR PLAN' }, doors)).toBe(true);
     expect(needsLines({ id: 'p3', title: 'GROUND FLOOR PLAN' }, doors)).toBe(false);
+  });
+
+  it('marks a door swing drawn as straight chords as curve pieces, not a rectangle or a short bend', () => {
+    const chain = (pts: number[][], sub: number): Segment[] =>
+      pts.slice(1).map((p, i) => ({ x1: pts[i][0], y1: pts[i][1], x2: p[0], y2: p[1], width: 0.5, filled: false, sub }));
+    const arc = chain(Array.from({ length: 9 }, (_, k) => [30 * Math.cos((k * Math.PI) / 16), 30 * Math.sin((k * Math.PI) / 16)]), 1);
+    const box = chain([[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], 2);
+    const bend = chain([[0, 0], [10, 0], [20, 1], [30, 3]], 3);
+    const out = markPolylineArcs([...arc, ...box, ...bend]);
+    expect(out.slice(0, 8).every((l) => l.curve)).toBe(true);
+    expect(out.slice(8).some((l) => l.curve)).toBe(false);
   });
 
   it('keeps every line exactly, without the fields the model never reads', () => {

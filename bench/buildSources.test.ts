@@ -13,7 +13,7 @@ import { segmentsOf } from '../src/fill/sheetWalls';
 import { buildAll } from '../src/build/run';
 import { readSpecFacts } from '../src/build/facts';
 import { sourceHashOf, titleBlockWords } from '../src/build/extract';
-import { doorSheets, needsLines, needsText, slimLines } from '../src/build/sources';
+import { doorSheets, markPolylineArcs, needsLines, needsText, slimLines } from '../src/build/sources';
 import type { Project } from '../src/model';
 
 const root = process.env.BUILD_PROJECTS_ROOT;
@@ -46,7 +46,7 @@ it.skipIf(!root)(
         }
         if (needsLines(s, doors)) {
           const l = await segmentsOf(page);
-          full.lines[s.id] = l;
+          full.lines[s.id] = markPolylineArcs(l);
           slim.lines[s.id] = slimLines(l);
         }
       }

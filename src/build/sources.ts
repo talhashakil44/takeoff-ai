@@ -13,7 +13,7 @@ import type { DrawingLines } from './roof';
  * so the cache key is the document and page; the version is bumped when what is kept changes.
  */
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 
 /** Sheets whose linework the model reads: building elevations and sections (window elevations included). */
 /**
@@ -38,9 +38,49 @@ export function doorSheets(project: Pick<Project, 'measurements'> & { types?: Pr
 export const needsText = (s: Pick<Sheet, 'id' | 'title'>, measured: Set<string>) =>
   measured.has(s.id) || needsLines(s) || !(s.title ?? '').trim() || /PLAN|ELEVATION|SECTION|SCHEDULE/i.test(s.title ?? '');
 
+/**
+ * Arcs some CAD exports write as runs of short straight chords (Kelso's door swings and tag
+ * ovals) rather than Bézier curves: within one subpath, five or more chords of similar length,
+ * each turning a little the same way, are marked as curve pieces.
+ */
+export function markPolylineArcs(segs: Segment[]): Segment[] {
+  const out = segs.slice();
+  const turn = (a: Segment, b: Segment) => {
+    const t = Math.atan2(b.y2 - b.y1, b.x2 - b.x1) - Math.atan2(a.y2 - a.y1, a.x2 - a.x1);
+    return Math.atan2(Math.sin(t), Math.cos(t));
+  };
+  const len = (l: Segment) => Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
+  let start = -1;
+  let sign = 0;
+  const close = (end: number) => {
+    // `start`..`end` (inclusive) are chords joined by `end - start` small turns.
+    if (start >= 0 && end - start >= 4) for (let k = start; k <= end; k++) if (!out[k].curve) out[k] = { ...out[k], curve: true };
+    start = -1;
+    sign = 0;
+  };
+  for (let i = 1; i < out.length; i++) {
+    const a = out[i - 1];
+    const b = out[i];
+    const la = len(a);
+    const lb = len(b);
+    const t = turn(a, b);
+    const joined =
+      a.sub !== undefined && a.sub === b.sub && !a.filled && !b.filled && !a.curve && !b.curve &&
+      Math.hypot(b.x1 - a.x2, b.y1 - a.y2) < 0.01 && la > 0 && lb > 0 && Math.max(la, lb) < 3 * Math.min(la, lb);
+    if (joined && Math.abs(t) > 0.02 && Math.abs(t) < 0.6 && (!sign || Math.sign(t) === sign)) {
+      if (start < 0) start = i - 1;
+      sign = Math.sign(t);
+    } else {
+      close(i - 1);
+    }
+  }
+  close(out.length - 1);
+  return out;
+}
+
 /** Only what Build It uses of a line: its ends and whether it is a curve or dashed. */
 export function slimLines(segs: Segment[]): Segment[] {
-  return segs.map((l) => {
+  return markPolylineArcs(segs).map((l) => {
     const out: Segment = { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, width: l.width, filled: l.filled };
     if (l.curve) out.curve = true;
     if (l.dashed) out.dashed = true;
