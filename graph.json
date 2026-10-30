@@ -98,7 +98,7 @@
     {
       "id": "T7",
       "owner": "claude",
-      "status": "todo",
+      "status": "doing",
       "title": "Beam lengths off the framing plans",
       "depends": [
         "T1"
@@ -107,7 +107,8 @@
         "tsc",
         "test",
         "build"
-      ]
+      ],
+      "updated": "2026-10-30T04:03:44.815Z"
     },
     {
       "id": "T8",
