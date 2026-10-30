@@ -709,7 +709,7 @@
       "evidence": "codex/build-it-polyline-door-hosts@a3dfd08"
     },
     {
-      "status": "blocked",
+      "status": "todo",
       "depends": [],
       "accept": [
         "tsc",
@@ -723,7 +723,8 @@
       "prompt": "Engine coverage gap found by gpt-explore T11: roof system tags R1-R3 on Kelso S2.1 reference the ROOF ASSEMBLY SCHEDULE (decking, purlins at spacing, span arrows). Take off roof-system areas and derived purlin count/length. Blocked: S2.1 has no scale (several noted, user must confirm).",
       "added": "2026-10-30T18:29:41.806Z",
       "by": "claude",
-      "updated": "2026-10-30T18:29:43.990Z"
+      "updated": "2026-10-30T18:36:10.028Z",
+      "notes": "Reframed: per-viewport scale (view title + its scale note + view extent) so multi-view sheets like Kelso S2.1 (high/low roof 1:100, canopy 1:50) measure without one sheet scale; then roof-system areas and purlins from the assembly schedule. Quantities only for views with a read scale; sheet scale stays unset."
     }
   ]
 }
