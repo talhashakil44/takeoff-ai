@@ -764,8 +764,16 @@ const ALLOWANCE_DEFAULTS: Record<string, { metric: [string, number]; imperial: [
  * is added to the takeoff or the model. A trade with measured work shows it, so an allowance is
  * only added on purpose.
  */
-function AllowancesForm(props: { allowances: Record<string, ScopeAllowance>; measured: string[]; metric: boolean; onChange: (next: Record<string, ScopeAllowance>) => void }) {
+function AllowancesForm(props: {
+  allowances: Record<string, ScopeAllowance>;
+  measured: string[];
+  metric: boolean;
+  /** Allowances Build It proposes for trades with nothing measured: shown until accepted. */
+  suggestions?: { key: string; allowance: ScopeAllowance; why: string }[];
+  onChange: (next: Record<string, ScopeAllowance>) => void;
+}) {
   const { allowances, measured, metric, onChange } = props;
+  const suggested = (props.suggestions ?? []).filter((x) => !allowances[x.key] && !measured.includes(x.key));
   const keys = [{ key: 'foundations', name: 'Foundations', colour: '#ffb340' }, ...TRADES.filter((t) => t.key !== 'other')];
   const nameOf = (k: string) => keys.find((t) => t.key === k)?.name ?? k;
   const missing = keys.filter((t) => !allowances[t.key]);
@@ -783,6 +791,24 @@ function AllowancesForm(props: { allowances: Record<string, ScopeAllowance>; mea
   return (
     <div className="bld-form">
       <p className="dim small">Scope the takeoff doesn’t measure, so the plan still carries its time: a quantity and how much one crew does a day. Each becomes its own activity in the schedule; nothing is added to the takeoff or the model. A quantity of 0 is a draft.</p>
+      {suggested.length > 0 && (
+        <>
+          <h4>Suggested</h4>
+          {suggested.map((x) => (
+            <div key={x.key} className="bld-trade bld-allowance suggested">
+              <b>
+                {nameOf(x.key)}
+                <button className="link-button" onClick={() => put(x.key, x.allowance)} title="Add this allowance to the plan; you can change it after">
+                  Accept
+                </button>
+              </b>
+              <p className="dim small">
+                {Math.round(x.allowance.quantity)} {x.allowance.unit} at {x.allowance.rate} {x.allowance.unit}/crew-day ({Math.ceil(x.allowance.quantity / Math.max(x.allowance.rate, 1e-9))} days for one crew), provisional. {x.why}
+              </p>
+            </div>
+          ))}
+        </>
+      )}
       {rows.length === 0 && <p className="dim">No allowances.</p>}
       {rows.map(([k, a]) => {
         const days = a.quantity > 0 && a.rate > 0 ? Math.ceil(a.quantity / a.rate) : 0;

@@ -329,3 +329,4 @@
 .bld-allowance p { margin: 2px 0 0; }
 .bld-allowance label.check { display: inline-flex; align-items: center; gap: 6px; }
 .bld-allowance label.check input { width: auto; margin: 0; }
+.bld-allowance.suggested { border-style: dashed; }
