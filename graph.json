@@ -422,7 +422,7 @@
       "evidence": "claude/integration@d70ac18"
     },
     {
-      "status": "review",
+      "status": "done",
       "depends": [
         "T14"
       ],
@@ -438,8 +438,9 @@
       "title": "Electrical rough-in from measured device counts (etags): per-device rough-in rate, basis assumed, per level",
       "added": "2026-10-30T05:29:56.427Z",
       "by": "claude",
-      "branch": "codex/build-it-electrical-rough@2bcc703",
-      "updated": "2026-10-30T05:40:35.408Z"
+      "branch": "claude/integration@2bcc703",
+      "updated": "2026-10-30T05:41:56.257Z",
+      "evidence": "claude/integration@2bcc703"
     },
     {
       "status": "todo",
