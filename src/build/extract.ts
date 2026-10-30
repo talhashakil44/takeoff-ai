@@ -398,13 +398,15 @@ export function extractModel(input: ExtractInput): BuildModel {
       shape=null;placement='unknown';
       elIssues.push('Counted structural item retained; member position, span and section must be established before generating physical geometry.');
     }
-    const concrete = m.source === 'foundations' && trade === 'structure' && vars
-      ? type.items.find((item) => /^concrete\b/i.test(item.name) && (item.unit === 'm³' || item.unit === 'CY'))
-      : undefined;
-    const concreteResult = concrete && vars ? evaluate(concrete.formula, formulaVars(vars, type)) : undefined;
-    const production = concrete && concreteResult?.ok && concreteResult.value > 0
-      ? { quantity: concreteResult.value, unit: concrete.unit } : undefined;
-    if (concrete && !production) elIssues.push('Concrete volume cannot be calculated from the available dimensions; review the foundation production allowance.');
+    let productionItem: TakeoffType['items'][number] | undefined;
+    if (vars && m.source === 'foundations' && trade === 'structure')
+      productionItem = type.items.find((item) => /^concrete\b/i.test(item.name) && (item.unit === 'm³' || item.unit === 'CY'));
+    else if (vars && trade === 'site' && divNum(type.division) === 32)
+      productionItem = type.items.find((item) => /^road area$/i.test(item.name) && (item.unit === 'm²' || item.unit === 'SF'));
+    const productionResult = productionItem && vars ? evaluate(productionItem.formula, formulaVars(vars, type)) : undefined;
+    const production = productionItem && productionResult?.ok && productionResult.value > 0
+      ? { quantity: productionResult.value, unit: productionItem.unit } : undefined;
+    if (productionItem && !production) elIssues.push('Assembly production quantity cannot be calculated from the available dimensions; review its production allowance.');
     if (shape?.type === 'surface' && (!simpleRing(shape.ring) || shape.holes.some(h => !simpleRing(h)))) {
       shape = null; placement = 'unknown';
       elIssues.push('Self-intersecting or degenerate polygon: retained in takeoff quantities, omitted from 3D/IFC geometry pending drawing review.');

@@ -12,7 +12,7 @@ Based on `claude/integration` at `5023d30`. This branch changes Build It only; i
 
 - Foundation concrete uses the takeoff assembly's `Concrete + 5%` volume as its production quantity when the formula evaluates to a positive value. The original count, line length, or area remains the measured quantity for estimates and IFC.
 - The default structure rates remain **10 counted members per crew-day**, with an added **8 m³ per crew-day** for metric foundation concrete (**10 CY** imperial). These are provisional planning allowances, not rates established by the drawings. A schedule warning calls for confirmation of member complexity, forming, reinforcement, concrete placement and crew size. If the assembly cannot yield volume, Build It retains the primary quantity and marks the element for review.
-- The metric site defaults of 46 m/day and 139 m²/day yield 38 crew-days for the stated 900 m plus 2,490 m² example, after mobilization. This is a regression scenario, not a new source quantity.
+- The road takeoff is a labelled chainage length; its assembly calculates road area (`L × W`). Build It uses that area for road production and keeps the length as the measured takeoff. The metric site defaults of 46 m/day and 139 m²/day yield 38 crew-days for the 900 m pipe plus 415 m road at 6 m width example, after mobilization. This is a regression scenario, not a new source quantity.
 
 ## Verification
 

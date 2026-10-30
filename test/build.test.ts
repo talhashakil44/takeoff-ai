@@ -53,15 +53,20 @@ describe('build it', () => {
   it('plans stated site lengths after mobilization without a building level or route geometry', () => {
     const p = project();
     p.units = 'metric';
-    p.sheets = [{ ...sheet('civil', 'C1.0', 'SITE SERVICES PLAN', 1), metersPerPoint: null }, { ...sheet('road', 'C2.0', 'ROAD PLAN', 2), metersPerPoint: 0.1 }];
-    p.types = [type('pipe', 'Sanitary sewer', 'linear', '33 Utilities'), type('pavement', 'Paved road', 'area', '32 Exterior Improvements')];
+    p.sheets = [{ ...sheet('civil', 'C1.0', 'SITE SERVICES PLAN', 1), metersPerPoint: null }, { ...sheet('road', 'C2.0', 'ROAD PLAN AND PROFILE', 2), metersPerPoint: null }];
+    p.types = [type('pipe', 'Sanitary sewer', 'linear', '33 Utilities'), {
+      ...type('pavement', 'Access road (by chainage)', 'linear', '32 Exterior Improvements'),
+      width: 6,
+      items: [{ id: 'road-area', name: 'Road area', unit: 'm²', formula: 'L * W' }],
+    }];
     p.measurements = [
       { id: 'run', sheetId: 'civil', typeId: 'pipe', source: 'site', points: [[0, 0], [20, 0]], holes: [], statedLength: 900 },
-      { id: 'paving', sheetId: 'road', typeId: 'pavement', source: 'site', points: [[0, 0], [498, 0], [498, 500], [0, 500]], holes: [] },
+      { id: 'paving', sheetId: 'road', typeId: 'pavement', source: 'site', points: [[0, 0], [20, 0]], holes: [], statedLength: 415 },
     ];
     const model = extractModel({ project: p, sections: [], floorToFloor: 3.6 });
     const el = model.elements[0];
     expect(el).toMatchObject({ trade: 'site', level: null, shape: null, quantity: 900, unit: 'm' });
+    expect(model.elements[1]).toMatchObject({ quantity: 415, unit: 'm', production: { quantity: 2490, unit: 'm²' } });
     expect(model.issues.some((i) => i.id === 'unplaced:level unknown')).toBe(false);
     const setup = defaultSetup(model, [], '2026-11-02');
     const work = planActivities(model, setup, [], []).find((a) => a.id === 'work:site:site')!;
