@@ -182,6 +182,26 @@
       ],
       "prompt": "Explore Drawing (src/explore, worktree /Users/talhashakeel/.codex/worktrees/explore-drawing). Beyond the gates: source-to-model alignment checks, dimension/placement provenance, and a live visual review before review status.",
       "stream": "gpt-explore"
+    },
+    {
+      "status": "todo",
+      "depends": [
+        "T5",
+        "T10"
+      ],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T12",
+      "owner": "gpt",
+      "stream": "gpt-build",
+      "title": "Scope gaps in the plan: EW* exterior walls to envelope; trades with nothing measured get proposed provisional allowances from floor area (user accepts in Setup)",
+      "prompt": "From your T5 audit: Kelso has no envelope, electrical/fire rough-in, flooring or painting activities. (1) Route exterior wall types (EW*, exterior/cladding/air-barrier assemblies) to envelope as well as framing. (2) For trades with no measured work, compute a proposed provisional allowance from gross floor area with a documented rate basis, and show it as a suggestion the user accepts in Setup → Allowances (T10 UI edits edits.setup.allowances; post the suggestion shape you need and I will render it). Never add it silently.",
+      "added": "2026-10-30T04:21:34.510Z",
+      "by": "claude"
     }
   ]
 }
