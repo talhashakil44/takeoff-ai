@@ -37,6 +37,7 @@ export function ifcClassOf(e: BuildElement): { cls: string; tail: string } {
   const name = e.typeName.toLowerCase();
   const t9 = (cls: string, pre: string) => ({ cls, tail: `,${pre}` });
   if (e.trade === 'demolition') return t9('IFCBUILDINGELEMENTPROXY', '.NOTDEFINED.');
+  if (e.trade === 'structure' && /\bbeam\b/.test(name)) return t9('IFCBEAM', '.BEAM.');
   if (e.shape?.type === 'run') {
     if (e.trade === 'mech-rough') return /duct/.test(name) ? t9('IFCDUCTSEGMENT', '.NOTDEFINED.') : t9('IFCPIPESEGMENT', '.NOTDEFINED.');
     if (e.trade === 'fire-rough') return t9('IFCPIPESEGMENT', '.NOTDEFINED.');
@@ -68,6 +69,7 @@ const NAMES: Record<string, string> = {
   IFCPIPESEGMENT: 'IfcPipeSegment',
   IFCCABLECARRIERSEGMENT: 'IfcCableCarrierSegment',
   IFCWALL: 'IfcWall',
+  IFCBEAM: 'IfcBeam',
   IFCCOVERING: 'IfcCovering',
   IFCSLAB: 'IfcSlab',
   IFCROOF: 'IfcRoof',
