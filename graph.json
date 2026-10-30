@@ -507,7 +507,7 @@
       "evidence": "codex/build-it-services-reqa@bfe94f2"
     },
     {
-      "status": "todo",
+      "status": "done",
       "depends": [
         "T26"
       ],
@@ -523,7 +523,10 @@
       "title": "T26 findings: de-duplicate collinear service traces; inline labels both sides; longer duct bridges",
       "prompt": "Fix T26 findings 1-6 in pipes/ducts.",
       "added": "2026-10-30T08:33:21.322Z",
-      "by": "claude"
+      "by": "claude",
+      "branch": "claude/integration@dde9a97",
+      "evidence": "claude/integration@dde9a97",
+      "updated": "2026-10-30T08:33:24.226Z"
     }
   ]
 }
