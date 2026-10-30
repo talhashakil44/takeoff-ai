@@ -122,7 +122,7 @@
     {
       "id": "T8",
       "owner": "claude",
-      "status": "doing",
+      "status": "done",
       "title": "Site grading, paving and erosion control off the civil drawings",
       "depends": [
         "T1"
@@ -133,9 +133,12 @@
         "build"
       ],
       "notes": [
-        "2026-10-30T04:28 claude: Kelso civil: gravel access road already measured by chainage (560 m). Granular A/B depths are in C-112's typical section; limit of construction and silt fence are dash-piece line types without layers on C-104/C-111: tracing them is the remaining work."
+        "2026-10-30T04:28 claude: Kelso civil: gravel access road already measured by chainage (560 m). Granular A/B depths are in C-112's typical section; limit of construction and silt fence are dash-piece line types without layers on C-104/C-111: tracing them is the remaining work.",
+        "2026-10-30T04:30 claude: road granular A/B + box excavation from the typical section; limit of construction / silt fence split to T18"
       ],
-      "updated": "2026-10-30T04:28:34.921Z"
+      "updated": "2026-10-30T04:30:47.397Z",
+      "branch": "claude/integration@59d01b9",
+      "evidence": "claude/integration@59d01b9"
     },
     {
       "id": "T9",
