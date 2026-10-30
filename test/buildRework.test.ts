@@ -135,7 +135,7 @@ describe('building and full-scope rework', () => {
     expect(b.model.floorAreas).toEqual({ L1: 800, L2: 800 });
     expect(b.model.elements.some((e) => e.origin === 'building' && e.typeName.includes('slab'))).toBe(true);
     const ids = b.schedule.activities.map((a) => a.id);
-    expect(ids).toContain('work:partitions:L1');
+    expect(ids).toContain('work:envelope:L1');
     expect(ids).toContain('work:doors:L1');
     expect(ids).toContain('closeout');
     expect(ids).not.toContain('work:mech-rough:L1');
@@ -167,8 +167,8 @@ describe('building and full-scope rework', () => {
     expect(fast.feasibility.changes).toEqual([]);
     expect(fast.feasibility.earliestFinish).toBe(b.schedule.feasibility.earliestFinish);
     expect(fast.feasibility.baselineFinish).toBe(b.schedule.feasibility.earliestFinish);
-    expect(fast.activities.find((a) => a.id === 'proc:partitions')!.duration).toBe(
-      b.schedule.activities.find((a) => a.id === 'proc:partitions')!.duration,
+    expect(fast.activities.find((a) => a.id === 'proc:envelope')!.duration).toBe(
+      b.schedule.activities.find((a) => a.id === 'proc:envelope')!.duration,
     );
     const relaxed = replan(b.model, applySetupEdits(b.setup, { setup: { target: '2030-01-01' } }), i).schedule;
     expect(relaxed.activities.map((a) => [a.id, a.crews, a.duration, a.deps])).toEqual(
@@ -176,9 +176,9 @@ describe('building and full-scope rework', () => {
     );
     const edited = replan(b.model, setup, {
       ...i,
-      edits: { activities: { 'work:partitions:L1': { duration: 100 } } },
+      edits: { activities: { 'work:envelope:L1': { duration: 100 } } },
     }).schedule;
-    expect(edited.activities.find((a) => a.id === 'work:partitions:L1')!.duration).toBe(100);
+    expect(edited.activities.find((a) => a.id === 'work:envelope:L1')!.duration).toBe(100);
   });
   it('counts recovery changes when measured work can actually be compressed', () => {
     const setup = applySetupEdits(buildAll(input()).setup, { setup: { target: '2026-11-20' } });
