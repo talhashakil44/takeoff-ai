@@ -1,6 +1,7 @@
 import { applyFinishes, ceilingsFromRcps, finishRooms, levelOfSheet, readFinishes } from './finishes';
 import { automateCeilings } from './ceilings';
 import { automateKeynotes } from './keynotes';
+import { automatePipes } from './pipes';
 import { automateRuns } from './runs';
 import { automateTrades } from './trades';
 import { doorTakeoff, findDoorTagsIn } from './doors';
@@ -401,8 +402,13 @@ export async function takeOffWholeSet(
     const r = await automateRuns(project, access);
     apply('runs', r);
     await hold();
-    for (const c of r.checks) review.push({ kind: 'check', text: c });
-    return r.message;
+    // Plans without layers: their piping by its labels, off the sheet as drawn.
+    const pipes = await automatePipes(project, access);
+    apply('pipes', pipes);
+    await hold();
+    const checks = pipes.apply ? r.checks.filter((c) => !/have no CAD layers/.test(c)) : r.checks;
+    for (const c of [...checks, ...pipes.checks]) review.push({ kind: 'check', text: c });
+    return [r.apply ? r.message : '', pipes.apply ? pipes.message : ''].filter(Boolean).join(' · ') || r.message;
   });
 
   await run('mechanical and electrical counts', async () => {
