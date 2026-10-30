@@ -1,3 +1,4 @@
+import { ExploreHost } from './explore/ExploreHost';
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { diffProjects, type ActivityEvent } from './activity';
 import { AiAssembliesDialog } from './components/AiAssembliesDialog';
@@ -751,7 +752,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('.modal-backdrop, .popover')) return;
+      if (t.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('.modal-backdrop, .popover, .ex-shell')) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -2744,6 +2745,7 @@ export function App() {
 
   return (
     <div className="app">
+      <ExploreHost liveProject={project} onBuild={()=>setView('build')} onOpenTakeoff={s=>{setView('drawings');follow([{sheetId:s.id,box:[0,0,s.width,s.height],label:s.name}],s.name);}} />
       <header className="titlebar">
         <input
           ref={projectFileInput}
