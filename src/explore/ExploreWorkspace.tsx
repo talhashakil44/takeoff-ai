@@ -14,13 +14,12 @@ import type { SheetFrame } from "./spatial";
 import { StructuralEditor } from "./StructuralEditor";
 import {
   structuralEvidence,
-  connectStructuralModel,
   applyStructuralReviews,
   structuralFingerprint,
   type StructuralPlacement,
 } from "../build/structural";
 import type { DrawingLines } from "../build/roof";
-import { connectPhysicalStructure } from "../build/connectStructure";
+import { connectStructure } from "../build/connectStructure";
 import { roofViewportRegistrations } from "../build/roofRegistration";
 import { SourceViewer } from "./SourceViewer";
 import { structuralRevisionContext } from "../build/structuralRevisions";
@@ -38,6 +37,7 @@ const num = (v: number) =>
   v.toLocaleString(undefined, { maximumFractionDigits: 2 });
 const emptyTexts: DrawingTexts = {};
 const emptyLines: DrawingLines = {};
+type ScopedStructuralPlacement = StructuralPlacement & { reviewFrame?: SheetFrame; reviewBaseId?: string };
 export function ExploreWorkspace({
   project,
   model,
@@ -132,24 +132,17 @@ export function ExploreWorkspace({
       }
     }),
     [aligning, setAligning] = useState<Sheet | null>(null);
-  const layers = useMemo(
-    () =>
-      sheet
-        ? drawingLayers(project, model, sheet, drawingTexts, drawingLines).map((l) =>
-            manual[`${sid}:${l.sheet.id}`]?.baseId === sid
-              ? {
-                  ...l,
-                  frame: manual[`${sid}:${l.sheet.id}`].frame,
-                  level:
-                    model.elements.find((e) => e.sheetId === sid && e.level)
-                      ?.level ?? null,
-                  reason: "User-reviewed control points",
-                }
-              : l,
-          )
-        : [],
-    [project, model, sheet, drawingTexts, drawingLines, manual, sid],
-  );
+  // All floor registrations share the model's world coordinates. Cache their
+  // presentation layers up front; selecting a floor must not rerun extraction.
+  const layersByFloor = useMemo(() => new Map(sheets.map(base => [base.id,
+    drawingLayers(project, model, base, drawingTexts, drawingLines),
+  ])), [project, model, sheets, drawingTexts, drawingLines]);
+  const layers = useMemo(() => (layersByFloor.get(sid) ?? []).map(l =>
+    manual[`${sid}:${l.sheet.id}`]?.baseId === sid ? {
+      ...l, frame: manual[`${sid}:${l.sheet.id}`].frame,
+      level: model.elements.find(e => e.sheetId === sid && e.level)?.level ?? null,
+      reason: "User-reviewed control points",
+    } : l), [layersByFloor, manual, sid, model]);
   const level =
     model.levels.find((l) => l.sheets.includes(sid))?.id ??
     model.elements.find((e) => e.sheetId === sid && e.level)?.level;
@@ -165,7 +158,7 @@ export function ExploreWorkspace({
   const [structureOnly, setStructureOnly] = useState(false);
   const structuralKey = `explore-structure:${project.id}:${model.sourceHash}`;
   const [structuralReviews, setStructuralReviews] = useState<
-    Record<string, StructuralPlacement>
+    Record<string, ScopedStructuralPlacement>
   >(() => {
     try {
       return JSON.parse(localStorage.getItem(structuralKey) || "{}");
@@ -182,39 +175,58 @@ export function ExploreWorkspace({
       ),
     [layers],
   );
-  const recoveredStructure = useMemo(
-    () =>
-      structuralEvidence(project, model, drawingTexts, drawingLines, frames),
-    [project, model, drawingTexts, drawingLines, frames],
-  );
+  const canonicalFrames = useMemo(() => {
+    const out: Record<string, SheetFrame> = {};
+    for (const base of sheets) {
+      const baseFrame = sheetFrame(project, model, base);
+      if (baseFrame) out[base.id] = baseFrame;
+      for (const layer of layersByFloor.get(base.id) ?? [])
+        if (layer.frame && !layer.geometryOnly && !out[layer.sheet.id]) out[layer.sheet.id] = layer.frame;
+    }
+    return out;
+  }, [project, model, sheets, layersByFloor]);
+  const canonicalModel = useMemo(() => connectStructure(project, model, drawingTexts, drawingLines),
+    [project, model, drawingTexts, drawingLines]);
+  // Editor evidence is needed only for the selected member, not every floor switch.
+  const recoveredStructure = useMemo(() => editingStructural
+    ? structuralEvidence(project, {...model, elements: [editingStructural]}, drawingTexts, drawingLines, canonicalFrames)
+    : {}, [project, model, drawingTexts, drawingLines, canonicalFrames, editingStructural]);
   const roofRegistrations = useMemo(() => ({...roofViewportRegistrations(project, model, drawingTexts), ...canopyRegistrations(project, model, drawingTexts, drawingLines)}), [project, model, drawingTexts, drawingLines]);
-  const memberFrames=useMemo(()=>Object.fromEntries(model.elements.flatMap(e=>{
-    const frame=roofRegistrations[e.measurementId]?.frame ?? (layers.find(l=>l.sheet.id===e.sheetId)?.geometryOnly ? undefined : frames[e.sheetId]);
-    return frame?[[e.id,frame]]:[];
-  })),[model,roofRegistrations,layers,frames]);
-  const structuralModel = useMemo(
-    () =>
-      suppressCoincidentStructure(applyStructuralReviews(project, connectPhysicalStructure(project, connectStructuralModel(
-        project, model, recoveredStructure, {}, frames,
-      ), drawingTexts, drawingLines), structuralReviews, memberFrames)),
-    [model, recoveredStructure, structuralReviews, frames, project, drawingTexts, drawingLines, memberFrames],
-  );
+  const memberFrames = useMemo(() => Object.fromEntries(model.elements.flatMap(e => {
+    const frame = roofRegistrations[e.measurementId]?.frame ??
+      (layers.find(l => l.sheet.id === e.sheetId)?.geometryOnly ? undefined : frames[e.sheetId] ?? canonicalFrames[e.sheetId]);
+    return frame ? [[e.id, frame]] : [];
+  })), [model, roofRegistrations, layers, frames, canonicalFrames]);
+  const structuralModel = useMemo(() => {
+    if (!Object.keys(structuralReviews).length) return canonicalModel;
+    // New reviews retain the exact world frame used in their editor. Legacy
+    // reviews retain the previous scoped manual-frame behaviour until resaved.
+    const reviewFrames = {...memberFrames};
+    for (const [id, review] of Object.entries(structuralReviews))
+      if (review.reviewFrame) reviewFrames[id] = review.reviewFrame;
+    return suppressCoincidentStructure(applyStructuralReviews(project, canonicalModel, structuralReviews, reviewFrames));
+  }, [project, canonicalModel, structuralReviews, memberFrames]);
+  const originalFrames = useMemo(() => new Map(project.sheets.map(source =>
+    [source.id, sheetFrame(project, model, source)])), [project, model]);
+  const editingReview = editingStructural && structuralReviews[editingStructural.id]?.fingerprint === structuralFingerprint(editingStructural, project)
+    ? structuralReviews[editingStructural.id] : undefined;
+  const editingFrame = editingStructural ? editingReview?.reviewFrame ?? memberFrames[editingStructural.id] : undefined;
   const coordinatedModel = useMemo(
     () => ({
       ...model,
       elements: structuralModel.elements.flatMap((e) => {
-        if (e.origin === "building" || e.sheetId === sid || (roofRegistrations[e.measurementId] && e.shape)) return [e];
+        // Source-built structural solids and accepted member reviews are already
+        // in the canonical world frame. A selected-floor overlay is not a new
+        // geometry registration and must never move/re-extrude those members.
+        if (e.origin === "building" || e.trade === "structure" || e.measurementSource === "foundations" || e.sheetId === sid || (roofRegistrations[e.measurementId] && e.shape)) return [e];
         const l = available.find((l) => l.sheet.id === e.sheetId);
         if (!l?.frame) return [];
-        const hasRecovered =
-          recoveredStructure[e.id]?.shape ||
-          (structuralReviews?.[e.id]?.fingerprint ===
-            structuralFingerprint(e, project) &&
-            e.shape);
+        const review = structuralReviews[e.id];
+        const hasRecovered = review && review.fingerprint === structuralFingerprint(e, project) && e.shape;
         if (hasRecovered) return [e];
         const placed = layerElement(
           e,
-          sheetFrame(project, model, l.sheet),
+          originalFrames.get(l.sheet.id) ?? null,
           l.frame,
         );
         if (!placed?.shape) return [];
@@ -238,7 +250,7 @@ export function ExploreWorkspace({
       project,
       model,
       structuralModel,
-      recoveredStructure,
+      originalFrames,
       structuralReviews,
       roofRegistrations,
       sid,
@@ -394,6 +406,11 @@ export function ExploreWorkspace({
   const source = element?.sources.find(
     (s) => s.kind === "sheet" && s.id === sheet?.id,
   );
+  const revisionEvidence = [...new Set(element?.sources.filter(s => s.kind === "spec" && !s.section).map(s => s.id) ?? [])].map(id => {
+    const doc = project.specs?.find(s => s.id === id);
+    const pages = [...new Set(element!.sources.filter(s => s.kind === "spec" && !s.section && s.id === id).map(s => s.page).filter((p): p is number => p !== undefined))].sort((a, b) => a - b);
+    return `${doc?.book?.addendum ? `Addendum ${doc.book.addendum}` : doc?.name ?? "Revised document"} · ${pages.length === 1 ? "page" : "pages"} ${pages.join(", ")}`;
+  });
   const allSheetElements = structuralModel.elements.filter(
     (e) => visibleSheets.has(e.sheetId) && e.origin === "takeoff",
   );
@@ -406,7 +423,8 @@ export function ExploreWorkspace({
   const candidates =
     query || scope === "structure"
       ? (scope === "structure" ? structuralElements : allSheetElements).filter(
-          (e) => e.name.toLowerCase().includes(query.toLowerCase()),
+          (e) => e.name.toLowerCase().includes(query.toLowerCase()) ||
+            (!!query.replace(/[^a-z0-9]/gi, "") && e.name.replace(/[^a-z0-9]/gi, "").toLowerCase().includes(query.replace(/[^a-z0-9]/gi, "").toLowerCase())),
         )
       : [];
   const selectedShape = element?.shape;
@@ -622,6 +640,11 @@ export function ExploreWorkspace({
                 .padStart(2, "0")}
             </span>
           </div>
+          {scope === "structure" && (
+            <p className="ex-coverage">
+              {structuralElements.filter(e => e.shape && e.shape.type !== "axis" && e.shape.type !== "locator").length} of {structuralElements.length} records have solid geometry. Remaining records need placement, section or elevation evidence.
+            </p>
+          )}
           <input
             className="ex-search"
             aria-label="Find a measured room or element"
@@ -1051,10 +1074,10 @@ export function ExploreWorkspace({
                       "Unknown"}
                   </dd>
                 </div>
-                {element.sources.some(s => s.kind === "spec" && !s.section) && (
+                {revisionEvidence.length > 0 && (
                   <div>
                     <dt>Revision evidence</dt>
-                    <dd>{[...new Set(element.sources.filter(s => s.kind === "spec" && !s.section).map(s => `${s.label} · p${s.page}`))].join("; ")}</dd>
+                    <dd>{revisionEvidence.join("; ")}</dd>
                   </div>
                 )}
                 {vars && t?.kind === "area" && (
@@ -1383,22 +1406,22 @@ export function ExploreWorkspace({
           }}
         />
       )}
-      {editingStructural && memberFrames[editingStructural.id] && (
+      {editingStructural && editingFrame && (
         <StructuralEditor
           element={editingStructural}
-          existing={structuralReviews?.[editingStructural.id]?.fingerprint === structuralFingerprint(editingStructural,project) ? structuralReviews[editingStructural.id] : undefined}
+          existing={editingReview}
           evidence={recoveredStructure[editingStructural.id]}
           project={project}
           sheet={project.sheets.find(
             (s) => s.id === editingStructural.sheetId,
           )!}
-          frame={memberFrames[editingStructural.id]}
+          frame={editingFrame}
           renderPage={renderPage}
           onClose={() => setEditingStructural(null)}
           onSave={(placement) => {
             const next = {
               ...structuralReviews,
-              [editingStructural.id]: placement,
+              [editingStructural.id]: {...placement, reviewFrame: {...editingFrame}, reviewBaseId: editingReview?.reviewBaseId ?? sid},
             };
             setStructuralReviews(next);
             try {

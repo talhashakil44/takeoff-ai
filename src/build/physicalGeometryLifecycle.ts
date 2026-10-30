@@ -22,7 +22,7 @@ type TrackedElement = BuildElement & {
 /** These qualifications are emitted only by successful physical resolvers. They
  * must be removed before a new pass, or old success can masquerade as new proof. */
 const derivedIssue = (value: string) =>
-  /^(?:Physical (?:floor|high-roof|low-roof) beam:|Physical roof column:|Foundation revision applied:|Footing section taken from|Pier section and eccentric centre recovered|Interior slab concrete depth|Steel profile and datum offset inferred from calibrated section linework)/.test(
+  /^(?:Physical (?:floor|high-roof|low-roof) beam:|Physical (?:roof (?:column|cantilever)|floor column):|Foundation revision applied:|Footing section taken from|Pier section and eccentric centre recovered|Interior slab concrete depth|Steel profile and datum offset inferred from calibrated section linework)/.test(
     value,
   );
 const cleanIssues = (issues: string[]) =>

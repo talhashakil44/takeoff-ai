@@ -896,16 +896,18 @@ export function recoverFoundationGeometry(
   const revision = foundationRevisionPages(project);
   if (!revision.length)
     return recoverBaseFoundationGeometry(project, model, texts, lines);
-  const references: SourceRef[] = revision.map((r) => ({
-    kind: 'spec',
-    id: r.docId,
-    page: r.page,
-    label:
-      project.specs?.find((s) => s.id === r.docId)?.name ??
-      'Foundation revision',
-    quote:
-      'Newer foundation drawing contains explicit local footing elevations; supersedes generic original-sheet datum.',
-  }));
+  const oldGeneric=(source:SourceRef)=>source.quote?.startsWith('Newer foundation drawing contains explicit local footing elevations;')??false;
+  const noticePrefix='Foundation revision notice:';
+  // Discovery pages include questions and indexes. They are load candidates,
+  // never evidence of an element's local dimensions or elevation.
+  const references:SourceRef[]=revision.flatMap(r=>{
+    const spec=project.specs?.find(s=>s.id===r.docId),ts=texts[foundationRevisionKey(r.docId,r.page)]??[];
+    const loadedPlan=ts.some(t=>/^FOUNDATION PLAN$/i.test(t.str.trim()))&&ts.some(t=>/^T\/O FTG:\s*-?\d+/i.test(t.str.trim()));
+    const changeText=(spec?.book?.changes??[]).filter(c=>c.page===r.page).map(c=>c.text).join(' ');
+    const indexedPlan=/FOUNDATION PLAN/i.test(changeText)&&/T\/O\s+FTG:\s*-?\d+/i.test(changeText);
+    if(!loadedPlan&&!indexedPlan)return [];
+    return [{kind:'spec' as const,id:r.docId,page:r.page,label:`${spec?.name??'Addendum'} · revised foundation plan`,quote:loadedPlan?`${noticePrefix} local top/underside notes are present on this plan; this element still requires its own footprint and datum association.`:`${noticePrefix} the change index identifies this revised foundation plan; coordinate evidence must be loaded and matched before recovering geometry.`}];
+  });
   // Keep source quantities and symbolic locations available while matching the
   // replacement sheet. A successful old-sheet recovery is not revision evidence.
   const held: BuildModel = {
@@ -928,7 +930,7 @@ export function recoverFoundationGeometry(
         placement: 'inferred' as const,
         sources: [
           ...new Map(
-            [...e.sources, ...references].map((s) => [JSON.stringify(s), s]),
+            [...e.sources.filter(s=>!oldGeneric(s)&&!s.quote?.startsWith(noticePrefix)&&!(s.kind==='spec'&&s.label.startsWith('Revised '))), ...references].map((s) => [JSON.stringify(s), s]),
           ).values(),
         ],
         issues: [
@@ -938,7 +940,8 @@ export function recoverFoundationGeometry(
                 !i.startsWith('Footing section taken from') &&
                 !i.startsWith('Interior slab concrete depth') &&
                 !i.startsWith('Pier section and eccentric centre recovered') &&
-                !i.startsWith('Foundation revision applied:'),
+                !i.startsWith('Foundation revision applied:') &&
+                !i.startsWith('Foundation revision discrepancy:'),
             ),
             'Foundation revision unresolved: newer addendum supplies local elevations and changed details. Old-sheet physical geometry withheld pending registered revised footprint and local datum association.',
           ]),
@@ -946,7 +949,7 @@ export function recoverFoundationGeometry(
       };
     }),
   };
-  return recoverRevisedContinuousStrips(
+  const recovered=recoverRevisedContinuousStrips(
     project,
     model,
     recoverRevisedMassFootings(
@@ -968,6 +971,11 @@ export function recoverFoundationGeometry(
     lines,
     revision,
   );
+  return {...recovered,elements:recovered.elements.map(e=>{
+    if(e.measurementSource!=='foundations')return e;
+    const resolved=e.issues.some(i=>i.startsWith('Foundation revision applied:'));
+    return {...e,sources:e.sources.filter(s=>!oldGeneric(s)&&!(resolved&&s.quote?.startsWith(noticePrefix)))};
+  })};
 }
 
 interface RevisedPlan {
@@ -1402,8 +1410,8 @@ function recoverRevisedPiers(
     superseded: false,
   }));
   const virtual = { ...project, sheets: virtualSheets };
-  const detail = localPadDetails(virtual, texts).exterior,
-    datum = footingTopDatum(virtual, texts);
+  const detail = localPadDetails(virtual, texts).exterior;
+  const datum=detail?footingTopDatum({...virtual,sheets:virtual.sheets.filter(s=>s.id===detail.source.id)},texts):null;
   if (!detail || !datum) return current;
   const toSpec = (s: SourceRef): SourceRef => {
     const r = pages.find(
@@ -1599,6 +1607,7 @@ function recoverRevisedPiers(
             (i) => !i.startsWith('Foundation revision unresolved:'),
           ),
           `Foundation revision applied: revised pier outline and schedule agree; named exterior low-pier detail gives top ${-detail.drop} m, bottom ${datum.z} m. ICF perimeter detail applicability remains inferred; source quantity unchanged.`,
+          ...pierQuantityDiscrepancy(project,e,height),
         ],
       };
     }),
@@ -1902,6 +1911,45 @@ function recoverRevisedMassFootings(
   };
 }
 
+function pierQuantityDiscrepancy(project:Project,element:BuildElement,geometryHeight:number):string[] {
+ const type=project.types.find(t=>t.id===element.typeId);
+ if(!type||!Number.isFinite(type.height)||type.height<=0||!type.items?.some(item=>/\bH\b/.test(item.formula)))return [];
+ const acceptedHeight=type.height*(project.units==='imperial'?.3048:1);
+ if(Math.abs(acceptedHeight-geometryHeight)<.001)return [];
+ return [`Foundation revision discrepancy: accepted takeoff type H=${acceptedHeight.toFixed(3)} m remains in formulas using H; revised source geometry height is ${geometryHeight.toFixed(3)} m. Accepted count and quantities are unchanged. Review the height assumption before pricing.`];
+}
+
+interface LocalFootingLeader {tip:[number,number];top:number;bottom:number;source:SourceRef}
+function localFootingLeaders(plan:RevisedPlan):LocalFootingLeader[] {
+ const datums=plan.texts.flatMap(t=>{
+  const m=/^T\/O FTG:\s*(-?\d+)$/i.exec(t.str.trim());if(!m)return [];
+  const us=plan.texts.filter(v=>/^U\/S FTG:\s*-?\d+$/i.test(v.str.trim())&&Math.abs(v.cx-t.cx)<40&&v.cy>t.cy&&v.cy-t.cy<20);if(us.length!==1)return [];
+  const top=Number(m[1])/1000,bottom=Number(us[0].str.match(/-?\d+$/)![0])/1000;
+  return top<0&&bottom<top?[{t,us:us[0],top,bottom}]:[];
+ });
+ const endpoints=new Map<string,{at:[number,number];other:[number,number]}[]>();
+ for(const l of plan.lines) {
+  if(l.filled||l.width>.4||Math.hypot(l.x2-l.x1,l.y2-l.y1)<=10||(l.color&&l.color!=='#000000'))continue;
+  for(const v of [{at:[l.x1,l.y1] as [number,number],other:[l.x2,l.y2] as [number,number]},{at:[l.x2,l.y2] as [number,number],other:[l.x1,l.y1] as [number,number]}]) {
+   const key=`${Math.floor(v.at[0]/10)},${Math.floor(v.at[1]/10)}`;endpoints.set(key,[...(endpoints.get(key)??[]),v]);
+  }
+ }
+ const groups=new Map<number,DrawingLines[string]>();for(const l of plan.lines)if(l.filled&&l.sub!==undefined)groups.set(l.sub,[...(groups.get(l.sub)??[]),l]);
+ return [...groups.values()].flatMap(ls=>{
+  if(ls.length!==3)return [];
+  const vs=[...new Map(ls.flatMap(l=>[[l.x1,l.y1],[l.x2,l.y2]] as [number,number][]).map(p=>[p.join(','),p])).values()];if(vs.length!==3)return [];
+  const lengths=vs.map((p,i)=>Math.hypot(p[0]-vs[(i+1)%3][0],p[1]-vs[(i+1)%3][1])).sort((a,b)=>a-b);if(lengths[0]<1||lengths[2]>15||lengths[2]/lengths[0]<2)return [];
+  const cx=vs.reduce((n,p)=>n+p[0],0)/3,cy=vs.reduce((n,p)=>n+p[1],0)/3,tip=vs.sort((a,b)=>Math.hypot(b[0]-cx,b[1]-cy)-Math.hypot(a[0]-cx,a[1]-cy))[0];
+  const nearby:{at:[number,number];other:[number,number]}[]=[];
+  for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)nearby.push(...(endpoints.get(`${Math.floor(tip[0]/10)+dx},${Math.floor(tip[1]/10)+dy}`)??[]));
+  const connected=nearby.filter(v=>Math.hypot(v.at[0]-tip[0],v.at[1]-tip[1])<.3);
+  const candidates=datums.filter(d=>connected.some(v=>Math.hypot(v.other[0]-d.t.cx,v.other[1]-(d.t.cy+d.us.cy)/2)<70));
+  if(candidates.length!==1)return [];
+  const d=candidates[0],source:SourceRef={kind:'spec',id:plan.docId,page:plan.page,label:'Revised local footing elevation',quote:`${d.t.str}; ${d.us.str}; connected triangular leader arrowhead`,box:[Math.min(tip[0],d.t.cx-40),Math.min(tip[1],d.t.cy-10),Math.max(tip[0],d.t.cx+40),Math.max(tip[1],d.us.cy+10)]};
+  return [{tip,top:d.top,bottom:d.bottom,source}];
+ });
+}
+
 /** Propagate a datum only through a drawn constant-width band connected to a
  * locally dimensioned pad. A step marker or conflicting connection blocks it. */
 function recoverRevisedContinuousStrips(
@@ -1915,6 +1963,11 @@ function recoverRevisedContinuousStrips(
   const plan = revisedPlan(project, original, texts, lines, pages);
   if (!plan) return current;
   const scale = Math.hypot(plan.frame.a, plan.frame.b);
+  const directLeaders=localFootingLeaders(plan);
+  const baseSheet=project.sheets.find(s=>s.id===plan.sheetId);
+  const baseFrame=baseSheet&&sheetFrame(project,{...original,elements:original.elements.filter(e=>!(e.shape?.type==='run'&&e.issues.some(i=>i.startsWith('Foundation revision applied:'))))},baseSheet);
+  if(!baseFrame)return current;
+  const padSections=new Map<string,{width:number;length:number}|null>();
   const sections = new Map<
     string,
     { width: number; depth: number; source: SourceRef }[]
@@ -1924,6 +1977,11 @@ function recoverRevisedContinuousStrips(
       detailed(texts[foundationRevisionKey(r.docId, r.page)] ?? []),
     ))
       for (const mark of foundationMarks([table], true)) {
+        if(mark.kind==='pad'&&mark.width&&mark.length) {
+          const key=normalized(mark.mark),previous=padSections.get(key);
+          padSections.set(key,previous===null||previous&&(previous.width!==mark.width||previous.length!==mark.length)?null:{width:mark.width,length:mark.length});
+          continue;
+        }
         if (mark.kind !== 'strip' || !mark.width || !mark.depth) continue;
         const key = normalized(mark.mark),
           row = table.rows.find((v) => normalized(v.mark) === key);
@@ -1971,7 +2029,9 @@ function recoverRevisedContinuousStrips(
         ss!.some((v) => v.width !== section.width || v.depth !== section.depth)
       )
         return e;
-      const ps = shape.points.map((p) => sheetPoint(p, plan.frame));
+      const measured=project.measurements.find(m=>m.id===e.measurementId);
+      if(measured?.points.length!==2)return e;
+      const ps=measured.points.map(p=>sheetPoint(worldPoint(p,baseFrame),plan.frame));
       const horizontal = Math.abs(ps[0][1] - ps[1][1]) < 0.1,
         vertical = Math.abs(ps[0][0] - ps[1][0]) < 0.1;
       if (!horizontal && !vertical) return e;
@@ -2024,6 +2084,23 @@ function recoverRevisedContinuousStrips(
         gap = Math.max(gap, hi - last);
         return { ratio: n / (hi - lo), gap };
       };
+      const padSupports=original.elements.flatMap(pad=>{
+        if(pad.sheetId!==plan.sheetId||pad.status==='demolished'||!/^F-?\d+\b/.test(pad.typeName))return [];
+        const at=atOf(pad),key=normalized(/^([A-Z]+-?\d+)/.exec(pad.typeName)![1]),size=padSections.get(key);
+        return at&&size?[{p:sheetPoint(at,plan.frame),along:(axis===0?size.width:size.length)/scale,across:(cross===0?size.width:size.length)/scale}]:[];
+      });
+      const explainedGap=(lo:number,hi:number,edge:number)=>{
+        if((hi-lo)*scale<=.25)return true; // Normal dash interruptions, not physical spans.
+        if(padSupports.some(v=>lo>=v.p[axis]-v.along/2-.025/scale&&hi<=v.p[axis]+v.along/2+.025/scale&&Math.abs(edge-v.p[cross])<=v.across/2+.025/scale))return true;
+        // A perpendicular strip T-junction removes a piece of this outer boundary.
+        // Both returning edges must actually meet it, at the scheduled width.
+        if(Math.abs((hi-lo)*scale-section.width)>.015)return false;
+        return [lo,hi].every(position=>plan.lines.some(l=>{
+          if(l.filled||l.width<.5)return false;
+          const x1=horizontal?l.x1:l.y1,x2=horizontal?l.x2:l.y2,y1=horizontal?l.y1:l.x1,y2=horizontal?l.y2:l.x2;
+          return Math.abs(x1-position)<.15&&Math.abs(x2-position)<.15&&Math.min(Math.abs(y1-edge),Math.abs(y2-edge))<.15&&Math.abs(y2-y1)*scale>.1;
+        }));
+      };
       const bands = coords
         .flatMap((a) =>
           coords
@@ -2034,69 +2111,39 @@ function recoverRevisedContinuousStrips(
               const aa = intervals(a),
                 bb = intervals(b);
               if (!aa.length || !bb.length) return [];
-              const lo = Math.max(aa[0][0], bb[0][0]);
-              let hi = Math.min(aa.at(-1)![1], bb.at(-1)![1]);
-              // Stop at an unexplained opening in either boundary rather than bridging a
-              // changed footing profile or continuing around an unmeasured wall return.
-              for (const is of [aa, bb]) {
-                let last = lo;
-                for (const [a, b] of is) {
-                  if ((a - last) * scale > 1.8) {
-                    hi = Math.min(hi, last);
-                    break;
-                  }
-                  last = Math.max(last, b);
-                }
+              const startBound=Math.max(aa[0][0],bb[0][0]),endBound=Math.min(aa.at(-1)![1],bb.at(-1)![1]);
+              const breaks:number[][]=[];
+              for(const [is,edge] of [[aa,a],[bb,b]] as [number[][],number][]) {
+                let last=startBound;
+                for(const [x,y] of is){if(x>last&&!explainedGap(last,x,edge))breaks.push([last,x]);last=Math.max(last,y);}
               }
-              if ((hi - lo) * scale < 1) return [];
-              const ca = coverage(aa, lo, hi),
-                cb = coverage(bb, lo, hi);
-              if (
-                Math.min(ca.ratio, cb.ratio) < 0.4 ||
-                Math.max(ca.gap, cb.gap) * scale > 1.8
-              )
-                return [];
-              if (
-                plan.texts.some(
-                  (t) =>
-                    /^S\.?F\.?$/.test(t.str.trim()) &&
-                    (horizontal ? t.cx : t.cy) > lo - 10 &&
-                    (horizontal ? t.cx : t.cy) < hi + 10 &&
-                    (horizontal ? t.cy : t.cx) > a - 20 &&
-                    (horizontal ? t.cy : t.cx) < b + 20,
-                )
-              )
-                return [];
-              const connections = pads.flatMap((pad) => {
-                const sh = pad.shape;
-                if (sh?.type !== 'point') return [];
-                const q = sheetPoint(sh.at, plan.frame),
-                  halfAlong = sh.size[axis] / scale / 2,
-                  halfAcross = sh.size[cross] / scale / 2;
-                const touched =
-                  (Math.abs(lo - (q[axis] + halfAlong)) * scale < 0.03 ||
-                    Math.abs(hi - (q[axis] - halfAlong)) * scale < 0.03) &&
-                  a >= q[cross] - halfAcross - 1 &&
-                  b <= q[cross] + halfAcross + 1;
-                return touched ? [{ pad, top: sh.z + sh.size[2] }] : [];
+              const regions:number[][]=[];let cursor=startBound;
+              for(const [lo,hi] of breaks.sort((x,y)=>x[0]-y[0])){if(lo>cursor)regions.push([cursor,lo]);cursor=Math.max(cursor,hi);}
+              if(cursor<endBound)regions.push([cursor,endBound]);
+              return regions.flatMap(([lo,hi])=>{
+                if((hi-lo)*scale<1)return [];
+                const ca=coverage(aa,lo,hi),cb=coverage(bb,lo,hi);if(Math.min(ca.ratio,cb.ratio)<.4)return [];
+                if(plan.texts.some(t=>/^S\.?F\.?$/.test(t.str.trim())&&(horizontal?t.cx:t.cy)>lo-10&&(horizontal?t.cx:t.cy)<hi+10&&(horizontal?t.cy:t.cx)>a-20&&(horizontal?t.cy:t.cx)<b+20))return [];
+                const connections=pads.flatMap(pad=>{
+                  const sh=pad.shape;if(sh?.type!=='point')return [];
+                  const q=sheetPoint(sh.at,plan.frame),halfAlong=sh.size[axis]/scale/2,halfAcross=sh.size[cross]/scale/2;
+                  const touched=(Math.abs(lo-(q[axis]+halfAlong))*scale<.03||Math.abs(hi-(q[axis]-halfAlong))*scale<.03)&&a>=q[cross]-halfAcross-1&&b<=q[cross]+halfAcross+1;
+                  return touched?[{pad,top:sh.z+sh.size[2]}]:[];
+                });
+                const direct=directLeaders.filter(d=>d.tip[axis]>=lo-.3&&d.tip[axis]<=hi+.3&&Math.min(Math.abs(d.tip[cross]-a),Math.abs(d.tip[cross]-b))<.3&&Math.abs(d.top-d.bottom-section.depth)<.002);
+                const tops=[...connections.map(c=>c.top),...direct.map(d=>d.top)];
+                if(!tops.length||tops.some(z=>Math.abs(z-tops[0])>.002))return [];
+                return [{a,b,lo,hi,connections,direct,top:tops[0],score:ca.ratio+cb.ratio}];
               });
-              if (
-                !connections.length ||
-                connections.some(
-                  (c) => Math.abs(c.top - connections[0].top) > 0.002,
-                )
-              )
-                return [];
-              return [
-                { a, b, lo, hi, connections, score: ca.ratio + cb.ratio },
-              ];
             }),
         )
         .sort((a, b) => b.score - a.score);
-      if (bands.length !== 1) return e;
-      const band = bands[0],
+      const padAnchored=bands.filter(b=>b.connections.length>0);
+      const eligible=padAnchored.length===1?padAnchored:bands;
+      if(eligible.length!==1)return e;
+      const band = eligible[0],
         centre = (band.a + band.b) / 2,
-        top = band.connections[0].top;
+        top = band.top;
       const points: [number, number][] = horizontal
         ? [
             [band.lo, centre],
@@ -2111,7 +2158,7 @@ function recoverRevisedContinuousStrips(
         id: plan.docId,
         page: plan.page,
         label: 'Revised continuous strip footing',
-        quote: `${code}: drawn parallel boundaries ${band.a}/${band.b} PDF pt; no S.F. marker in connected band. Datum propagated from directly leader-dimensioned adjoining pad (inferred).`,
+        quote: `${code}: drawn parallel boundaries ${band.a}/${band.b} PDF pt; no S.F. marker in connected band. ${band.direct.length?'Direct local elevation leader on this band.':'Datum propagated from directly leader-dimensioned adjoining pad (inferred).'}`,
         box: horizontal
           ? [band.lo, band.a, band.hi, band.b]
           : [band.a, band.lo, band.b, band.hi],
@@ -2131,6 +2178,7 @@ function recoverRevisedContinuousStrips(
               ...e.sources,
               section.source,
               source,
+              ...band.direct.map(d=>d.source),
               ...band.connections.flatMap((c) =>
                 c.pad.sources.filter((s) => s.kind === 'spec'),
               ),
@@ -2141,7 +2189,7 @@ function recoverRevisedContinuousStrips(
           ...e.issues.filter(
             (i) => !i.startsWith('Foundation revision unresolved:'),
           ),
-          `Foundation revision applied: strip centre follows actual revised parallel boundaries; top ${top} m propagated from connected explicitly dimensioned pad. Datum continuity is inferred; no S.F. marker crosses this band. Only source-bounded span represented; original takeoff quantity unchanged.`,
+          `Foundation revision applied: strip centre follows actual revised parallel boundaries; top ${top} m ${band.direct.length?'from its direct local elevation leader':'propagated from connected explicitly dimensioned pad'}. Datum continuity within the bounded region is inferred; no S.F. marker crosses this band. Only source-bounded span represented; original takeoff quantity unchanged.`,
         ],
       };
     }),

@@ -1,23 +1,24 @@
-import { connectSourceColumns } from './columnGeometry';
-import { connectStructuralWalls } from './structuralWallGeometry';
-import { withRevisedRoofSources } from './structuralRevisions';
+import { connectSourceColumns } from "./columnGeometry";
+import { recoverRoofCantilevers } from "./roofCantileverGeometry";
+import { connectStructuralWalls } from "./structuralWallGeometry";
+import { withRevisedRoofSources } from "./structuralRevisions";
 import {
   beginPhysicalGeometry,
   endPhysicalGeometry,
-} from './physicalGeometryLifecycle';
-import { suppressCoincidentStructure } from './coincidentStructure';
-import { canopyRegistrations } from './canopyRegistration';
-import { canopyMemberGeometry } from './canopyMemberGeometry';
-import { connectFlatRoofMembers } from './flatRoofBeamGeometry';
-import { connectRoofMembers } from './roofMemberGeometry';
-import { connectFloorBeams } from './floorBeamGeometry';
-import { recoverFoundationGeometry } from './foundationGeometry';
-import type { Project } from '../model';
-import type { BuildModel } from './types';
-import { registerSheets, type DrawingTexts } from './building';
-import type { DrawingLines } from './roof';
-import { sheetFrame, type SheetFrame } from './sheetCoordinates';
-import { structuralEvidence, connectStructuralModel } from './structural';
+} from "./physicalGeometryLifecycle";
+import { suppressCoincidentStructure } from "./coincidentStructure";
+import { canopyRegistrations } from "./canopyRegistration";
+import { canopyMemberGeometry } from "./canopyMemberGeometry";
+import { connectFlatRoofMembers } from "./flatRoofBeamGeometry";
+import { connectRoofMembers } from "./roofMemberGeometry";
+import { connectFloorBeams } from "./floorBeamGeometry";
+import { recoverFoundationGeometry } from "./foundationGeometry";
+import type { Project } from "../model";
+import type { BuildModel } from "./types";
+import { registerSheets, type DrawingTexts } from "./building";
+import type { DrawingLines } from "./roof";
+import { sheetFrame, type SheetFrame } from "./sheetCoordinates";
+import { structuralEvidence, connectStructuralModel } from "./structural";
 /** Register structural evidence into the existing model's coordinate system, not an independent scene. */
 export function connectStructure(
   project: Project,
@@ -30,8 +31,8 @@ export function connectStructure(
     (s) =>
       !s.superseded &&
       /^A/.test(s.name) &&
-      /FLOOR PLAN/i.test(s.title ?? '') &&
-      !/CEILING|FIRE SEPARATION|ENLARG/i.test(s.title ?? ''),
+      /FLOOR PLAN/i.test(s.title ?? "") &&
+      !/CEILING|FIRE SEPARATION|ENLARG/i.test(s.title ?? ""),
   );
   for (const base of anchors) {
     const bf = sheetFrame(project, model, base);
@@ -71,6 +72,7 @@ export function connectStructure(
       connectStructuralModel(project, model, evidence, {}, frames),
       texts,
       lines,
+      frames,
     ),
   );
 }
@@ -81,6 +83,7 @@ export function connectPhysicalStructure(
   model: BuildModel,
   texts: DrawingTexts,
   lines: DrawingLines,
+  registeredFrames: Record<string, SheetFrame> = {},
 ): BuildModel {
   const baseline = connectStructuralWalls(
     project,
@@ -95,9 +98,15 @@ export function connectPhysicalStructure(
     texts,
     lines,
     (sourceProject, sourceModel, sourceTexts, sourceLines) => {
-      const highRoof = connectRoofMembers(
+      const supportedRoof = connectRoofMembers(
         sourceProject,
         sourceModel,
+        sourceTexts,
+        sourceLines,
+      );
+      const highRoof = recoverRoofCantilevers(
+        sourceProject,
+        supportedRoof,
         sourceTexts,
         sourceLines,
       );
@@ -112,6 +121,7 @@ export function connectPhysicalStructure(
         lowRoof,
         sourceTexts,
         sourceLines,
+        registeredFrames,
       );
       const canopy = canopyMemberGeometry(
         sourceProject,
@@ -127,7 +137,7 @@ export function connectPhysicalStructure(
           return {
             ...e,
             shape: member.shape,
-            placement: 'inferred' as const,
+            placement: "inferred" as const,
             sources: [
               ...new Map(
                 [...e.sources, ...member.sources].map((s) => [
@@ -139,7 +149,7 @@ export function connectPhysicalStructure(
             issues: [
               ...new Set([
                 ...e.issues.filter(
-                  (i) => !i.includes('Calibrated') && !i.includes('plan only'),
+                  (i) => !i.includes("Calibrated") && !i.includes("plan only"),
                 ),
                 ...member.issues,
               ]),

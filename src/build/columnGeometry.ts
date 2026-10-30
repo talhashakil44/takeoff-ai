@@ -1,11 +1,11 @@
 import { joinCollinearRoofStrokes } from './roofSpanEvidence';
-import type { Project, Pt } from '../model';
+import type { Project, Pt, Sheet } from '../model';
 import type { BuildModel, SourceRef } from './types';
-import type { DrawingTexts } from './building';
+import { gridAxes, registerSheets, type DrawingTexts } from './building';
 import type { DrawingLines } from './roof';
 import { structuralSections } from './structural';
 import { roofViewportRegistrations } from './roofRegistration';
-import { worldPoint } from './sheetCoordinates';
+import { worldPoint, sheetFrame, type SheetFrame } from './sheetCoordinates';
 type Line = DrawingLines[string][number];
 const black = (l: Line) => !l.filled && !l.curve && l.color === '#000000';
 const horizontal = (l: Line) => Math.abs(l.y1 - l.y2) < 0.05;
@@ -84,6 +84,28 @@ export function traceSectionPost(
   // Multiple nested/crossing column envelopes are not resolved by taking tallest.
   return candidates.length === 1 ? candidates[0] : null;
 }
+/** Reuse architectural grid registration: structural locators may already be
+ * snapped, and corrected beam endpoints no longer match raw takeoff points. */
+function floorColumnFrame(project:Project,model:BuildModel,sheet:Sheet,texts:DrawingTexts):SheetFrame|null {
+ const candidates:SheetFrame[]=[];
+ for(const base of project.sheets.filter(s=>!s.superseded && /^A/.test(s.name) && /FLOOR PLAN/i.test(s.title??'') && !/CEILING|FIRE|ENLARG|DETAIL/i.test(s.title??'') && s.metersPerPoint)){
+  const bf=sheetFrame(project,model,base);if(!bf)continue;
+  const regs=registerSheets({...project,sheets:[base,sheet]},texts),br=regs[base.id],sr=regs[sheet.id];if(!br||!sr)continue;
+  const ba=Math.cos(br.rotation??0)*base.metersPerPoint!,bb=Math.sin(br.rotation??0)*base.metersPerPoint!,den=ba*ba+bb*bb,ca=(bf.a*ba+bf.b*bb)/den,cb=(bf.b*ba-bf.a*bb)/den;
+  const sa=Math.cos(sr.rotation??0)*sheet.metersPerPoint!,sb=Math.sin(sr.rotation??0)*sheet.metersPerPoint!;
+  candidates.push({a:ca*sa-cb*sb,b:cb*sa+ca*sb,tx:bf.tx+ca*(-sr.x+br.x)-cb*(-sr.y+br.y),ty:bf.ty+cb*(-sr.x+br.x)+ca*(-sr.y+br.y),residual:bf.residual});
+ }
+ if(!candidates.length)return null;
+ const points:Pt[]=[[0,0],[sheet.width,sheet.height]];
+ if(candidates.some(f=>points.some(p=>{const a=worldPoint(p,f),b=worldPoint(p,candidates[0]);return Math.hypot(a[0]-b[0],a[1]-b[1])>.025;})))return null;
+ return candidates[0];
+}
+/** A floor post must be traced below its head-storey datum, so a stacked
+ * roof post at the same grid cannot be mistaken for this member. */
+export function traceFloorPost(lines:Line[],x:number,headDatumY:number,baseDatumY:number,scale:number,width:number) {
+  if (!(baseDatumY > headDatumY)) return null;
+  return traceSectionPost(lines.filter(l=>Math.min(l.y1,l.y2)>headDatumY),x,baseDatumY,scale,width);
+}
 function planRectangle(
   lines: Line[],
   at: Pt,
@@ -161,13 +183,27 @@ export function connectSourceColumns(
   model: BuildModel,
   texts: DrawingTexts,
   lines: DrawingLines,
+  registeredFrames:Record<string,SheetFrame> = {},
 ): BuildModel {
   const regs = roofViewportRegistrations(project, model, texts),
     sections = structuralSections(project, texts);
+  // Calibrated single floor plans can share the same source-section tracer.
+  // Their frame must already be established by model/source correspondences.
+  for (const sheet of project.sheets.filter(s => !s.superseded && /FRAMING/.test(s.title ?? '') && !/ROOF/.test(s.title ?? '') && s.metersPerPoint)) {
+    const ts = texts[sheet.id] ?? [], axes = gridAxes(ts, sheet.width, sheet.height);
+    const xs = Object.entries(axes).filter(([k,v]) => /^\d+$/.test(k) && v.axis === 'x').map(([,v])=>v.at);
+    const ys = Object.entries(axes).filter(([k,v]) => /^[A-Z]$/.test(k) && v.axis === 'y').map(([,v])=>v.at);
+    const frame = registeredFrames[sheet.id] ?? floorColumnFrame(project, model, sheet, texts);
+    if (!frame || xs.length < 3 || ys.length < 3) continue;
+    for (const m of project.measurements.filter(m=>m.sheetId===sheet.id && m.points.length===1)) regs[m.id] = {
+      frame, metersPerPoint:sheet.metersPerPoint!, title:'FLOOR FRAMING', bounds:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)], grids:Object.keys(axes),
+      source:{kind:'sheet',id:sheet.id,page:sheet.page,label:sheet.name,quote:'Calibrated floor framing plan, existing model coordinate frame and matching grid envelope.'},
+    };
+  }
   const joinedPlans = new Map<string, Line[]>();
   const located = new Map<
     string,
-    { at: Pt; code: string; width: number; depth: number }
+    { at: Pt; code: string; width: number; depth: number; domain: string }
   >();
   const resolved = new Map<
     string,
@@ -178,6 +214,7 @@ export function connectSourceColumns(
       width: number;
       depth: number;
       rotation: number;
+      domain: string;
       sources: SourceRef[];
     }
   >();
@@ -204,6 +241,7 @@ export function connectSourceColumns(
     located.set(e.id, {
       at: worldPoint(rect.at, r.frame),
       code: code!,
+      domain: r.title === 'FLOOR FRAMING' ? 'floor' : 'roof',
       width: rect.width,
       depth: rect.depth,
     });
@@ -320,13 +358,9 @@ export function connectSourceColumns(
         Math.abs((ground.y - floor.y) * scale - (floor.z - ground.z)) > 0.015
       )
         continue;
-      const post = traceSectionPost(
-        sl.filter((l) => Math.min(l.y1, l.y2) > sg.cy),
-        sg.cx,
-        floor.y,
-        scale,
-        rect.depth,
-      );
+      const post = r.title === 'FLOOR FRAMING'
+        ? traceFloorPost(sl,sg.cx,floor.y,ground.y,scale,rect.depth)
+        : traceSectionPost(sl.filter(l=>Math.min(l.y1,l.y2)>sg.cy),sg.cx,floor.y,scale,rect.depth);
       if (!post) continue;
       const z = floor.z + (floor.y - post.bottom) * scale,
         height = (post.bottom - post.top) * scale;
@@ -360,6 +394,7 @@ export function connectSourceColumns(
       width: rect.width,
       depth: rect.depth,
       rotation: Math.atan2(r.frame.b, r.frame.a),
+      domain: r.title === 'FLOOR FRAMING' ? 'floor' : 'roof',
       sources: [
         r.source,
         sec.source,
@@ -401,7 +436,8 @@ export function connectSourceColumns(
         Math.hypot(q.at[0] - p.at[0], q.at[1] - p.at[1]) < 0.01 &&
         q.width === p.width &&
         q.depth === p.depth &&
-        located.get(other)?.code === p.code,
+        located.get(other)?.code === p.code &&
+        located.get(other)?.domain === p.domain,
     );
     if (matches.length === 1) {
       duplicates.set(id, matches[0][0]);
@@ -413,16 +449,16 @@ export function connectSourceColumns(
     elements: model.elements.map((e) => {
       const p = resolved.get(e.id);
       if (!p)
-        return e.issues.some((i) => i.startsWith('Physical roof column:'))
+        return e.issues.some((i) => /^Physical (roof|floor) column:/.test(i))
           ? {
               ...e,
               shape: null,
               placement: 'unknown' as const,
               issues: [
                 ...e.issues.filter(
-                  (i) => !i.startsWith('Physical roof column:'),
+                  (i) => !/^Physical (roof|floor) column:/.test(i),
                 ),
-                'Physical roof column: current source geometry does not requalify this post; prior solid withheld.',
+                `Physical ${e.issues.some(i=>i.startsWith('Physical floor column:'))?'floor':'roof'} column: current source geometry does not requalify this post; prior solid withheld.`,
               ],
             }
           : e;
@@ -445,10 +481,10 @@ export function connectSourceColumns(
           ).values(),
         ],
         issues: [
-          ...e.issues.filter((i) => !i.startsWith('Physical roof column:')),
+          ...e.issues.filter((i) => !/^Physical (roof|floor) column:/.test(i)),
           duplicate
-            ? `Physical roof column: coincident viewport record; physical post displayed by ${duplicate}. Original quantity retained and unreconciled.`
-            : 'Physical roof column: registered plan rectangle and directly matched section faces determine placement and height. Section quantisation is approximately 10–20mm. Drawn post tops are retained without assuming beam undersides; beam/post joint and bearing fabrication details remain inferred; quantity retained.',
+            ? `Physical ${p.domain} column: coincident viewport record; physical post displayed by ${duplicate}. Original quantity retained and unreconciled.`
+            : `Physical ${p.domain} column: registered plan rectangle and directly matched section faces determine placement and height. Section quantisation is approximately 10–20mm. Drawn post tops are retained without assuming beam undersides; beam/post joint and bearing fabrication details remain inferred; quantity retained.`,
         ],
       };
     }),

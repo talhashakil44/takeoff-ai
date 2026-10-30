@@ -55,7 +55,12 @@ const palette = (e: BuildElement) =>
         : e.shape?.type === "surface"
           ? "#d6d1c3"
           : "#e8e3d6";
+const emptyPins: NonNullable<Props["pins"]> = [];
 export function ExploreScene(props: Props) {
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  // Callers may use an inline [] when locator pins are hidden. Its identity
+  // must not allocate a new scene/context on every unrelated button click.
+  const scenePins = props.pins?.length ? props.pins : emptyPins;
   const host = useRef<HTMLDivElement>(null),
     api = useRef<{
       select: () => void;
@@ -70,18 +75,20 @@ export function ExploreScene(props: Props) {
     if (!el) return;
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({
+      renderer = rendererRef.current ?? new THREE.WebGLRenderer({
         antialias: true,
         alpha: false,
         powerPreference: "high-performance",
       });
+      rendererRef.current = renderer;
     } catch {
       setError(
         "3D could not start on this device. The original PDF remains available below.",
       );
       return;
     }
-    setError("");
+    const lostMessage = "The graphics connection was lost. Waiting for the browser to restore 3D; the source drawing is still available.";
+    setError(renderer.getContext().isContextLost() ? lostMessage : "");
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setClearColor("#ece9e1");
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -301,7 +308,7 @@ export function ExploreScene(props: Props) {
       label.position.set(g.a[0], base + 0.08, g.a[1]);
       gridGroup.add(label);
     }
-    const pins = (props.pins ?? []).map((p) => {
+    const pins = scenePins.map((p) => {
       const sprite = textSprite("●", "#9c602f");
       sprite.scale.set(0.7, 0.35, 1);
       sprite.userData.id = p.id;
@@ -320,6 +327,7 @@ export function ExploreScene(props: Props) {
       lastPose = 0,
       raf = 0,
       disposed = false,
+      contextLost = renderer.getContext().isContextLost(),
       dirty = true,
       transition = 1,
       currentLift = 0,
@@ -628,11 +636,20 @@ export function ExploreScene(props: Props) {
     renderer.domElement.addEventListener("blur", onBlur);
     const lost = (e: Event) => {
       e.preventDefault();
-      setError(
-        "The graphics connection was lost. Close and reopen Explore Drawing to restore it.",
-      );
+      contextLost = true;
+      setError(lostMessage);
+    };
+    const restored = () => {
+      if (disposed || renderer.getContext().isContextLost()) return;
+      contextLost = false;
+      clock = 0;
+      dirty = true;
+      // Three rebuilds its GPU state on this same restoration event. Clear the
+      // fallback only after the actual context is available again.
+      setError("");
     };
     renderer.domElement.addEventListener("webglcontextlost", lost);
+    renderer.domElement.addEventListener("webglcontextrestored", restored);
     controls.addEventListener("change", () => {
       dirty = true;
     });
@@ -657,6 +674,7 @@ export function ExploreScene(props: Props) {
       lastFootprints: boolean | undefined;
     const draw = (now: number) => {
       if (disposed) return;
+      if (contextLost) { raf = requestAnimationFrame(draw); return; }
       const dt = Math.min(0.04, (now - clock) / 1000 || 0.016);
       clock = now;
       const p = live.current;
@@ -838,6 +856,12 @@ export function ExploreScene(props: Props) {
       api.current = null;
       ro.disconnect();
       controls.dispose();
+      renderer.domElement.removeEventListener("pointerdown", onDown);
+      renderer.domElement.removeEventListener("pointermove", onMove);
+      renderer.domElement.removeEventListener("keydown", onKey);
+      renderer.domElement.removeEventListener("blur", onBlur);
+      renderer.domElement.removeEventListener("webglcontextlost", lost);
+      renderer.domElement.removeEventListener("webglcontextrestored", restored);
       clearOverlays();
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("keyup", onKeyUp);
@@ -860,8 +884,9 @@ export function ExploreScene(props: Props) {
         }
       texture.dispose();
       sun.shadow.dispose();
-      renderer.dispose();
-      renderer.domElement.remove();
+      // Keep the single context alive while model/page/annotations rebuild.
+      // Remove render-list references to the disposed scene resources.
+      renderer.renderLists.dispose();
     };
   }, [
     props.model,
@@ -869,8 +894,18 @@ export function ExploreScene(props: Props) {
     props.frame,
     props.page,
     props.grids,
-    props.pins,
+    scenePins,
   ]);
+  useEffect(() => () => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    renderer.dispose();
+    // dispose releases GPU resources but not the browser's WebGL context slot.
+    // Release that slot explicitly only when this ExploreScene is unmounted.
+    renderer.forceContextLoss();
+    renderer.domElement.remove();
+    rendererRef.current = null;
+  }, []);
   useEffect(
     () => api.current?.retarget(),
     [props.mode, props.room, props.focus, props.reduced, props.resetView],
@@ -886,6 +921,7 @@ export function ExploreScene(props: Props) {
             alt={`Original PDF sheet ${props.sheet.name}`}
           />
           <p role="alert">{error}</p>
+          {rendererRef.current && <button onClick={() => rendererRef.current?.forceContextRestore()}>Retry 3D connection</button>}
         </div>
       )}
     </div>

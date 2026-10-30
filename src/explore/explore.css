@@ -202,6 +202,12 @@
   color: var(--muted);
   font-family: monospace;
 }
+.ex-coverage {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
 .ex-search {
   background: transparent;
   border: 0;

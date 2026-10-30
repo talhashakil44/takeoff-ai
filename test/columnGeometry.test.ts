@@ -1,5 +1,5 @@
 import { it, expect } from 'vitest';
-import { traceSectionPost } from '../src/build/columnGeometry';
+import { traceSectionPost, traceFloorPost } from '../src/build/columnGeometry';
 const rectangle = (color = '#000000') =>
   [
     { x1: -5, x2: -5, y1: 100, y2: 240, color },
@@ -42,4 +42,13 @@ it('rejects two complete stacked viewports when not scoped to a section', () => 
     ...rectangle().map((l: any) => ({ ...l, y1: l.y1 + 300, y2: l.y2 + 300 })),
   ];
   expect(traceSectionPost(ls, 0, 600, 0.025, 0.25)).toBeNull();
+});
+
+it('selects the floor post below the floor deck and preserves its standoff base',()=>{
+ const upper=rectangle().map((l:any)=>({...l,y1:l.y1-160,y2:l.y2-160}));
+ const p=traceFloorPost([...upper,...rectangle()],0,90,246,.025,.25)!;
+ expect(p).toEqual({top:100,bottom:240});
+ expect((246-p.bottom)*.025).toBeCloseTo(.15);
+ expect(traceFloorPost(upper,0,90,246,.025,.25)).toBeNull();
+ expect(traceFloorPost(rectangle(),0,246,90,.025,.25)).toBeNull();
 });

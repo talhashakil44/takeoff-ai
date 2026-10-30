@@ -692,6 +692,7 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
     recoverFoundationGeometry(p, m, alternate, lines).elements[1].shape?.type,
   ).toBe('locator');
   // The latest named low-pier detail, not the old 200 mm note, controls its top.
+  p.types=[{id:'pier-type',height:1.2,items:[{id:'volume',name:'Concrete',unit:'m³',formula:'N * W * D * H * 1.05'}]} as Project['types'][number]];
   p.specs![0].book!.changes!.push({
     page: 22,
     text: 'FOUNDATION SECTIONS',
@@ -704,6 +705,7 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
   const pier = {
     ...located,
     id: 'p3',
+    typeId: 'pier-type',
     measurementId: 'p3',
     typeName: 'P3 – Concrete pier 670 x 670',
   };
@@ -794,6 +796,11 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
     recoverFoundationGeometry(p, recovered, pierSource, pierLines),
   ).toEqual(recovered);
 
+  expect(recovered.elements[2].issues.join(' ')).toContain('Foundation revision discrepancy: accepted takeoff type H=1.200 m');
+  expect(recovered.elements[2].issues.join(' ')).toContain('geometry height is 0.950 m');
+  expect(recovered.elements[2].quantity).toBe(pier.quantity);
+  const noHeightFormula={...p,types:p.types.map(t=>({...t,items:t.items.map(i=>({...i,formula:'N'}))}))};
+  expect(recoverFoundationGeometry(noHeightFormula,{...m,elements:[run,located,pier,wall]},pierSource,pierLines).elements[2].issues.join(' ')).not.toContain('Foundation revision discrepancy:');
   const shifted = {
     'spec:revision:21': lines['spec:revision:21'].map((l) => ({
       ...l,
@@ -983,4 +990,40 @@ it('uses a revised grid, drawn pad perimeter and actual arrowhead before applyin
   expect(
     recoverFoundationGeometry(sp, span, stepped, sl).elements[2].shape?.type,
   ).toBe('axis');
+  const broken={'spec:revision:21':[...lines['spec:revision:21'],{...boundaries[0],x2:155},{...boundaries[0],x1:175},boundaries[1]]};
+  const stopped=recoverFoundationGeometry(sp,span,source,broken).elements[2].shape;
+  expect(stopped?.type).toBe('run');
+  if(stopped?.type==='run')expect(stopped.points[1][0]).toBeCloseTo(155*scale,6);
+  const junctionEnd=155+.6/scale;
+  const junction={'spec:revision:21':[...lines['spec:revision:21'],{...boundaries[0],x2:155},{...boundaries[0],x1:junctionEnd},boundaries[1],{x1:155,y1:100-halfStrip,x2:155,y2:80,width:.6,filled:false,sub:500},{x1:junctionEnd,y1:100-halfStrip,x2:junctionEnd,y2:80,width:.6,filled:false,sub:501}]};
+  const joined=recoverFoundationGeometry(sp,span,source,junction).elements[2].shape;
+  expect(joined?.type).toBe('run');
+  if(joined?.type==='run')expect(joined.points[1][0]).toBeCloseTo(200*scale,6);
+
+  // A direct leader may resolve a later bounded region after an unsupported gap.
+  // No connected pad or nearest-text fallback is available for this interval.
+  const directSource={...source,'spec:revision:21':[...grids,text('FOUNDATION PLAN',300,600),text('1 : 100',300,620),text('T/O FTG: -250',220,40),text('U/S FTG: -550',220,50)]};
+  const tipY=100-halfStrip,ar=[[185,tipY],[188,tipY-8],[190,tipY-6],[185,tipY]];
+  const directArrow=ar.slice(1).map((q,i)=>({x1:ar[i][0],y1:ar[i][1],x2:q[0],y2:q[1],width:0,filled:true,sub:600}));
+  const directLines={'spec:revision:21':[{...boundaries[0],x2:145},{...boundaries[0],x1:165},boundaries[1],...directArrow,{x1:185,y1:tipY,x2:205,y2:55,width:.24,filled:false,sub:601}]};
+  const directModel={...m,elements:[run,strip2]};
+  const directOut=recoverFoundationGeometry(sp,directModel,directSource,directLines);
+  expect(directOut.elements[1].shape).toMatchObject({type:'run',z0:-.55,height:.3,thickness:.6});
+  const directShape=directOut.elements[1].shape;
+  if(directShape?.type!=='run')throw new Error('Expected directly leader-dimensioned strip');
+  expect(directShape.points[0][0]).toBeCloseTo(165*scale,6);
+  expect(directShape.points[1][0]).toBeCloseTo(200*scale,6);
+  expect(directOut.elements[1].quantity).toBe(strip2.quantity);
+  expect(recoverFoundationGeometry(sp,directOut,directSource,directLines)).toEqual(directOut);
+  expect(recoverFoundationGeometry(sp,directModel,directSource,{'spec:revision:21':directLines['spec:revision:21'].filter(l=>!l.filled)}).elements[1].shape?.type).toBe('axis');
+
+  p.specs![0].book!.changes!.push({page:3,text:'Question about foundation coordination',label:'Q',y:0,sections:[],sheets:[],action:'clarified'});
+  const polluted={...directModel,elements:directModel.elements.map(e=>({...e,sources:[...e.sources,{kind:'spec' as const,id:'revision',page:3,label:'Addendum5',quote:'Newer foundation drawing contains explicit local footing elevations; supersedes generic original-sheet datum.'},{kind:'spec' as const,id:'revision',page:31,label:'Revised foundation detail (stale)',quote:'T/O FOOTING -1200 mm; FIN. GROUND FLOOR 0'}]}))};
+  const clean=recoverFoundationGeometry(sp,polluted,directSource,directLines);
+  expect([...new Set(clean.elements[1].sources.filter(s=>s.kind==='spec').map(s=>s.page))].sort((a,b)=>a-b)).toEqual([19,21]);
+  expect(clean.elements[1].sources.some(s=>s.quote?.startsWith('Foundation revision notice:'))).toBe(false);
+  expect(clean.elements[0].sources.filter(s=>s.kind==='spec').map(s=>s.page)).toEqual([21]);
+  expect(clean.elements[0].sources[0].quote).toContain('still requires its own footprint and datum association');
+  expect(recoverFoundationGeometry(sp,clean,directSource,directLines)).toEqual(clean);
+
 });
