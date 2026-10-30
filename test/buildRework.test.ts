@@ -152,8 +152,12 @@ describe('building and full-scope rework', () => {
     expect(wall.shape.openings?.[0].elementId).toBe('door0');
     const volume = runSolids(wall.shape).reduce((n, p) => n + p.length * p.height * p.thickness, 0);
     const gross = 120 * 3.6 * 0.25;
-    expect(volume).toBeCloseTo(gross - 0.95 * 2.1 * 0.25);
+    // Four square-turn fillers close the outside corners; they add a quarter
+    // of a thickness-square per corner to the separate-solid volume.
+    expect(volume).toBeCloseTo(gross - 0.95 * 2.1 * 0.25 + 4 * (0.25 / 2) ** 2 * 3.6);
     expect(wall.quantity).toBe(120);
+    expect(b.model.elements.find((e) => e.id === 'door0')!.issues.some((issue) => /opening host inferred/i.test(issue))).toBe(false);
+    expect(b.model.issues.some((issue) => issue.id === 'opening-host-assumptions' && issue.refs?.includes('door0'))).toBe(true);
   });
   it('exposes the baseline and restores it without changing fixed procurement', {timeout:15000}, () => {
     const i = input(),
