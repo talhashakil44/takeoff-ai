@@ -328,7 +328,7 @@
       ]
     },
     {
-      "status": "todo",
+      "status": "doing",
       "depends": [
         "T12"
       ],
@@ -344,7 +344,9 @@
       "title": "Realism check of durations: with every suggestion accepted Kelso still finishes 2027-07-12 (~8 months); review allowance rates/crews, per-level sequencing and finishes/envelope logic against typical durations for a 1,237 m² two-storey timber/steel rec building",
       "prompt": "Evidence first: compare each activity duration to a documented production rate (RSMeans-style or trade norms) and report which rates drive the gap. Do not force a target. Allowances could be split per level and follow the measured trade sequence (envelope after structure per level, finishes after partitions per level).",
       "added": "2026-10-30T04:41:42.232Z",
-      "by": "claude"
+      "by": "claude",
+      "branch": "codex/build-it-duration-realism",
+      "updated": "2026-10-30T04:58:41.506Z"
     },
     {
       "status": "todo",
