@@ -1,3 +1,4 @@
+import { planFootprintHit } from './planFootprintHit';
 import { drawingHit } from './drawingHit';
 import { drawingTiles } from './drawingTiles';
 import type { SourceTile } from './sourceRegion';
@@ -746,6 +747,11 @@ export function ExploreScene(props: Props) {
             live.current.onSelect(String(pinHit.object.userData.id));
             down = null;
             return;
+          }
+          if (footprints.visible) {
+            const point=ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),-(base+.026)),new THREE.Vector3());
+            const id=point && planFootprintHit(planItems.filter(item=>item.line.visible).map(item=>item.e),[point.x,point.z],live.current.selected);
+            if(id){live.current.onSelect(id);down=null;return;}
           }
           const sourcePoint=drawingHit(ray,paper,props.frame);
           if(sourcePoint)live.current.onSheetPoint(sourcePoint);

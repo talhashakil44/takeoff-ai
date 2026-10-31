@@ -253,3 +253,8 @@ it('withdraws cached plan envelopes before a new source pass, even if no resolve
  expect(result.elements[0].quantity).toBe(e.quantity);
  expect(cached.elements[0].planFootprint).toBeDefined();
 });
+it('keeps non-structural element identity when there is no derived plan envelope to clear',()=>{
+ const untouched={...e,trade:'finishes'};
+ const out=beginPhysicalGeometry(project,{...model,elements:[untouched]});
+ expect(out.elements[0]).toBe(untouched);
+});

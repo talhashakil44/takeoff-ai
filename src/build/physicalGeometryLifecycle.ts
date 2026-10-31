@@ -104,8 +104,11 @@ export function beginPhysicalGeometry(
     elements: model.elements.map((original) => {
       // Plan-only placement must be requalified even when a pending revision
       // prevents the column resolver from running.
-      const {planFootprint: _priorPlanFootprint, ...fresh} = original;
-      const e = fresh as TrackedElement;
+      let e = original as TrackedElement;
+      if(original.planFootprint){
+        const {planFootprint: _priorPlanFootprint, ...fresh} = original;
+        e = fresh as TrackedElement;
+      }
       if (e.origin === 'building' || e.trade !== 'structure') return e;
       const current = fingerprint(project, e),
         old = e.physicalGeometryBaseline;

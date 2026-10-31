@@ -1,0 +1,15 @@
+{
+  "baseline": "7c2c3fd",
+  "modelVersion": 41,
+  "engineProjectAndEntireModelEqual": true,
+  "engineDrawingCandidates": 0,
+  "frozenFixtureProduction": "PASS unchanged geometry and quantities",
+  "livePicking": {
+    "initialRecordIndex": 0,
+    "hiddenFootprintClickIndex": 0,
+    "visibleFootprintClickIndex": 1,
+    "browserErrors": []
+  },
+  "sourceReviewed": "Revised S2.1 Add5 page25 second C2 beside B7",
+  "physicalGeometryChanged": false
+}

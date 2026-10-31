@@ -1173,7 +1173,7 @@ export function ExploreWorkspace({
                 >
                   <h3>{element.origin === "drawing" && selectedShape?.type === "axis" ? "DRAWING COVERAGE" : "STRUCTURAL GEOMETRY"}</h3>
                   {element.planFootprint && (!selectedShape || selectedShape.type === 'locator') && <>
-                    <p>Plan envelope verified against source drawings. Base and top elevations are unresolved.</p>
+                    <p>Plan envelope verified against source drawings. Base and top elevations are unresolved. Click an outline to inspect it; repeated clicks cycle overlapping records.</p>
                     <button onClick={()=>{
                       const ring=element.planFootprint!.ring;
                       setFocus([ring.reduce((v,p)=>v+p[0],0)/ring.length,ring.reduce((v,p)=>v+p[1],0)/ring.length]);

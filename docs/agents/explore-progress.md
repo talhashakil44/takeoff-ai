@@ -1105,3 +1105,41 @@ Next: exact C2 column section-cut/base-top identity, main-roofC1 endpoints, oute
 MF3datum and SF2steps remain open. Plan envelopes are placement evidence only;
 do not upgrade them to solid geometry or reconcile counts automatically. T11
 active/incomplete; no main merge/deploy.
+
+## 2026-10-31 08:08 UTC — direct selection of verified plan envelopes
+
+Fetched current bus/integration; Claude approved7c2c3fd. Repaired the next live
+integration gap: clicking a displayed verified column envelope previously fell
+through to room picking. Drawing clicks now test visible plan-only envelopes in
+registered world coordinates before rooms. Hidden layers/footprints, demolished
+records, withdrawn rings and physical solids are excluded. Repeated clicks cycle
+coincident record IDs deterministically; this is inspection, not deduplication or
+count reconciliation. UI explains this behavior. No model version or source
+geometry change. Applied Claude's lifecycle identity nit: unrelated elements
+without cached plan footprints retain object identity, while stale footprints
+still clear before source qualification.
+
+Actual live C2 interaction: starting record0, click adjacent envelope at933,533
+in1600x1000 viewport selects record1. With footprint checkbox off, same click
+leaves record0; re-enable and it selects record1. Original-PDF link now opens
+that second C2 beside the B7 tag on revised S2.1/Add5p25. Inspected direct-pick,
+original-source and settled3D screenshots; no fabricated C2solid, browsererrors=[].
+Proofs diag/explore/proofs/canopy-c2-{direct-pick,original-footprint-picking,
+withheld-3d-picking}-v41.png. Unit coverage includes rotated rings, overlapping
+record cycling, missing/demolished/physical exclusion and lifecycle identity.
+Source/model production checks and clean harness accompany checkpoint.
+
+Next bounded geometry audit: main-roof C1 at grid2/B against the corresponding
+4/S4.0 cut; establish actual cut identity and vertical endpoints before copying
+an elevation. C2 base/top, outerMF3 datum and steppedSF2 remain unresolved.
+T11 active/incomplete; source geometry and accepted quantities unchanged. No
+main merge/deploy. Do not treat this interaction repair as new physical geometry.
+
+Validation note: the older ad hoc engine-fixture test expected1 unaccepted drawing
+candidate, but Claude's refreshed Kelso engine project now produces0. Compared
+against a read-only archive of HEAD7c2c3fd with identical source PDFs: baseline
+also produces0, passes5 physical MF3 of7 and preserves input quantities. The
+frozen original drawing fixture still passes unchanged. This is not a new
+physical-geometry regression; record current/baseline comparison with checkpoint.
+Claude reports new standalone strip footing extraction in progress; do not
+silently replace this task's frozen accepted project with the mutable engine data.
