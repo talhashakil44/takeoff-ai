@@ -1565,3 +1565,9 @@ Dunnville adds3P-2 500x500mm footprints within existing3F-2 footprints at2/B,3/B
 source project unchanged. Next: local elevation evidence for interior assembly;
 continue independent exterior/compound footprints if no applicable elevation.
 T11 incomplete; no main merge/deploy. Full harness/live validation follows.
+Validated 17e2a49: 648 tests, TypeScript, build and Kelso/Frederick audit PASS.
+Original PDF overlay and live 2D/3D proofs inspected; no browser errors. Same-input
+Kelso and Dunnville physical shapes and quantities unchanged. Sent Claude the
+pier footprint evidence and requested an explicit general note/specification for
+interior footing datum and pier top; the typical detail's vertical break does
+not provide height. Continue independent footprint gaps while that is reviewed.
