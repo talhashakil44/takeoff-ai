@@ -895,6 +895,7 @@
 }
 .ex-source-scroll img {
   display: block;
+  margin-inline: auto;
 }
 @media (max-width: 850px) {
   .ex-shell {

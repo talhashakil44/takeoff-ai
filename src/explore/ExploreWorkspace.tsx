@@ -21,12 +21,14 @@ import {
 import type { DrawingLines } from "../build/roof";
 import { connectStructure } from "../build/connectStructure";
 import { roofViewportRegistrations } from "../build/roofRegistration";
+import type { SourceBox } from "./sourceRegion";
 import { SourceViewer } from "./SourceViewer";
 import { structuralRevisionContext } from "../build/structuralRevisions";
 export interface ExploreWorkspaceProps {
   project: Project;
   model: BuildModel;
   renderPage: (sheet: Sheet) => Promise<HTMLCanvasElement>;
+  renderDetail?: (sheet: Sheet, box: SourceBox) => Promise<HTMLCanvasElement>;
   onClose: () => void;
   drawingTexts?: DrawingTexts;
   drawingLines?: DrawingLines;
@@ -42,6 +44,7 @@ export function ExploreWorkspace({
   project,
   model,
   renderPage,
+  renderDetail,
   onClose,
   drawingTexts = emptyTexts,
   drawingLines = emptyLines,
@@ -101,7 +104,7 @@ export function ExploreWorkspace({
     [showFootprints, setShowFootprints] = useState(true),
     [showUnplaced, setShowUnplaced] = useState(false),
     [showGrids, setShowGrids] = useState(false),
-    [sourceView, setSourceView] = useState<Sheet | null>(null),
+    [sourceView, setSourceView] = useState<(Sheet & { evidenceBox?: SourceBox }) | null>(null),
     [overlayPages, setOverlayPages] = useState<
       Record<string, HTMLCanvasElement>
     >({}),
@@ -1223,11 +1226,10 @@ export function ExploreWorkspace({
                       <button
                         key={i}
                         title={ref.quote}
-                        onClick={() =>
-                          setSourceView(
-                            project.sheets.find((s) => s.id === ref.id) ?? null,
-                          )
-                        }
+                        onClick={() => {
+                          const sheet = project.sheets.find((s) => s.id === ref.id);
+                          setSourceView(sheet ? { ...sheet, evidenceBox: ref.box } : null);
+                        }}
                       >
                         {ref.label} · {ref.quote?.split(":")[0]} ↗
                       </button>
@@ -1328,7 +1330,7 @@ export function ExploreWorkspace({
                           : { id: `spec:${s.id}:${s.page}`, docId: s.id,
                               page: s.page, name: s.label,
                               title: "Addendum drawing evidence", width: 0, height: 0 } as Sheet;
-                        if (sh) setSourceView(sh);
+                        if (sh) setSourceView({ ...sh, evidenceBox: s.box });
                       }}
                       title={s.quote}
                     >
@@ -1359,9 +1361,11 @@ export function ExploreWorkspace({
                                 page: ref.page,
                                 name: ref.label,
                                 title: "Specification source",
+                                evidenceBox: ref.box,
+                                metersPerPoint: null, scaleLabel: "", scaleSource: null, scaleHints: [],
                                 width: 0,
                                 height: 0,
-                              } as Sheet)
+                              })
                             }
                           >
                             Open spec page {ref.page} ↗
@@ -1469,6 +1473,8 @@ export function ExploreWorkspace({
       {sourceView && (
         <SourceViewer
           sheet={sourceView}
+          box={sourceView.evidenceBox}
+          renderDetail={renderDetail}
           renderPage={renderPage}
           onClose={() => setSourceView(null)}
           onOpenTakeoff={project.sheets.some(s => s.id === sourceView.id) ? onOpenTakeoff : undefined}

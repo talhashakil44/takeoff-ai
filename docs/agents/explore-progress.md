@@ -601,3 +601,25 @@ diag/explore/proofs/fw4-plan-overlay-v34.png. No geometry placement changed.
 Next: source viewer evidence-box focus and sharper source raster at close zoom;
 then remaining source-defined roof ends and stepped footing/wall profiles.
 T11 remains incomplete. This viewport repair does not close those geometry gaps.
+
+## Evidence-detail viewer — October 31, 01:03 wake
+
+Claude approved 3e62df0. Source references now pass their existing evidence boxes
+to the original-PDF viewer. ExploreHost can rasterize just that region with
+surrounding context, up to 4 pixels/PDF point and a bounded 1800-pixel long edge.
+It clips to the original page and rejects invalid/out-of-page regions. This is
+an optional capability: hosts without detail rendering retain the whole-page
+viewer. Show whole page / Focus evidence preserve access to the complete source.
+No model, extraction, accepted quantity, original JSON or PDF changed.
+
+Live source review: FW4 plan link opens the actual closed hatched panel;
+section link opens 6/S1.1 with DROP FOUNDATION WALL 250, FIN. GROUND FLOOR 0,
+and T/O FOOTING -1200 visible together. Whole-page toggle restores the original
+S1.0 title block and complete sheet. Proof:
+diag/explore/proofs/fw4-source-section-detail.png. This improves evidence
+inspection, not structural coverage. The scene's full-page texture still has
+its earlier raster limit; adaptive detail inside the 2D/3D scene remains open.
+
+Next action: return to source qualification of unresolved roof free ends and
+stepped-footing/wall bases, using the now-readable reference details. Preserve
+all unresolved coverage flags; no default solid/profile. T11 remains active.

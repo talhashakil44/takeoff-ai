@@ -1,27 +1,35 @@
+import type { SourceBox } from "./sourceRegion";
 import { useDialogKeys } from "./useDialogKeys";
 import { useEffect, useState } from "react";
 import type { Sheet } from "../model";
 export function SourceViewer({
   sheet,
+  box,
+  renderDetail,
   renderPage,
   onClose,
   onOpenTakeoff,
 }: {
   sheet: Sheet;
+  box?: SourceBox;
+  renderDetail?: (sheet: Sheet, box: SourceBox) => Promise<HTMLCanvasElement>;
   renderPage: (s: Sheet) => Promise<HTMLCanvasElement>;
   onClose: () => void;
   onOpenTakeoff?: (sheet: Sheet) => void;
 }) {
   const [url, setUrl] = useState(""),
     [error, setError] = useState(""),
-    [zoom, setZoom] = useState(1);
+    [ratio, setRatio] = useState(1),
+    [zoom, setZoom] = useState(1),
+    [detail, setDetail] = useState(!!box && !!renderDetail);
+  useEffect(() => { setDetail(!!box && !!renderDetail); setZoom(1); }, [sheet, box, renderDetail]);
   useEffect(() => {
     let gone = false;
     setUrl("");
     setError("");
-    renderPage(sheet)
+    (detail && box && renderDetail ? renderDetail(sheet, box) : renderPage(sheet))
       .then((c) => {
-        if (!gone) setUrl(c.toDataURL());
+        if (!gone) { setRatio(c.width / c.height); setUrl(c.toDataURL()); }
       })
       .catch((e) => {
         if (!gone) setError(String(e));
@@ -29,7 +37,7 @@ export function SourceViewer({
     return () => {
       gone = true;
     };
-  }, [sheet, renderPage]);
+  }, [sheet, renderPage, renderDetail, box, detail]);
   const dialog = useDialogKeys(onClose);
   return (
     <div
@@ -43,9 +51,12 @@ export function SourceViewer({
         <div>
           <b>{sheet.name}</b>
           <span>
-            {sheet.title} · page {sheet.page}
+            {sheet.title} · page {sheet.page}{detail ? " · evidence detail with context" : ""}
           </span>
         </div>
+        {box && renderDetail && <button onClick={() => { setDetail(!detail); setZoom(1); }}>
+          {detail ? "Show whole page" : "Focus evidence"}
+        </button>}
         <button
           onClick={() => setZoom((z) => Math.max(0.5, z / 1.25))}
           aria-label="Zoom source out"
@@ -71,9 +82,9 @@ export function SourceViewer({
       <div className="ex-source-scroll">
         {url ? (
           <img
-            style={{ width: `${zoom * 100}%`, maxWidth: "none" }}
+            style={{ width: detail ? `${zoom * Math.min(window.innerWidth - 80, (window.innerHeight - 180) * ratio)}px` : `${zoom * 100}%`, maxWidth: "none" }}
             src={url}
-            alt={`${sheet.name} original document page ${sheet.page}`}
+            alt={`${sheet.name} original document page ${sheet.page}${detail ? " evidence detail" : ""}`}
           />
         ) : (
           <p role={error ? "alert" : "status"}>
