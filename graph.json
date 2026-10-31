@@ -727,7 +727,7 @@
       "notes": "Step 1 done @f42d95c. Step 2 WIP on claude/t36-roof-systems-wip: assembly legend parses (R2 purlins 175x342 GLULAM @1200, R3 joists 2x8 @400, R1 deck), but the dashed-zone flood gives R1 and R2 the same rings (577 and 127 m2) vs gpt-explore's R2 ring of about 774 m2. Not shipped. Needs a zone method that separates systems (outline style per tag) or user-drawn areas."
     },
     {
-      "status": "todo",
+      "status": "done",
       "depends": [],
       "accept": [
         "tsc",
@@ -742,8 +742,9 @@
       "prompt": "In src/fill/sheetWalls wall-tag association, when a tag has a leader, seed the run at the leader end on the wall it touches and trace that wall, not the leader. Verify on Kelso S1.0 FW-4 and that the Frederick wall takeoffs do not regress.",
       "added": "2026-10-31T00:12:09.934Z",
       "by": "claude",
-      "notes": "Root cause: the FW-4 tag (box 1976.9-2008.3 x 869.5-880.4, 0.84 pen) has its real leader 0.84 (2008.3,875)->(2043,875) leaving MID-SIDE into the ICF panel. Tag detection instead took a 0.6-pen loop/leader from the 6/S1.1 section-cut break symbol (2011-2015) and cut line (2019.5->2191.8, y 880.9). Fix: in tags.ts prefer the symbol loop whose box tightly encloses the text and whose pen matches a leader leaving its side (fromEdge), and reject leaders that continue as long section-cut lines. Core tracer, so verify against the Frederick wall audit. Not started; a continuation-only attempt was reverted.",
-      "updated": "2026-10-31T00:20:08.941Z"
+      "notes": "52b7a72: tight tag box with mid-side tick beats a section bubble loop drawn over it. Only FW-4 moves across 5,666 Kelso+Frederick tags; Kelso S1.0 FW-4 2.59 m ICF panel at x 2043 + SF-2 added (2113->2115), saved measurements identical, audit pins unchanged.",
+      "updated": "2026-10-31T07:49:32.134Z",
+      "evidence": "claude/integration@52b7a72"
     },
     {
       "status": "blocked",
