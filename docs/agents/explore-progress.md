@@ -1512,3 +1512,9 @@ location. Next: associate actual closed pad/pier outlines and explicit local
 section cuts; retain off-grid exceptions (6 belowB and Dy), never promote a
 nearest-grid candidate to a physical centre. Model51 cache invalidation included.
 T11 incomplete; full harness and live source/2D/3D validation follow.
+Validated9d3b60a:642tests/tsc/build/Kelso+Frederick audit PASS. Live F-1 source
+references open original S2-3;2D/3D notes show scheduled1.8x1.8x0.4m and-1.220m
+datum as evidence, expressly unverified for local applicability; no new pad
+solid. Screenshots dunnville-{plan,source,3d}-v51 inspected,pageerrors empty.
+Sent Claude scoped integration breakdown and closed stale engine-fix request.
+Next work remains physical footprint/section association, not dimensions parsing.
