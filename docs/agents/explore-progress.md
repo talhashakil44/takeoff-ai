@@ -1755,3 +1755,7 @@ surround elevator, candidate selectedorange.3D hides traces; no fabricatedB4
 solid. Proofs inset-trace-*; live browsererrors empty. Click/fullharness follow.
 Next: local B4vertical sourcechain or other structuralelement geometry gaps;
 no automatic adoption of revision conflicts. T11incomplete; no merge/deploy.
+Validated58dbf78:663tests(4skipped),TypeScript,build,Kelso/Frederick audit PASS.
+Live line-click selects another B4record (row1 to4), confirming paper trace hit
+priority; source viewer and3D hiding verified, browsererrors empty. Fourtraces
+are candidates, not physical beams. Sent Claude source/visual/harness evidence.
