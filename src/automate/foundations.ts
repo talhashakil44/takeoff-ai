@@ -39,7 +39,8 @@ export interface FoundationMark {
   schedule: string;
 }
 
-const MARK = /^[A-Z]{1,3}-?\d{1,2}[A-Z]?$/;
+/** A footing mark: F1, SF-2, S/F-5, P3A; or a lettered one the schedule details elsewhere (SF-N, "refer to detail"). */
+const MARK = /^(?:[A-Z]{1,3}|[A-Z]{1,2}\/[A-Z]{1,2})-?(?:\d{1,2}[A-Z]?|N)$/;
 const norm = (s: string) => s.toUpperCase().replace(/[\s.-]/g, '');
 
 /** A length in metres from schedule words: millimetres (1500) on a metric set, feet and inches (4'-6") on an imperial one. */
@@ -71,7 +72,7 @@ const column = (s: Schedule, re: RegExp) => s.columns.findIndex((c) => re.test(c
 /** The foundation marks the structural schedules list: footings, piers, mass footings, foundation walls. */
 export function foundationMarks(schedules: Schedule[], metric: boolean): FoundationMark[] {
   const out: FoundationMark[] = [];
-  for (const s of schedules) {
+  for (let s of schedules) {
     const t = s.title.toUpperCase();
     const which: FoundationKind | 'footing' | null = /MASS\s+FOOTING/.test(t)
       ? 'mass'
@@ -83,6 +84,9 @@ export function foundationMarks(schedules: Schedule[], metric: boolean): Foundat
             ? 'wall'
             : null;
     if (!which) continue;
+    // Headings read as the first row (no heading band above the rows): "PIER TAG | PIER SIZE | ...".
+    const head = s.columns.every((c) => !c.length) && s.rows[0]?.cells.length && s.rows[0].cells.every((c) => !/\d/.test(c)) ? s.rows[0] : null;
+    if (head) s = { ...s, columns: head.cells.map((c) => [c]), rows: s.rows.slice(1) };
     const size = column(s, /\bSIZE\b|DIMENSION/i);
     const depth = column(s, /DEPTH|THICK/i);
     const type = column(s, /\bTYPE\b/i);
@@ -94,10 +98,18 @@ export function foundationMarks(schedules: Schedule[], metric: boolean): Foundat
       let kind: FoundationKind;
       if (which === 'footing') {
         const ty = cell(type).toUpperCase();
-        kind = /^S|STRIP|CONT/.test(ty) ? 'strip' : /^P|PAD|SPREAD|ISOL/.test(ty) ? 'pad' : /^SF/.test(norm(mark)) ? 'strip' : 'pad';
+        kind = /^S|STRIP|CONT/.test(ty) ? 'strip' : /^P|PAD|SPREAD|ISOL/.test(ty) ? 'pad' : /^S\/?F/.test(norm(mark)) || /\bCONT/i.test(cell(size)) ? 'strip' : 'pad';
       } else kind = which;
       const sz = sizesOf(cell(size), metric);
-      const d = cell(depth) ? sizesOf(cell(depth), metric)[0] : undefined;
+      // Depth in its own column, or the last of a footing's sizes ("W x Lg x THK": 1800 x 1800 x 400; a
+      // strip's "W x THK x CONTINUOUS": 600 x 300).
+      const d = cell(depth)
+        ? sizesOf(cell(depth), metric)[0]
+        : (kind === 'pad' || kind === 'mass') && sz.length === 3
+          ? sz[2]
+          : kind === 'strip' && sz.length === 2
+            ? sz[1]
+            : undefined;
       // A wall's thickness: its type column ("200 CONCRETE", "458 ICF (300 CONCRETE)": the concrete).
       const wallWords = kind === 'wall' ? cell(column(s, /WALL\s*TYPE|THICK/i)) || r.cells[1] || '' : '';
       const wallThick = kind === 'wall' ? (sizesOf(/\((\d+)\s*CONCRETE\)/i.exec(wallWords)?.[1] ?? wallWords, metric)[0] ?? undefined) : undefined;
