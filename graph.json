@@ -778,7 +778,9 @@
       "title": "Columns tagged on several plans or views (Kelso C1: S2.0 32, S2.1 55, 19 coincident) may be counted twice; count once per registered grid location unless elevations show separate storeys",
       "prompt": "Register views (sheetViews and grids) so C1 tags on S2.0 main floor framing, the S2.1 high roof and the S2.1 low roof views map to building grid points. Use S3.x framing elevations to see whether C1 runs through the second floor. Propose a review flag first, not silent dedupe.",
       "added": "2026-10-31T05:09:53.148Z",
-      "by": "claude"
+      "by": "claude",
+      "notes": "From gpt-explore v38 evidence (docs/agents/evidence/column-plan-review-v38.json): 86 C1 records cluster into 45 registered column locations (<5 cm). 23 are floor+roof, 9 floor+roof+roof, 13 roof only. The 9 roof+roof pairs are the same column tagged in both the S2.1 low-roof and high-roof views: a likely double count of 9. The 32 floor/roof pairs need the S3.x elevations to tell stacked storeys from one continuous column. Engine plan: flag, not dedupe, until the user agrees.",
+      "updated": "2026-10-31T05:42:08.258Z"
     }
   ]
 }
