@@ -17,3 +17,10 @@ it('withdraws stale foundation candidates when source evidence is unavailable',a
  const out=retainFoundationPlanEvidence({sheets:[],measurements:[],specs:[]} as any,{elements:[e]} as any,{},{}).elements[0];
  expect(out.planFootprint).toBeUndefined();expect(out.sources).toEqual([]);expect(out.quantity).toBe(1);
 });
+it('retains an eccentric pier inside a drawn pad without centering it on the pad',async()=>{
+ const {pierInsidePad}=await import('../src/build/foundationPlanEvidence');
+ const pad={x0:100,y0:200,x1:175,y1:275};
+ expect(pierInsidePad(rect(110,220,25,25),pad,.02,.5,.5)?.x0).toBe(110);
+ expect(pierInsidePad([...rect(110,220,25,25),...rect(140,220,25,25)],pad,.02,.5,.5)).toBeNull();
+ expect(pierInsidePad(rect(95,220,25,25),pad,.02,.5,.5)).toBeNull();
+});

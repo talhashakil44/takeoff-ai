@@ -1545,3 +1545,23 @@ Validated50534e4:647tests/tsc/build/Kelso+Frederick audit PASS. Final live UI la
 empty. OriginalPDF outline overlay and live2D/3D proofs inspected; only three
 2D witnesses added, zero physical shape/quantity deltas. Sent Claude source
 boxes and request for independent local section-cut applicability review.
+
+## 2026-10-31 16:08 UTC — nested pier footprint candidates (model53)
+Claude approved52; independent search found no local cut through interior2-4/B.
+Inspected S3-1 P-2 detail originalPDF: explicit500mm pier,1500x350F-2 pad, vertical
+break in pier. It supports typical assembly dimensions, not actual pier height
+or local top datum. No physical extrusion from global-1220 or typical detail.
+Extended plan-only witness gate to pier marks. Direct small-outline search was
+insufficient; retained same distance gate. Added separate source chain: exact
+P tag position, single glyph-aligned F tag directly below, independently matched
+closed pad, unique scheduled-size pier outline strictly inside it. No use of
+nearest grid or forcing centre on pad. Ambiguous parents/inner outlines withheld.
+Synthetic eccentric-pier test proves drawn offset retained, multiple/partly
+outside outlines rejected. Existing stale evidence withdrawal applies.
+Dunnville adds3P-2 500x500mm footprints within existing3F-2 footprints at2/B,3/B,
+4/B. Original overlay dunnville-pier-outlines-v53.png inspected against printed
+500/1500 dimensions. Physicalshapes and quantities unchanged;118records/9solids/
+109unresolved remain. Six plan candidates are not six physical solids. Full
+source project unchanged. Next: local elevation evidence for interior assembly;
+continue independent exterior/compound footprints if no applicable elevation.
+T11 incomplete; no main merge/deploy. Full harness/live validation follows.
