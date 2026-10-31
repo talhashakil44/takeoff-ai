@@ -1,5 +1,7 @@
 import type { PDFPageProxy } from './pdf';
 import type { OcrWord } from './ocrText';
+import { mosaicLayout, tagBoxes, withTagWords, wordsFromMosaic, type Box } from './ocrTags';
+import { segmentsOf } from './fill/sheetWalls';
 
 /**
  * Reading a title block that has no text layer (the words drawn as linework, or a scan): the
@@ -196,5 +198,44 @@ export async function pageOcr(page: PDFPageProxy): Promise<OcrWord[]> {
     if (!words.some((o) => o.x0 < word.x1 && word.x0 < o.x1 && o.y0 < word.y1 && word.y0 < o.y1)) words.push(word);
   }
   turned.width = turned.height = 0;
-  return words;
+  // Tags in their symbols, read off a mosaic of the symbols at high resolution (src/ocrTags.ts).
+  const boxes = tagBoxes(await segmentsOf(page)).slice(0, 2500);
+  return boxes.length ? withTagWords(words, await mosaicWords(page, w, boxes), boxes) : words;
+}
+
+/** Symbols are cut out at this resolution, from the sheet rendered a strip at a time. */
+const TAG_DPI = 360;
+const STRIP = 600;
+
+async function mosaicWords(page: PDFPageProxy, w: Worker, boxes: Box[]): Promise<OcrWord[]> {
+  const k = TAG_DPI / 72;
+  const layout = mosaicLayout(boxes, k, Math.round(4 * k), 3000);
+  const mosaic = document.createElement('canvas');
+  mosaic.width = layout.width;
+  mosaic.height = layout.height;
+  const out = mosaic.getContext('2d')!;
+  out.fillStyle = '#ffffff';
+  out.fillRect(0, 0, mosaic.width, mosaic.height);
+  const { width, height } = page.getViewport({ scale: 1 });
+  const strip = document.createElement('canvas');
+  const band = Math.round(0.9 * k);
+  for (let y0 = 0; y0 < height; y0 += STRIP)
+    for (let x0 = 0; x0 < width; x0 += STRIP) {
+      // The symbols whose top-left corner is in this strip, each cut out whole (strips overlap by a symbol's size).
+      const here = layout.tiles.filter((t) => t.box[0] >= x0 && t.box[0] < x0 + STRIP && t.box[1] >= y0 && t.box[1] < y0 + STRIP);
+      if (!here.length) continue;
+      const [x1, y1] = [Math.min(width, x0 + STRIP + 100), Math.min(height, y0 + STRIP + 60)];
+      strip.width = Math.ceil((x1 - x0) * k);
+      strip.height = Math.ceil((y1 - y0) * k);
+      await page.render({ canvas: strip, viewport: page.getViewport({ scale: k }), transform: [1, 0, 0, 1, -x0 * k, -y0 * k], background: '#ffffff' }).promise;
+      for (const t of here) {
+        const [sx, sy] = [Math.round((t.box[0] - x0) * k), Math.round((t.box[1] - y0) * k)];
+        // Inside the outline only: the outline whited out.
+        out.drawImage(strip, sx + band, sy + band, t.w - 2 * band, t.h - 2 * band, t.x + band, t.y + band, t.w - 2 * band, t.h - 2 * band);
+      }
+    }
+  strip.width = strip.height = 0;
+  const read = wordsOfRecognized((await w.recognize(mosaic, {}, { blocks: true })).data, 1);
+  mosaic.width = mosaic.height = 0;
+  return wordsFromMosaic(read, layout.tiles, k);
 }
