@@ -1,3 +1,4 @@
+import {hasLocalRoofCantilever} from './roofCantileverMark';
 import type { Project, Pt } from '../model';
 import type { BuildModel, SourceRef } from './types';
 import { gridAxes, matchGridAxes, type DrawingTexts } from './building';
@@ -14,8 +15,9 @@ export interface RoofViewportRegistration {
 /** Recover placement for an uncalibrated multi-scale roof sheet from each named
  * viewport's printed scale AND independently matching architectural grids.
  * Never changes sheet calibration, quantities, or the source project. A frame
- * applies only inside its supporting grid envelope; details/canopies outside it
- * remain unresolved, and overlapping candidate frames are rejected. */
+ * applies inside its supporting grid envelope, with a local CANT-noted span
+ * allowed one free end outside it. Details/canopies and ambiguous frames remain
+ * unresolved; this association alone never qualifies physical geometry. */
 export function roofViewportRegistrations(
   project: Project,
   model: BuildModel,
@@ -209,6 +211,12 @@ export function roofViewportRegistrations(
             x <= c.bounds[2] &&
             y >= c.bounds[1] &&
             y <= c.bounds[3],
+        ) || (
+          /^HIGH ROOF/.test(c.title) && measurement.points.length===2 &&
+          Math.abs(measurement.points[0][1]-measurement.points[1][1])<.3 &&
+          measurement.points.every(([,y])=>y>=c.bounds[1]&&y<=c.bounds[3]) &&
+          measurement.points.some(([x])=>x>=c.bounds[0]&&x<=c.bounds[2]) &&
+          hasLocalRoofCantilever(measurement.points,measurement.label??'',texts[sheet.id]??[])
         ),
       );
       if (hits.length === 1) output[measurement.id] = hits[0];

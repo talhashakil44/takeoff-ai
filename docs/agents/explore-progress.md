@@ -1299,3 +1299,20 @@ original-PDF section crop and selected3D inspected; UI shows8.45m drawn span,
 10.428m top, retained4.47m takeoff separately. No page errors. Evidence updated.
 No acceptance claim for remaining D8/B1-2 or foundation gaps; requesting Claude
 review of new fallback and actual one-member delta.
+
+## 2026-10-31 11:38 UTC — longer engine cantilever lines retain registration
+Claude approved model44, then engine6883eb0 refreshed structure IDs and B2 lengths.
+Observed concrete regression:8/10B2 shapes became null because free ends exceeded
+viewport grid bounds and bearing lookup expected both measured ends at supports.
+Model45 fixes association only for locally beam+CANT-noted horizontal highroof
+spans: both ends in same viewport row, at least one within grid envelope. No global
+bounds widening. Bearing recovery then requires exactly2 closed scheduled supports
+inside span and exactly1 measured end near a support; each bay still needs beam
+mark. Actual free-end geometry remains separately source-qualified. All10B2 now
+runs again; B1-2 extension held. Current project and accepted tuples unchanged by
+production loader. Source engine changes are not Explore quantity edits.
+Targeted12tests PASS including missing note,wrongmark,outsideviewport,missingface,
+and both ends unsupported. Evidence docs/agents/evidence/cantilever-registration-v45.json.
+Confirmed refreshed audit first pin actually09-01; sync approved09-01/09-21 pins.
+OuterMF3 source crop still has no own local datum; deferred to fix this regression.
+Full harness and focused originalPDF/2D/3D follow. T11 incomplete; no merge/deploy.

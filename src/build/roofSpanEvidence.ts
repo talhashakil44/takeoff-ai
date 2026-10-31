@@ -1,3 +1,4 @@
+import {hasLocalRoofCantilever} from './roofCantileverMark';
 import type { Pt } from '../model';
 import type { DrawingTexts } from './building';
 import type { DrawingLines } from './roof';
@@ -206,6 +207,12 @@ export function recoverRoofBeamSpan(
           (a, b) => Math.abs(a[axis] - p[axis]) - Math.abs(b[axis] - p[axis]),
         )[0],
   );
+  if ((!ends[0] || !ends[1]) && hasLocalRoofCantilever(points,code,ts)) {
+    // A free-end measurement has no bearing at one end. Recover exactly two
+    // closed supports inside its extent; do not invent a support at the tip.
+    const inside=near.filter(p=>p[axis]>=Math.min(points[0][axis],points[1][axis])-.5 && p[axis]<=Math.max(points[0][axis],points[1][axis])+.5).sort((a,b)=>a[axis]-b[axis]);
+    if(inside.length===2 && ends.filter(Boolean).length===1){ends[0]=inside[0];ends[1]=inside[1];}
+  }
   if (!ends[0] || !ends[1] || ends[0] === ends[1]) return null;
   const ordered = near
     .filter(

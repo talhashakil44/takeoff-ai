@@ -150,3 +150,11 @@ it('does not register canopy tags from only a single letter and number grid', ()
   ];
   expect(roofViewportRegistrations(f.project, f.model, f.texts)).toEqual({});
 });
+it('registers a locally CANT-noted free end without expanding other viewport bounds',()=>{
+ const f=fixture(),m=f.project.measurements[1];m.points=[[0,500],[500,500]];m.label='B2';
+ f.texts.s.push({str:'B2',cx:400,cy:490},{str:'(CANT.)',cx:400,cy:510});
+ expect(roofViewportRegistrations(f.project,f.model,f.texts)[m.id]).toBeTruthy();
+ f.texts.s.pop();expect(roofViewportRegistrations(f.project,f.model,f.texts)[m.id]).toBeUndefined();
+ f.texts.s.push({str:'(CANT.)',cx:400,cy:510});m.points=[[-200,500],[0,500]];
+ expect(roofViewportRegistrations(f.project,f.model,f.texts)[m.id]).toBeUndefined();
+});

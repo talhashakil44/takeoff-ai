@@ -131,3 +131,11 @@ it('does not bridge missing ink in a striped column side', () => {
     ),
   ).toBeNull();
 });
+it('recovers two real bearings inside a locally CANT-noted line with one free end',()=>{
+ const f=fixture();f.texts.push({str:'(CANT.)',cx:200,cy:110});
+ const run=(points:any,ls=f.lines,ts=f.texts)=>recoverRoofBeamSpan(points,'B1',f.r,ts,ls,f.sec);
+ expect(run([[-100,100],[300,100]])).toEqual([[100,100],[300,100]]);
+ expect(run([[-100,100],[500,100]])).toBeNull();
+ expect(run([[-100,100],[300,100]],f.lines,f.texts.filter((t:any)=>t.str!=='(CANT.)'))).toBeNull();
+ expect(run([[-100,100],[300,100]],f.lines.slice(0,-1))).toBeNull();
+});

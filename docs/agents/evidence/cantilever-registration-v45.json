@@ -1,0 +1,365 @@
+{
+  "modelVersion": 45,
+  "engineCommit": "6883eb0",
+  "b2": [
+    {
+      "id": "46ef2cf8-1451-410a-8c49-c480b002ebd2",
+      "quantity": 4.610100000000002,
+      "unit": "m",
+      "shape": {
+        "type": "run",
+        "points": [
+          [
+            -19.72640381700311,
+            14.315634913699359
+          ],
+          [
+            -19.726403817003114,
+            5.859551580366023
+          ]
+        ],
+        "z0": 7.96,
+        "height": 0.608,
+        "thickness": 0.265,
+        "topPlane": [
+          0,
+          0,
+          8.568
+        ],
+        "bottomPlane": [
+          0,
+          0,
+          7.96
+        ]
+      },
+      "issues": [
+        "No spec section found for B2 \u2013 Beam 265 x 608 GLULAM 24f-EX.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation grids or an explicit plan cut inside the bearing bay. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "d85aa6c8-0b0f-49e1-969d-ad1581e8bde8",
+      "quantity": 8.621183333333336,
+      "unit": "m",
+      "shape": {
+        "type": "run",
+        "points": [
+          [
+            -16.007420483669783,
+            10.097118247032693
+          ],
+          [
+            -16.007420483669783,
+            5.859551580366023
+          ]
+        ],
+        "z0": 8.42615002425817,
+        "height": 0.608,
+        "thickness": 0.265,
+        "topPlane": [
+          0.1249993904390538,
+          0,
+          11.035067827218517
+        ],
+        "bottomPlane": [
+          0.1249993904390538,
+          0,
+          10.427067827218517
+        ]
+      },
+      "issues": [
+        "No spec section found for B2 \u2013 Beam 265 x 608 GLULAM 24f-EX.",
+        "Roof framing detail: cantilever callout applies near this member. Current support-to-support envelope does not establish free-end extensions or continuous-member connections.",
+        "Physical high-roof beam: viewport scale and 14 matching grids; drawn bearing centres associated with the measured span and schedule section; top tied to structural beam datums. Connections and bearings remain unmodelled. Source quantity is unchanged.",
+        "Roof cantilever elevation unresolved: B2 at row B, grids 1\u20132, has a drawn free end but no unique matching section/profile level. Extension withheld; the current support-to-support beam does not represent the full cantilever. Conflicting elevation titles or unmatched grid bubbles are not accepted as proof."
+      ]
+    },
+    {
+      "id": "90033a87-37fa-4b66-bd55-53d4b73f7832",
+      "quantity": 8.621183333333336,
+      "unit": "m",
+      "shape": {
+        "type": "run",
+        "points": [
+          [
+            -12.290553817003115,
+            14.315634913699355
+          ],
+          [
+            -12.290553817003115,
+            5.859551580366023
+          ]
+        ],
+        "z0": 8.890756091934742,
+        "height": 0.608,
+        "thickness": 0.265,
+        "topPlane": [
+          0,
+          0,
+          9.498756091934743
+        ],
+        "bottomPlane": [
+          0,
+          0,
+          8.890756091934742
+        ]
+      },
+      "issues": [
+        "No spec section found for B2 \u2013 Beam 265 x 608 GLULAM 24f-EX.",
+        "Roof cantilever source discrepancy: elevation title names grid A with lettered range C\u2013E; plan reference 6/S3.0 and adjacent low-girt grid-1 note establish this frame location. Title discrepancy remains unresolved; geometry association is inferred from those explicit plan references.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame association is inferred from the explicit plan reference and adjacent named girt; the conflicting elevation title remains unresolved. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "53cacba1-1258-42b9-8f54-bae26f2c4e41",
+      "quantity": 8.621183333333336,
+      "unit": "m",
+      "shape": {
+        "type": "run",
+        "points": [
+          [
+            -8.571570483669788,
+            14.315634913699355
+          ],
+          [
+            -8.571570483669788,
+            5.859551580366023
+          ]
+        ],
+        "z0": 9.355626741654408,
+        "height": 0.608,
+        "thickness": 0.265,
+        "topPlane": [
+          0,
+          0,
+          9.963626741654409
+        ],
+        "bottomPlane": [
+          0,
+          0,
+          9.355626741654408
+        ]
+      },
+      "issues": [
+        "No spec section found for B2 \u2013 Beam 265 x 608 GLULAM 24f-EX.",
+        "Roof cantilever source discrepancy: elevation title names grid A with lettered range C\u2013E; plan reference 6/S3.0 and adjacent low-girt grid-1 note establish this frame location. Title discrepancy remains unresolved; geometry association is inferred from those explicit plan references.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame association is inferred from the explicit plan reference and adjacent named girt; the conflicting elevation title remains unresolved. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "ee47b675-3b35-4024-9b81-981904c3e372",
+      "quantity": 8.621183333333336,
+      "unit": "m",
+      "shape": {
+        "type": "run",
+        "points": [
+          [
+            -4.854703817003113,
+            14.315634913699355
+          ],
+          [
+            -4.854703817003113,
+            5.859551580366023
+          ]
+        ],
+        "z0": 9.82023280933098,
+        "height": 0.608,
+        "thickness": 0.265,
+        "topPlane": [
+          0,
+          0,
+          10.42823280933098
+        ],
+        "bottomPlane": [
+          0,
+          0,
+          9.82023280933098
+        ]
+      },
+      "issues": [
+        "No spec section found for B2 \u2013 Beam 265 x 608 GLULAM 24f-EX.",
+        "Roof cantilever source discrepancy: elevation title names grid A with lettered range C\u2013E; plan reference 6/S3.0 and adjacent low-girt grid-1 note establish this frame location. Title discrepancy remains unresolved; geometry association is inferred from those explicit plan references.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame association is inferred from the explicit plan reference and adjacent named girt; the conflicting elevation title remains unresolved. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "85a1e98c-cf37-415a-a717-8db7fb64b91b",
+      "quantity": 8.619066666666663,
+      "unit": "m",
+      "shape": {
+        "type": "run",
+        "points": [
+          [
+            -16.00742048366979,
+            -25.91796508630064
+          ],
+          [
+            -16.00742048366979,
+            -34.3719317529673
+          ]
+        ],
+        "z0": 8.42615002425817,
+        "height": 0.608,
+        "thickness": 0.265,
+        "topPlane": [
+          0,
+          0,
+          9.034150024258171
+        ],
+        "bottomPlane": [
+          0,
+          0,
+          8.42615002425817
+        ]
+      },
+      "issues": [
+        "No spec section found for B2 \u2013 Beam 265 x 608 GLULAM 24f-EX.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation grids or an explicit plan cut inside the bearing bay. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "3fc39289-255b-433c-b56e-eab4fc02cd45",
+      "quantity": 5.092699999999996,
+      "unit": "m",
+      "shape": {
+        "type": "run",
+        "points": [
+          [
+            -19.726403817003117,
+            -25.91796508630064
+          ],
+          [
+            -19.72640381700312,
+            -34.3719317529673
+          ]
+        ],
+        "z0": 7.96,
+        "height": 0.608,
+        "thickness": 0.265,
+        "topPlane": [
+          0,
+          0,
+          8.568
+        ],
+        "bottomPlane": [
+          0,
+          0,
+          7.96
+        ]
+      },
+      "issues": [
+        "No spec section found for B2 \u2013 Beam 265 x 608 GLULAM 24f-EX.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation grids or an explicit plan cut inside the bearing bay. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "4a3a3bc8-0248-4b28-9146-a6f26bcdec30",
+      "quantity": 8.619066666666663,
+      "unit": "m",
+      "shape": {
+        "type": "run",
+        "points": [
+          [
+            -4.85470381700312,
+            -25.917965086300654
+          ],
+          [
+            -4.85470381700312,
+            -34.37193175296731
+          ]
+        ],
+        "z0": 9.82023280933098,
+        "height": 0.608,
+        "thickness": 0.265,
+        "topPlane": [
+          0,
+          0,
+          10.42823280933098
+        ],
+        "bottomPlane": [
+          0,
+          0,
+          9.82023280933098
+        ]
+      },
+      "issues": [
+        "No spec section found for B2 \u2013 Beam 265 x 608 GLULAM 24f-EX.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation grids or an explicit plan cut inside the bearing bay. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "72bed49f-b494-4fef-b79f-4d8cba54eeb7",
+      "quantity": 8.619066666666663,
+      "unit": "m",
+      "shape": {
+        "type": "run",
+        "points": [
+          [
+            -8.571570483669788,
+            -25.917965086300654
+          ],
+          [
+            -8.571570483669788,
+            -34.37193175296731
+          ]
+        ],
+        "z0": 9.355626741654408,
+        "height": 0.608,
+        "thickness": 0.265,
+        "topPlane": [
+          0,
+          0,
+          9.963626741654409
+        ],
+        "bottomPlane": [
+          0,
+          0,
+          9.355626741654408
+        ]
+      },
+      "issues": [
+        "No spec section found for B2 \u2013 Beam 265 x 608 GLULAM 24f-EX.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation grids or an explicit plan cut inside the bearing bay. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "a855ef2b-bb44-4a0a-8d90-5a6012add5d6",
+      "quantity": 8.619066666666663,
+      "unit": "m",
+      "shape": {
+        "type": "run",
+        "points": [
+          [
+            -12.290553817003122,
+            -25.91796508630064
+          ],
+          [
+            -12.290553817003122,
+            -34.3719317529673
+          ]
+        ],
+        "z0": 8.89075609193474,
+        "height": 0.608,
+        "thickness": 0.265,
+        "topPlane": [
+          0,
+          0,
+          9.498756091934741
+        ],
+        "bottomPlane": [
+          0,
+          0,
+          8.89075609193474
+        ]
+      },
+      "issues": [
+        "No spec section found for B2 \u2013 Beam 265 x 608 GLULAM 24f-EX.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation grids or an explicit plan cut inside the bearing bay. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    }
+  ],
+  "before": "8 of10 B2 records null after refreshed longer measured lines;2 retained runs",
+  "after": "10 B2 runs, B1-2 free end still unresolved",
+  "inputProjectUnchanged": true,
+  "acceptedTakeoffTuplesUnchanged": true
+}
