@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -53,7 +53,7 @@ async function tesseract(png: Buffer): Promise<string> {
 export async function cliOcr(path: string): Promise<PageOcr | null> {
   if (process.env.OCR === '0' || !(await haveCommands())) return null;
   const st = statSync(path);
-  const cache = join(process.env.OCR_CACHE ?? join(tmpdir(), 'takeoff-ocr'), createHash('sha1').update(`${path}|${st.size}|${st.mtimeMs}`).digest('hex').slice(0, 16));
+  const cache = join(process.env.OCR_CACHE ?? join(tmpdir(), 'takeoff-ocr'), createHash('sha1').update(`${realpathSync(path)}|${st.size}|${st.mtimeMs}`).digest('hex').slice(0, 16));
   const pageWords = async (n: number): Promise<OcrWord[]> => {
     const file = join(cache, `${n}.json`);
     if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8')) as OcrWord[];
