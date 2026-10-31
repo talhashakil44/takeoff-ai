@@ -744,6 +744,23 @@
       "by": "claude",
       "notes": "Root cause: the FW-4 tag (box 1976.9-2008.3 x 869.5-880.4, 0.84 pen) has its real leader 0.84 (2008.3,875)->(2043,875) leaving MID-SIDE into the ICF panel. Tag detection instead took a 0.6-pen loop/leader from the 6/S1.1 section-cut break symbol (2011-2015) and cut line (2019.5->2191.8, y 880.9). Fix: in tags.ts prefer the symbol loop whose box tightly encloses the text and whose pen matches a leader leaving its side (fromEdge), and reject leaders that continue as long section-cut lines. Core tracer, so verify against the Frederick wall audit. Not started; a continuation-only attempt was reverted.",
       "updated": "2026-10-31T00:20:08.941Z"
+    },
+    {
+      "status": "todo",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T38",
+      "owner": "claude",
+      "stream": "claude",
+      "title": "Kelso Addendum 5 re-issue: engine takeoffs on July S-sheets predate revised S0.2-S6.0 (e.g. vestibule left wall FW5 -> FW1, return walls added). Needs user decision to add Addendum 5 drawings as a revision (app re-issue flow) and re-run foundations/structure on them",
+      "prompt": "Blocked on user: add the Addendum 5 PDF as a drawing file so the re-issue flow registers S0.2-S6.0 (Sep 16 2026) as new sheets; user chooses whether to move takeoffs; then re-run the engine on the revised sheets and diff vs July.",
+      "added": "2026-10-31T02:06:53.598Z",
+      "by": "claude"
     }
   ]
 }
