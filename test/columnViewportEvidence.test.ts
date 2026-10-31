@@ -1,0 +1,25 @@
+import {expect,it} from 'vitest';
+import fs from 'node:fs';
+import {connectSourceColumns} from '../src/build/columnGeometry';
+import {structuralRevisionContext} from '../src/build/structuralRevisions';
+it.runIf(!!process.env.CANOPY_SOURCE_FIXTURE)('uses the matching viewport grid row, never the repeated grid in another viewport',()=>{
+ const data=JSON.parse(fs.readFileSync(process.env.CANOPY_SOURCE_FIXTURE!,'utf8'));
+ const r=structuralRevisionContext(data.project,data.drawingTexts,data.drawingLines);
+ const before=JSON.stringify(data.project),id='0c6f1bf4-';
+ const target=(m:ReturnType<typeof connectSourceColumns>)=>m.elements.find(e=>e.id.startsWith(id))!;
+ const resolved=target(connectSourceColumns(r.project,data.model,r.texts,r.lines));
+ expect(resolved.shape?.type).toBe('point');
+ expect(resolved.sources.some(s=>s.quote?.startsWith('2/S4.0, grids 5/D:'))).toBe(true);
+ const sid=resolved.sheetId,labels=r.texts[sid];
+ const fives=labels.filter(t=>t.str==='5' && Math.abs(t.cx-1460.793)<.1);
+ expect(fives.some(t=>t.cy>600)).toBe(true);
+ expect(fives.some(t=>t.cy<100)).toBe(true);
+ const withoutOwn={...r.texts,[sid]:labels.filter(t=>!(t.str==='5' && Math.abs(t.cx-1460.793)<.1 && t.cy>600))};
+ const missing=target(connectSourceColumns(r.project,data.model,withoutOwn,r.lines));
+ expect(missing.shape).toBeNull();
+ expect(missing.planFootprint).toBeDefined();
+ const withoutOther={...r.texts,[sid]:labels.filter(t=>!(t.str==='5' && Math.abs(t.cx-1460.793)<.1 && t.cy<100))};
+ expect(target(connectSourceColumns(r.project,data.model,withoutOther,r.lines)).shape).toEqual(resolved.shape);
+ expect(resolved.quantity).toBe(target(data.model).quantity);
+ expect(JSON.stringify(data.project)).toBe(before);
+});

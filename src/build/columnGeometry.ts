@@ -292,6 +292,9 @@ export function connectSourceColumns(
           /^\d+$/.test(t.str.trim()) &&
           Math.abs(t.cx - rect.at[0]) < 1 &&
           t.cy < ref.cy &&
+          // Repeated grids in a different roof viewport are not alternative
+          // section identities. Keep the header in this cut's viewport band.
+          t.cy > r.bounds[1] - 150 &&
           pt.filter(
             (v) => /^\d+$/.test(v.str.trim()) && Math.abs(v.cy - t.cy) < 1,
           ).length >= 3,

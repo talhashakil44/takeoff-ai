@@ -1143,3 +1143,38 @@ frozen original drawing fixture still passes unchanged. This is not a new
 physical-geometry regression; record current/baseline comparison with checkpoint.
 Claude reports new standalone strip footing extraction in progress; do not
 silently replace this task's frozen accepted project with the mutable engine data.
+
+## 2026-10-31 08:40 UTC — two additional physical roof posts from viewport fix
+
+Claude approved3d45158. Fetched bus/integration/current prompt. Corrected the
+previous next-action premise: grid2/B already had separate floor/roof posts from
+4/S4.0. Audited unresolved grid5/D in original revised S4.0/Add5p31 instead.
+Closed source faces at x748.68/761.64, y1153.2..1372.8 trace successfully, but
+section association failed before tracing: grid5 exists at cx1460.793 in both
+high-roof(cy678.456) and low-roof(cy81.697) viewports on S2.1. Unscoped lookup
+returned2 and rejected. Restricted header to the same150pt top band already used
+for the referenced viewport/cut. No tolerance widening, nearest-grid guessing or
+cross-viewport borrowing.
+
+Model42 resolves high-roof C1 at5/C,D,E via2/S4.0; existing coincident suppression
+moves the one5/C solid from low-roof record to high-roof record, retaining both
+accepted count records. Net physical solids138→140. C,D,E bases4.149m; tops9.496,
+9.959,10.423m respectively. These are calibrated section-derived positions with
+existing10–20mm quantisation caveat, not fabrication heights. Quantities/units and
+original project exact unchanged. Only4 element shapes change (3resolved,
+1coincident solid suppressed). Evidence docs/agents/evidence/column-viewport-v42.json.
+
+Actual source regression: delete own high-viewport5 header →5/Dsolid withdrawn,
+plan footprint retained; delete other low-viewport5 →same physical shape retained.
+Production frozen-source and current-engine checks pass; no source mutation.
+Live selected roof5/D verified by displayed5.810mheight (initial diagnostic selected
+floor record, corrected before evidence acceptance). Sourceviewer opens upperpost
+on revisedS4.0p31, 2Dfootprint aligns with original plan, settled3D shows newpost at
+4.149..9.959m. Also inspect5/E source/3D. Proof filenames in evidenceJSON; historical
+'withheld-3d' suffix reused by script now shows the resolved post. Full clean
+harness follows. C2 still no heights; no quantity reconciliation or main deploy.
+
+Next: audit unresolved C1 at grid8/D against3/S4.0 with its own viewport header;
+then outerMF3datum/SF2step endpoints. Do not infer members from dashed background
+or transfer roof/post bearing elevations without closed source faces. T11 active,
+incomplete; these two added solids are verified progress, not whole-model acceptance.
