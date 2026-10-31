@@ -258,3 +258,17 @@ it('keeps non-structural element identity when there is no derived plan envelope
  const out=beginPhysicalGeometry(project,{...model,elements:[untouched]});
  expect(out.elements[0]).toBe(untouched);
 });
+
+it('withholds foundation wall extrusion without fresh local vertical evidence, retaining the measured axis and quantity',()=>{
+ const wall={...e,id:'wall',typeName:'FW-1 – Foundation wall, 200 mm',measurementSource:'foundations' as const,
+ shape:{type:'run' as const,points:[[0,0],[7,0]] as [number,number][],z0:-1.2,height:1.2,thickness:.2},issues:[]};
+ const input={...model,elements:[wall]};const before=JSON.stringify(input);
+ const result=endPhysicalGeometry(beginPhysicalGeometry(project,input)).elements[0];
+ expect(result.shape).toEqual({type:'axis',points:[[0,0],[7,0]],z:-1.2});
+ expect(result.quantity).toBe(wall.quantity);
+ expect(result.sources).toEqual(wall.sources);
+ expect(result.issues.some(i=>i.includes('physical solid withheld'))).toBe(true);
+ expect(JSON.stringify(input)).toBe(before);
+ const again=endPhysicalGeometry(beginPhysicalGeometry(project,{...model,elements:[result]})).elements[0];
+ expect(again.shape?.type).toBe('axis');
+});

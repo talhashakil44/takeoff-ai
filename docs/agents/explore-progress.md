@@ -1813,3 +1813,30 @@ records, count and finish attribution checked. Source project unchanged.
 No datasets opened, no sealed access, no geometry placement/accuracy change.
 Next: category table/dev manifest and source-qualified placement adapter for
 that category, then original drawing and live overlay baseline. T11 incomplete.
+
+## 2026-10-31 22:34–23:04 UTC wakes — foundations corpus and unsupported wall solids
+Claude released hold; selected foundations (21 keys/3 dev sets), while Claude
+owns walls/rooms. Initial sandbox path unavailable; Claude delivered run2 JSON
+and keys to gitignored .agents-data/dev-corpus. Dunnville and Williamsburg PDFs
+verified against manifest SHA1 and staged via absolute paths outside originals.
+Brampton Drawings T2024-276.pdf is not at supplied local paths; transfer needed.
+Seneca has later engine output per manifest, not an exact ad6ea51-wide snapshot.
+No sealed input inspected. Existing detailed runner remains dev-only.
+Production run2 baseline: Dunnville 69 foundation records, 9 solids; Williamsburg
+10 foundation records, 0 solids. Found all nine Dunnville solids are foundation
+walls with inferred 1.2m height and no local vertical evidence. Original S1-1
+schedule gives widths, not those heights; Build's generic foundation level/storey
+fallback was escaping the physical evidence gate. Extended the existing gate to
+foundation walls, model60; measured axes and all quantities retained, unsupported
+extrusions withheld. This is general fail-closed behavior, not project tuning.
+Source-to-model comparison: exactly9 run→axis changes, same XY points, zero
+quantity/unit/project deltas. Williamsburg zero shape/quantity/unit/project
+deltas. Original source viewer, live 2D overlay and3D inspected in
+proofs/dunnville-{plan,source,3d}-v60.png; axes labelled unverified, foundation
+solids absent, browsererrors empty. Other architectural solids remain inferred.
+672tests(4skipped) and TypeScript/build PASS; lifecycle regression covers repeat
+passes and quantity/source immutability. No coverage/accuracy gain claimed:
+withholding unsupported geometry is not a numerator increase. Next: Brampton
+PDF transfer, complete 3-set baseline, then local source-qualified foundation
+placement across category. Need Claude review and sealed summary gate before
+accepting a corpus improvement. T11 remains incomplete, no merge/deploy.

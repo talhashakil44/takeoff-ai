@@ -42,7 +42,7 @@ const solid = (shape: ElementShape | null) =>
   !!shape && !['axis', 'locator'].includes(shape.type);
 const footingSeed = (e: BuildElement) =>
   e.measurementSource === 'foundations' &&
-  (/\b(?:footing|pier)\b/i.test(e.typeName) ||
+  (/\b(?:footing|pier|foundation wall)\b/i.test(e.typeName) ||
     /^Slab on grade$/i.test(e.typeName));
 const legacyPhysical = (e: BuildElement) =>
   e.issues.some(derivedIssue) || (e.shape?.type === 'run' && !!e.shape.profile);
