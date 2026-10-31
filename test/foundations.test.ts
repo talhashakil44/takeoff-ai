@@ -135,6 +135,17 @@ describe('beam spans', () => {
     // A lone dash with no column tagged near it is still not a support.
     expect(beamSpan(t, [...beam, ...ticks], 900, [[1475.9, 212.1]])).toEqual([[1085, 216.6], [1460.9, 216.6]]);
   });
+  it('runs on past its last support to the free end when noted as a cantilever (Kelso S2.1 B2 "(CANT.)")', () => {
+    // Tag between the columns at 200 and 300; past 300 the line runs to 400 with no column.
+    const t = { str: 'B2', cx: 44, cy: 250, w: 6, h: 5, angle: -Math.PI / 2 } as PageText;
+    expect(beamSpan(t, segs, 600)).toEqual([[50, 200], [50, 300]]);
+    expect(beamSpan(t, segs, 600, [], true)).toEqual([[50, 200], [50, 400]]);
+    // Free ends both sides: which one cantilevers is not known, the span stays.
+    const two = [line(50, 0, 50, 145), line(50, 155, 50, 245), line(50, 255, 50, 400)];
+    for (const y of [150, 250]) two.push(line(46, y - 5, 54, y - 5, 0.48), line(54, y - 5, 54, y + 5, 0.48), line(54, y + 5, 46, y + 5, 0.48), line(46, y + 5, 46, y - 5, 0.48));
+    const mid = { str: 'B2', cx: 44, cy: 200, w: 6, h: 5, angle: -Math.PI / 2 } as PageText;
+    expect(beamSpan(mid, two, 600, [], true)).toEqual([[50, 150], [50, 250]]);
+  });
 });
 
 describe('strip footings tagged on their own', () => {

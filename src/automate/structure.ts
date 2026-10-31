@@ -107,7 +107,7 @@ export interface StructureResult extends Automation {
  * it) or, failing one, the end of the line (gaps of a column's width bridged). Null when no line
  * runs along the tag.
  */
-export function beamSpan(t: PageText, segs: Segment[], maxSpan: number, columns: Pt[] = []): [Pt, Pt] | null {
+export function beamSpan(t: PageText, segs: Segment[], maxSpan: number, columns: Pt[] = [], cantilever = false): [Pt, Pt] | null {
   const vertical = Math.abs(Math.sin(t.angle ?? 0)) > 0.7;
   const across = (x: number, y: number) => (vertical ? x : y);
   const along = (x: number, y: number) => (vertical ? y : x);
@@ -169,9 +169,27 @@ export function beamSpan(t: PageText, segs: Segment[], maxSpan: number, columns:
     if (j > i || tagged.some((a) => Math.abs(a - mid) <= 25)) supports.push(mid);
     i = j + 1;
   }
-  const before = Math.max(piece[0], ...supports.filter((a) => a < at - 2));
-  const after = Math.min(piece[1], ...supports.filter((a) => a > at + 2));
+  let before = Math.max(piece[0], ...supports.filter((a) => a < at - 2));
+  let after = Math.min(piece[1], ...supports.filter((a) => a > at + 2));
   if (!(after - before >= 10 && after - before <= maxSpan)) return null;
+  // A cantilever (noted "CANT." at its tag): past the support at one end the line runs on to a
+  // free end with no support, and the beam runs out to it (Kelso S2.1 B2: grid 8 to 9, then the
+  // roof cantilever past 9).
+  if (cantilever) {
+    // Free: no support out to the line's end, a crossing right at the end being its edge (the roof
+    // edge drawn across it) or a column; the other side must have a support beyond the span.
+    const column = (a: number) => tagged.some((c) => Math.abs(c - a) <= 25);
+    const openAfter = after < piece[1] - 10 && !supports.some((a) => a > after + 2 && (a < piece[1] - 15 || column(a)));
+    const openBefore = before > piece[0] + 10 && !supports.some((a) => a < before - 2 && (a > piece[0] + 15 || column(a)));
+    const heldAfter = supports.some((a) => a > after + 2);
+    const heldBefore = supports.some((a) => a < before - 2);
+    const freeAfter = openAfter && heldBefore;
+    const freeBefore = openBefore && heldAfter;
+    if (freeAfter !== freeBefore) {
+      if (freeAfter && piece[1] - after <= maxSpan / 2) after = piece[1];
+      if (freeBefore && before - piece[0] <= maxSpan / 2) before = piece[0];
+    }
+  }
   const pt = (a: number): Pt => (vertical ? [best!.off, a] : [a, best!.off]);
   return [pt(before), pt(after)];
 }
@@ -260,7 +278,9 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
           const tag = tags.find((x) => x.cx === pt[0] && x.cy === pt[1]);
           // 20 m at the sheet's scale, or at the scale of the drawing on it the tag is in.
           const mpp = s.metersPerPoint ?? viewScaleAt(s.views, [pt])?.metersPerPoint;
-          const span = tag && segs.length ? beamSpan(tag, segs, mpp ? 20 / mpp : 600, columnsAt) : null;
+          // "(CANT.)" written with the tag: the beam runs on past its last support.
+          const cant = !!tag && texts.some((x) => x !== tag && /^\(?CANT(\.|ILEVER)?\)?$/i.test(x.str.trim().replace(new RegExp(`^${m.mark}\\s*-?\\s*`, 'i'), '')) && Math.abs(x.cy - tag.cy) <= tag.h * 3.5 && Math.abs(x.cx - tag.cx) <= Math.max(tag.w, x.w) * 2);
+          const span = tag && segs.length ? beamSpan(tag, segs, mpp ? 20 / mpp : 600, columnsAt, cant) : null;
           if (!span) unspanned++;
           const beam: Measurement = { id: newId(), sheetId: s.id, typeId: t.id, points: span ?? [pt, pt], holes: [], source: 'structure', label: m.mark };
           tagOf.set(beam, pt);
