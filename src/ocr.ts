@@ -230,8 +230,16 @@ async function mosaicWords(page: PDFPageProxy, w: Worker, boxes: Box[]): Promise
       await page.render({ canvas: strip, viewport: page.getViewport({ scale: k }), transform: [1, 0, 0, 1, -x0 * k, -y0 * k], background: '#ffffff' }).promise;
       for (const t of here) {
         const [sx, sy] = [Math.round((t.box[0] - x0) * k), Math.round((t.box[1] - y0) * k)];
-        // Inside the outline only: the outline whited out.
-        out.drawImage(strip, sx + band, sy + band, t.w - 2 * band, t.h - 2 * band, t.x + band, t.y + band, t.w - 2 * band, t.h - 2 * band);
+        // Inside the outline only: the outline whited out. An upright symbol goes in turned a quarter clockwise.
+        const [bw, bh] = t.turned ? [t.h, t.w] : [t.w, t.h];
+        out.save();
+        out.translate(t.x, t.y);
+        if (t.turned) {
+          out.translate(t.w, 0);
+          out.rotate(Math.PI / 2);
+        }
+        out.drawImage(strip, sx + band, sy + band, bw - 2 * band, bh - 2 * band, band, band, bw - 2 * band, bh - 2 * band);
+        out.restore();
       }
     }
   strip.width = strip.height = 0;

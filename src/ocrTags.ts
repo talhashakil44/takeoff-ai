@@ -22,7 +22,8 @@ export function tagBoxes(segs: Segment[], min = 6, max = 48): Box[] {
     const ys = list.flatMap((s) => [s.y1, s.y2]);
     const b: Box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
     const [w, h] = [b[2] - b[0], b[3] - b[1]];
-    if (w < min || h < min * 0.5 || w > max * 2 || h > max || w / h > 6 || h / w > 3) continue;
+    // Level or upright (a tag written up the sheet beside a vertical wall).
+    if (Math.min(w, h) < min * 0.5 || Math.max(w, h) < min || Math.max(w, h) > max * 2 || Math.min(w, h) > max || w / h > 6 || h / w > 6) continue;
     // Closed: it ends where it starts.
     const first = list[0]!;
     const last = list[list.length - 1]!;
@@ -40,6 +41,8 @@ export function tagBoxes(segs: Segment[], min = 6, max = 48): Box[] {
 /** Where each shape's cut-out goes in the mosaic, in its pixels. */
 export interface Tile {
   box: Box;
+  /** An upright symbol, laid in turned a quarter clockwise so its text reads level. */
+  turned?: boolean;
   /** Top-left of the tile in the mosaic, and its size. */
   x: number;
   y: number;
@@ -55,14 +58,15 @@ export function mosaicLayout(boxes: Box[], k: number, gap: number, width: number
   let row = 0;
   let wide = 0;
   for (const box of boxes) {
-    const w = Math.ceil((box[2] - box[0]) * k);
-    const h = Math.ceil((box[3] - box[1]) * k);
+    const turned = box[3] - box[1] > (box[2] - box[0]) * 1.5;
+    const [bw, bh] = [Math.ceil((box[2] - box[0]) * k), Math.ceil((box[3] - box[1]) * k)];
+    const [w, h] = turned ? [bh, bw] : [bw, bh];
     if (x + w + gap > width && x > gap) {
       x = gap;
       y += row + gap;
       row = 0;
     }
-    tiles.push({ box, x, y, w, h });
+    tiles.push({ box, x, y, w, h, ...(turned ? { turned } : {}) });
     x += w + gap;
     row = Math.max(row, h);
     wide = Math.max(wide, x);
@@ -78,6 +82,13 @@ export function wordsFromMosaic(words: { text: string; conf: number; x0: number;
     const i = tiles.findIndex((t) => cx >= t.x && cx <= t.x + t.w && cy >= t.y && cy <= t.y + t.h);
     if (i < 0) continue;
     const t = tiles[i]!;
+    if (t.turned) {
+      // Turned clockwise: (u, v) in the tile is (v, H − u) in the symbol, H its height in pixels.
+      const H = t.w;
+      const [u0, u1, v0, v1] = [w.x0 - t.x, w.x1 - t.x, w.y0 - t.y, w.y1 - t.y];
+      out.push({ text: w.text, conf: w.conf, x0: t.box[0] + v0 / k, x1: t.box[0] + v1 / k, y0: t.box[1] + (H - u1) / k, y1: t.box[1] + (H - u0) / k, line: `tag${i}`, rot: 90 });
+      continue;
+    }
     const at = (px: number, py: number): [number, number] => [t.box[0] + (px - t.x) / k, t.box[1] + (py - t.y) / k];
     const [x0, y0] = at(w.x0, w.y0);
     const [x1, y1] = at(w.x1, w.y1);

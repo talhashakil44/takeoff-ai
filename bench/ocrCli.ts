@@ -75,7 +75,8 @@ export async function cliOcr(path: string): Promise<PageOcr | null> {
   };
   // Tags in their symbols, read off a mosaic of the symbols cut out at high resolution (src/ocrTags.ts).
   const tagWords = async (n: number, boxes: Box[]): Promise<OcrWord[]> => {
-    const file = join(cache, `${n}.tags.json`);
+    // Keyed by the symbols cut out, so a change in which shapes count reads them again.
+    const file = join(cache, `${n}.tags-${createHash('sha1').update(JSON.stringify(boxes.map((b) => b.map((v) => Math.round(v))))).digest('hex').slice(0, 10)}.json`);
     if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8')) as OcrWord[];
     let out: OcrWord[] = [];
     if (boxes.length) {
@@ -89,7 +90,8 @@ export async function cliOcr(path: string): Promise<PageOcr | null> {
         const [sx, sy] = [Math.round(t.box[0] * k), Math.round(t.box[1] * k)];
         for (let y = band; y < t.h - band; y++)
           for (let x = band; x < t.w - band; x++) {
-            const [px, py] = [sx + x, sy + y];
+            // A turned tile's (x, y) is the symbol's (y, H − x), H its height in pixels (= the tile's width).
+            const [px, py] = t.turned ? [sx + y, sy + t.w - 1 - x] : [sx + x, sy + y];
             if (px < 0 || py < 0 || px >= info.width || py >= info.height) continue;
             mosaic[(t.y + y) * layout.width + t.x + x] = page[py * info.width * info.channels + px * info.channels]!;
           }

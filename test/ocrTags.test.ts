@@ -29,3 +29,14 @@ describe('tags read in their symbols', () => {
     expect(withTagWords(page, [w!], boxes).map((x) => x.text)).toEqual(['WT-2']);
   });
 });
+
+describe('upright tags', () => {
+  it('lays an upright symbol in turned and puts its word back reading up the sheet', () => {
+    const box: [number, number, number, number] = [200, 300, 210, 340];
+    const { tiles } = mosaicLayout([box], 5, 20, 3000);
+    expect(tiles[0]).toMatchObject({ turned: true, w: 200, h: 50 });
+    // Read level in the turned tile: u 20–180 along, v 10–40 across.
+    const [w] = wordsFromMosaic([{ text: 'WT-4', conf: 90, x0: tiles[0]!.x + 20, y0: tiles[0]!.y + 10, x1: tiles[0]!.x + 180, y1: tiles[0]!.y + 40 }], tiles, 5);
+    expect(w).toMatchObject({ text: 'WT-4', x0: 202, x1: 208, y0: 304, y1: 336, rot: 90 });
+  });
+});
