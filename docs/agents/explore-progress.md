@@ -1490,3 +1490,8 @@ and local elevation applicability remain mandatory before physical promotion.
 Full-source Dunnville118records/9solids/109unresolved unchanged, zero read errors.
 Same-input Kelso shapes/quantities and originalproject unchanged. Final harness
 and live check follow. T11 incomplete; no main merge/deploy.
+Validated78770e9:639tests/tsc/build/Kelso+Frederick audit PASS. Final held-out
+snapshot /tmp/dunnville-v50-final, original source and live2D/3D proofs
+(dunnville-{plan,source,3d}-v50) inspected, pageerrors empty. No new solids or
+acceptedquantity changes; datum extraction is verified, physical integration
+remains pending schedule repair and individual footprint/section evidence.
