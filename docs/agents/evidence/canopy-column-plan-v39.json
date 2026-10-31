@@ -1,0 +1,252 @@
+{
+  "modelVersion": 39,
+  "id": "2ef1bfde-26e8-4fde-b239-33000abbda2e",
+  "quantity": 1,
+  "unit": "ea",
+  "shape": null,
+  "source": {
+    "kind": "spec",
+    "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+    "page": 25,
+    "label": "S2.1 · Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+    "box": [
+      471.35999999999996,
+      1321.68,
+      486.35999999999996,
+      1341.12
+    ],
+    "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint. Registration: CANOPY FRAMING PLAN; printed 1:50; grid E/3, E–Ef 0.559 m from actual grid strokes"
+  },
+  "registeredCentreM": [
+    -4.852455361938478,
+    0.5681201300654379
+  ],
+  "registration": {
+    "frame": {
+      "a": 0,
+      "b": -0.017638888888888888,
+      "tx": -28.336872028605146,
+      "ty": 9.01467846339877,
+      "residual": 0.0017525631374811779
+    },
+    "metersPerPoint": 0.017638888888888888,
+    "title": "CANOPY FRAMING PLAN",
+    "bounds": [
+      185.40325997946314,
+      1209.3362134656,
+      578.8334649913375,
+      1543.72091171166
+    ],
+    "grids": [
+      "E",
+      "Ef",
+      "3"
+    ],
+    "topDatum": 6.623,
+    "sources": [
+      {
+        "kind": "sheet",
+        "id": "6d7e12ec-b8b5-4aa4-8668-ef00c3afd09c",
+        "page": 8,
+        "label": "S2.1",
+        "box": [
+          185.40325997946314,
+          1174.3362134656,
+          578.8334649913375,
+          1603.72091171166
+        ],
+        "quote": "CANOPY FRAMING PLAN; printed 1:50; grid E/3, E–Ef 0.559 m from actual grid strokes"
+      },
+      {
+        "kind": "sheet",
+        "id": "640f691d-d4ff-4814-b8b8-1e6f7cf32570",
+        "page": 9,
+        "label": "A2.1",
+        "box": [
+          200.6930755200001,
+          78.69483400000001,
+          921.688958,
+          1169.542124
+        ],
+        "quote": "Independent E–Ef spacing 0.561 m; dogleg traced to axis"
+      },
+      {
+        "kind": "sheet",
+        "id": "479fb68d-dd38-4773-bec0-dc708c965c1b",
+        "page": 12,
+        "label": "S3.0",
+        "box": [
+          2220.0757654871413,
+          1208.6104577558986,
+          2333.9404246613685,
+          1236.2904546838986
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "479fb68d-dd38-4773-bec0-dc708c965c1b",
+        "page": 12,
+        "label": "S3.0",
+        "box": [
+          990.3233585152702,
+          1208.6270057492793,
+          1046.4666770277859,
+          1236.3070026772793
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "9c78afae-7e19-443b-aaaa-8b91042503e9",
+        "page": 13,
+        "label": "S3.1",
+        "box": [
+          2220.0827494557107,
+          1208.6270057492793,
+          2333.9461620357856,
+          1236.3070026772793
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "7802cfd3-ca6d-41f4-98db-0a60bfba6cb1",
+        "page": 14,
+        "label": "S4.0",
+        "box": [
+          1245.8018018693106,
+          574.5472593812794,
+          1359.6653990511834,
+          602.2272563092793
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "7802cfd3-ca6d-41f4-98db-0a60bfba6cb1",
+        "page": 14,
+        "label": "S4.0",
+        "box": [
+          2220.0815878935687,
+          574.5472593812794,
+          2333.9450093391833,
+          602.2272563092793
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "7802cfd3-ca6d-41f4-98db-0a60bfba6cb1",
+        "page": 14,
+        "label": "S4.0",
+        "box": [
+          1246.1618017253109,
+          1265.7469829012791,
+          1360.1453988591834,
+          1293.4269798292792
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "7802cfd3-ca6d-41f4-98db-0a60bfba6cb1",
+        "page": 14,
+        "label": "S4.0",
+        "box": [
+          2220.201587845568,
+          1265.7469829012791,
+          2334.1850092431832,
+          1293.4269798292792
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "c9bd8c42-4113-4acb-9398-a0c3103ff573",
+        "page": 15,
+        "label": "S4.1",
+        "box": [
+          2220.3215877975667,
+          574.5472593812794,
+          2334.1850092431832,
+          602.2272563092793
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "c9bd8c42-4113-4acb-9398-a0c3103ff573",
+        "page": 15,
+        "label": "S4.1",
+        "box": [
+          2220.0815878935687,
+          1265.7469829012791,
+          2334.0650092911837,
+          1293.4269798292792
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "01e34838-a3f4-442d-ba78-916e00c23051",
+        "page": 16,
+        "label": "S4.2",
+        "box": [
+          2220.201587845568,
+          574.5472593812794,
+          2334.1850092431832,
+          602.2272563092793
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "01e34838-a3f4-442d-ba78-916e00c23051",
+        "page": 16,
+        "label": "S4.2",
+        "box": [
+          2220.201587845568,
+          1265.7469829012791,
+          2334.0650092911837,
+          1293.4269798292792
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      },
+      {
+        "kind": "sheet",
+        "id": "266d9c10-903e-4331-9541-79729af1b737",
+        "page": 17,
+        "label": "S5.0",
+        "box": [
+          784.5219863062736,
+          694.5472113812791,
+          898.3856713937937,
+          722.3472082612792
+        ],
+        "quote": "T/O ENTRY CANOPY: 6623 mm"
+      }
+    ]
+  },
+  "possibleSameColumnLine": [
+    {
+      "id": "667bb35d-bac2-448a-8523-c1a395be61c8",
+      "domain": "roof",
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 · Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          1236.8400000000001,
+          1164.36,
+          1246.56
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "shapeType": null
+    }
+  ],
+  "limitation": "Plan footprint only. Entry-canopy datum is not adopted as the column base/top. Candidate matches do not reconcile accepted counts."
+}

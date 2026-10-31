@@ -466,6 +466,8 @@ export function ExploreWorkspace({
       e.trade === "structure" &&
       (e.sheetId === sid || available.some((l) => l.sheet.id === e.sheetId)),
   );
+  const [resultLimit,setResultLimit]=useState(60);
+  useEffect(()=>setResultLimit(60),[query,scope,sid]);
   const candidates =
     query || scope !== "rooms"
       ? (scope === "drawings" ? drawingGeometry : scope === "structure" ? structuralElements : allSheetElements).filter(
@@ -705,7 +707,7 @@ export function ExploreWorkspace({
           />
           <div className="ex-room-list">
             {query || scope !== "rooms"
-              ? candidates.slice(0, 60).map((e) => (
+              ? candidates.slice(0, resultLimit).map((e) => (
                   <button
                     key={e.id}
                     className={`ex-element-row${selected === e.id ? " active" : ""}`}
@@ -748,6 +750,7 @@ export function ExploreWorkspace({
                     <span className="ex-arrow">↗</span>
                   </button>
                 ))}
+            {candidates.length>resultLimit && <button onClick={()=>setResultLimit(n=>n+60)}>Show {Math.min(60,candidates.length-resultLimit)} more results</button>}
             {!rooms.length && (
               <p className="ex-muted">
                 No room takeoffs on this sheet. Explore the measured elements

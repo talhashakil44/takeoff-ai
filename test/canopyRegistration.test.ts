@@ -1,3 +1,4 @@
+import { connectSourceColumns } from '../src/build/columnGeometry';
 import { describe, expect, it } from 'vitest';
 import { structuralRevisionContext } from '../src/build/structuralRevisions';
 import fs from 'node:fs';
@@ -227,6 +228,20 @@ describe('canopy viewport registration', () => {
         data.drawingTexts,
         data.drawingLines,
       );
+      const canopyColumn=data.project.measurements.find((m:any)=>result[m.id] &&
+        /^C1\b/.test(data.project.types.find((t:any)=>t.id===m.typeId)?.name??''));
+      expect(canopyColumn).toBeTruthy();
+      const columns=connectSourceColumns(data.project,data.model,data.drawingTexts,data.drawingLines);
+      const c1=columns.elements.find(e=>e.measurementId===canopyColumn.id)!;
+      expect(c1.shape).toBeNull(); // entry-canopy datum is not a column height
+      expect(c1.sources.some(s=>s.quote?.startsWith('Registered column footprint:') && s.quote.includes('CANOPY FRAMING PLAN'))).toBe(true);
+      expect(c1.quantity).toBe(data.model.elements.find((e:any)=>e.id===c1.id).quantity);
+      // Withdraw the corroborating grid from the actual source; a printed scale
+      // and single intersection alone must not retain this registration.
+      const withoutEf={...data.drawingTexts,[canopyColumn.sheetId]:data.drawingTexts[canopyColumn.sheetId].filter((t:any)=>t.str.trim()!=='Ef')};
+      const withdrawn=connectSourceColumns(data.project,columns,withoutEf,data.drawingLines).elements.find(e=>e.id===c1.id)!;
+      expect(withdrawn.sources.some(s=>s.quote?.startsWith('Registered column footprint:') && s.quote.includes('CANOPY FRAMING PLAN'))).toBe(false);
+      expect(withdrawn.shape).toBeNull();
       const members = canopyMemberGeometry(
         data.project,
         data.drawingTexts,

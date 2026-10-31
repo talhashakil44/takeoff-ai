@@ -1,3 +1,4 @@
+import { canopyRegistrations } from './canopyRegistration';
 import { retainColumnPlanEvidence, type ColumnPlanWitness } from './columnPlanEvidence';
 import { joinCollinearRoofStrokes } from './roofSpanEvidence';
 import type { Project, Pt, Sheet } from '../model';
@@ -188,6 +189,13 @@ export function connectSourceColumns(
 ): BuildModel {
   const regs = roofViewportRegistrations(project, model, texts),
     sections = structuralSections(project, texts);
+  // A separate 1:50 canopy view must use its own independently corroborated
+  // grid frame. Its entry-canopy datum is NOT a column base or top.
+  for(const [id,r] of Object.entries(canopyRegistrations(project,model,texts,lines))) {
+    if(regs[id])continue;
+    regs[id]={frame:r.frame,metersPerPoint:r.metersPerPoint,title:r.title,
+      bounds:r.bounds,grids:r.grids,source:r.sources[0]};
+  }
   // Calibrated single floor plans can share the same source-section tracer.
   // Their frame must already be established by model/source correspondences.
   for (const sheet of project.sheets.filter(s => !s.superseded && /FRAMING/.test(s.title ?? '') && !/ROOF/.test(s.title ?? '') && s.metersPerPoint)) {
@@ -242,11 +250,14 @@ export function connectSourceColumns(
     located.set(e.id, {
       at: worldPoint(rect.at, r.frame),
       code: code!,
-      domain: r.title === 'FLOOR FRAMING' ? 'floor' : 'roof',
+      domain: r.title === 'CANOPY FRAMING PLAN' ? 'canopy' : r.title === 'FLOOR FRAMING' ? 'floor' : 'roof',
       width: rect.width,
       depth: rect.depth,
-      source: {kind:'sheet',id:m.sheetId,page:r.source.page,label:r.source.label,box:rect.box},
+      source: {kind:'sheet',id:m.sheetId,page:r.source.page,label:r.source.label,box:rect.box,quote:r.source.quote},
     });
+    // Retain the footprint, but do not borrow a roof post or canopy datum as
+    // the height of this independently registered detail record.
+    if(r.title === 'CANOPY FRAMING PLAN')continue;
     const letter = pt
       .filter(
         (t) =>

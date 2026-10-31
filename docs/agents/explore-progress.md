@@ -973,3 +973,41 @@ separate1:50canopy detail. Establish that viewport's own grids/scale before any
 placement. For the main C1 group, trace explicit S3/S4 column base/top sections
 before replacing any unresolved record with a solid. Claude uses candidate data
 for T39 read-only; accepted counts remain untouched. T11 incomplete, no deploy.
+
+## 2026-10-31 06:10 UTC — canopy C1 registration and complete result access
+
+Claude approved ddaf1e5 and is retaining accepted counts for T39 review. Existing
+canopyRegistrations already checks printed1:50 against E/Ef/3 actual grid strokes
+and architectural references; columnGeometry had omitted that registration path.
+Added it for closed-column footprint recognition. Canopy domain remains separate
+from floor/roof and explicitly skips section-height tracing/duplicate-solid
+propagation. T/O ENTRY CANOPY is not adopted as a column base/top. Registration
+basis now accompanies retained footprint quotes. Model39 invalidates old cache.
+
+Canopy C1 2ef1bfde-26e8-4fde-b239-33000abbda2e: actual revised box
+[471.36,1321.68,486.36,1341.12], registered centre[-4.85245536,.56812013]m;
+frame residual .00175256m.87column footprint records now retained. It is within
+10mm of main-roof C1 667bb35d-bac2-448a-8523-c1a395be61c8, itself without a solid.
+This is a possible shared column line, not a duplicate-count conclusion. Plan
+registration/evidence artifact: docs/agents/evidence/canopy-column-plan-v39.json.
+No additional C2 rectangle qualified; no tolerance or guessed dimensions added.
+
+Production legacy/current-engine loader checks pass. Exact legacy original
+project and all2112(id,shape,quantity,unit) tuples unchanged from model38; all
+138physicalshapes retained. Actual-source regression in canopyRegistration test
+requires the canopyC1 footprint, null shape and unchanged quantity; removing Ef
+from actual source texts withdraws the footprint and still creates no solid.
+Targeted6tests pass, including source ablation. Full checkpoint harness follows.
+
+Live review also exposed the60-result truncation hiding later structural entries.
+Added incremental Show more results, reset on query/scope/floor changes. Actual
+C1 search expands60→87 and permits selecting the final canopy record. Its revised
+Add5p25 footprint opens correctly; original1ea, unresolved-height/cross-view notes
+and settled2D/3D inspected, no page errors. Proofs in diag/explore/proofs:
+canopy-c1-plan-review-v39.png, canopy-c1-original-footprint-v39.png,
+canopy-c1-withheld-3d-v39.png. No PDF or source project edits.
+
+Next: trace column base/top at grid3/E in the section evidence for the paired
+canopy/main-roof C1 records, before any vertical solid is allowed. Canopy C2 needs
+its own scheduled rectangle/section evidence; current recognition fails closed.
+T39 remains Claude-owned, all counts retained. T11 active/incomplete; no deploy.
