@@ -1,8 +1,29 @@
 {
   "modelVersion": 46,
   "rule": "Local glyph-relative cantilever annotation plus registered grid row or column; viewport boundaries scope section headers",
-  "syntheticChecks": ["0.25x, 1x, 4x scale", "horizontal and vertical spans", "X7 CANTILEVER and X7 (CANT.)", "missing glyph metrics rejected", "LOW roof title fallback"],
-  "sameProjectComparison": {"shapeDeltas": 0, "quantityUnitDeltas": 0, "projectUnchanged": true},
-  "heldOutProject": "Pending fixture and harness from Claude; no third-set pass claimed",
-  "limitation": "Other legacy section/title recognition windows are not yet fully scale-relative"
+  "syntheticChecks": [
+    "0.25x, 1x, 4x scale",
+    "horizontal and vertical spans",
+    "X7 CANTILEVER and X7 (CANT.)",
+    "missing glyph metrics rejected",
+    "LOW roof title fallback"
+  ],
+  "sameProjectComparison": {
+    "shapeDeltas": 0,
+    "quantityUnitDeltas": 0,
+    "projectUnchanged": true
+  },
+  "heldOutProject": "Claude confirmed pending user connection to MMA Submitted Estimates; third-set gate not run",
+  "limitation": "Other legacy section/title recognition windows are not yet fully scale-relative",
+  "validation": {
+    "checkpoint": "9342d58",
+    "harness": "PASS626tests,tsc,build,Kelso/Frederick audit",
+    "sameProjectShapeDeltas": 0,
+    "live": "Original PDF and focused2D/3D inspected, no browser errors",
+    "proofs": [
+      "diag/explore/proofs/roof-e89-plan-review-v46.png",
+      "diag/explore/proofs/roof-e89-original-footprint-v46.png",
+      "diag/explore/proofs/roof-e89-withheld-3d-v46.png"
+    ]
+  }
 }

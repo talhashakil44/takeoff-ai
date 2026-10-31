@@ -1346,3 +1346,10 @@ gap5pt. Replaced centre distance with glyph-box gap, still scaled by mark width,
 and added three-scale long-label regression. Re-ran actual identical-project
 comparison after correction: zero shape/quantity deltas confirmed. Initial
 zero-delta statement above applies to corrected follow-up, not9c740a9 alone.
+Final9342d58 harness PASS626tests,tsc/build,Kelso+Frederick audit. OriginalPDF,
+focused2D/3D screenshots inspected; browsererrors empty. Corrected same-project
+comparison confirms zero shape/quantity deltas. Claude confirms held-out pending
+user connection of MMA Submitted Estimates; no third-set evaluation or universal
+accuracy claimed. Next: held-out run-only gate once available; continue independent
+geometry/source work meanwhile, preserve source holds and finish other legacy
+scale windows incrementally. No merge/deploy; T11 incomplete.
