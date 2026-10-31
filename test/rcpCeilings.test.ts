@@ -52,6 +52,25 @@ describe('RCP ceilings and the finish schedule', () => {
     expect(p.types.map((t) => t.id)).toEqual(['rooms', 'act', 'floor', 'rcp', 'paint']);
   });
 
+  it('keeps the schedule ceiling of a room no measured ceiling covers (a plain gypsum ceiling)', () => {
+    const at = (id: string, x: number, label: string, extra: Partial<Measurement>) => ({ ...m(id, 'p1', 'rooms', label, extra), points: box(x, 0, 100) });
+    const p: Project = {
+      ...project(),
+      measurements: [
+        at('a', 0, '101 OFFICE', { source: 'rooms', finishes: { ceiling: 'act' } }),
+        at('b', 200, '102 OFFICE', { source: 'rooms', finishes: { ceiling: 'act' } }),
+        at('g', 400, '103 WASHROOM', { source: 'rooms', finishes: { ceiling: 'gyp' } }),
+        // The RCP drawn where the plan is: tile over 101 and 102; 103 left plain.
+        { ...m('r', 'r1', 'rcp', '', { source: 'ceilings' }), points: box(0, 0, 300) },
+      ],
+      types: [...project().types, type('gyp', 'GB – Ceiling')],
+    };
+    const { project: out, moved } = ceilingsFromRcps(p);
+    expect(moved).toBe(2);
+    expect(out.measurements.find((x) => x.id === 'g')!.finishes).toEqual({ ceiling: 'gyp' });
+    expect(out.measurements.find((x) => x.id === 'a')!.finishes).toEqual({});
+  });
+
   it('leaves a project without RCP ceilings alone', () => {
     const p = project();
     const none = { ...p, measurements: p.measurements.filter((x) => x.source !== 'ceilings') };

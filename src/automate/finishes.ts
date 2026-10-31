@@ -1,7 +1,7 @@
 import { codesInside, heightMeters, matchSchedules, readFinishLegend, readFinishSchedule, readFinishTags, roomNumbersOf, sameCode, type LegendEntry, type ScheduleRow, type ScheduleSheet } from '../finishSchedule';
 import { findRoomLabels } from '../fill/rooms';
 import { pointInRing } from '../fill/similar';
-import { FINISH_ROLES, finishType, type FinishRole, type Measurement, type Project, type Sheet, type TakeoffType } from '../model';
+import { FINISH_ROLES, finishType, type FinishRole, type Measurement, type Project, type Pt, type Sheet, type TakeoffType } from '../model';
 import { classifySheet } from '../sheetKind';
 import { toLength } from '../units';
 import { perSheet, PALETTE, type SetAccess } from './set';
@@ -293,6 +293,21 @@ export function levelOfSheet(s: Sheet): string | null {
   return m ? (m[1] ?? m[2] ?? m[3]) : null;
 }
 
+const centroid = (pts: Pt[]): Pt => {
+  let a = 0;
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x1, y1] = pts[i]!;
+    const [x2, y2] = pts[(i + 1) % pts.length]!;
+    const c = x1 * y2 - x2 * y1;
+    a += c;
+    x += (x1 + x2) * c;
+    y += (y1 + y2) * c;
+  }
+  return a ? [x / (3 * a), y / (3 * a)] : (pts[0] ?? [0, 0]);
+};
+
 export interface RcpCeilings {
   project: Project;
   /** Rooms whose ceiling now comes from the RCPs instead of the finish schedule. */
@@ -313,11 +328,31 @@ export function ceilingsFromRcps(project: Project): RcpCeilings {
   const stray = rcp.some((m) => m.finishes || m.wallShares);
   if (!rcp.length) return { project, moved: 0, existing: [] };
   const levels = new Set(rcp.map((m) => { const s = sheets.get(m.sheetId); return s ? levelOfSheet(s) : null; }));
-  const covered = (m: Measurement) => {
+  const onLevel = (m: Measurement) => {
     const s = sheets.get(m.sheetId);
     return !!s && (levels.has(null) || levels.has(levelOfSheet(s)));
   };
-  const rooms = new Set(finishRooms(project).filter((m) => m.finishes?.ceiling && covered(m)).map((m) => m.id));
+  // Under a measured ceiling: named in its label, or (the RCP drawn in the same place on a sheet
+  // like the plan's) the room's middle inside it.
+  const under = (m: Measurement) => {
+    const s = sheets.get(m.sheetId);
+    if (!s) return false;
+    const number = m.label?.split(/\s+/)[0];
+    if (number && /\d/.test(number) && rcp.some((c) => c.label?.split(/,\s*/).some((l) => l.split(/\s+/)[0] === number))) return true;
+    const mid = centroid(m.points);
+    return rcp.some((c) => {
+      const cs = sheets.get(c.sheetId);
+      if (!cs || cs.id === s.id || Math.abs(cs.width - s.width) > 1 || Math.abs(cs.height - s.height) > 1) return false;
+      if (!cs.metersPerPoint || !s.metersPerPoint || Math.abs(cs.metersPerPoint / s.metersPerPoint - 1) > 0.01) return false;
+      return pointInRing(mid, c.points) && !(c.holes ?? []).some((h) => pointInRing(mid, h));
+    });
+  };
+  const scheduled = finishRooms(project).filter((m) => m.finishes?.ceiling && onLevel(m));
+  // Rooms the RCPs leave unmeasured (a gypsum ceiling drawn plain, no pattern to find) keep the
+  // schedule's ceiling, when the RCPs clearly line up with the plans (most of the rooms under them).
+  const lined = scheduled.filter(under);
+  const registered = lined.length >= 2 && lined.length >= scheduled.length * 0.3;
+  const rooms = new Set((registered ? lined : scheduled).map((m) => m.id));
   if (!rooms.size && !stray) return { project, moved: 0, existing: [] };
   const typeName = new Map(project.types.map((t) => [t.id, t.name]));
   const dropped = new Set<string>();
