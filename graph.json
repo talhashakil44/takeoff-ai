@@ -804,7 +804,7 @@
       "updated": "2026-10-31T07:58:21.820Z"
     },
     {
-      "status": "todo",
+      "status": "done",
       "depends": [],
       "accept": [
         "tsc",
@@ -818,7 +818,10 @@
       "title": "Strip footings tagged on their own (Kelso S1.0 core: SF-1, SF-N under masonry walls, no FW tag)",
       "prompt": "Follow unpaired SF tag arrows to the dashed footing edge, pair with the parallel far edge at the scheduled width, take the centreline.",
       "added": "2026-10-31T08:09:57.009Z",
-      "by": "claude"
+      "by": "claude",
+      "notes": "1c27b6f. Kelso S1.0 +2 SF-1 +4 SF-N (700 as drawn, D assumed 300); saved identical; Frederick unchanged; audit re-pinned +1 day. Missed: short SF-N at x 1879-1900 y 838-899 (top of core).",
+      "evidence": "claude/integration@1c27b6f",
+      "updated": "2026-10-31T08:10:58.141Z"
     }
   ]
 }
