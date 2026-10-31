@@ -23,6 +23,10 @@ export interface Registration {
 
 /** Repeated grid labels at opposite ends of an axis. Single room/tag labels are rejected. */
 export function gridAxes(texts: DrawingText[], width: number, height: number, focus?: [number, number]) {
+  // Label centres can shift with glyph alignment. Use the smaller capital height
+  // so enlarging a sheet does not split one bubble family into separate columns.
+  const alignmentTolerance = (a: DrawingText, b: DrawingText) =>
+    a.h && b.h && a.h > 0 && b.h > 0 ? Math.min(a.h, b.h) / 2 : 3;
   const labels = new Map<string, DrawingText[]>();
   for (const t of texts) {
     const k = t.str.trim();
@@ -53,19 +57,28 @@ export function gridAxes(texts: DrawingText[], width: number, height: number, fo
   // family, then let cross-sheet spacing verification reject room numbers/keynotes.
   for (const letters of [true, false]) {
     const ts = texts.filter((t) => (letters ? /^[A-HJ-NP-Z]$/ : /^(?:[1-9]|1[0-9])$/).test(t.str.trim()) && t.cx < width * 0.87);
-    const rows: { axis: 'x' | 'y'; items: DrawingText[]; score: number }[] = [];
+    const rows: { axis: 'x' | 'y'; items: DrawingText[]; members: DrawingText[]; score: number }[] = [];
     for (const t of ts)
       for (const axis of ['x', 'y'] as const) {
-        const family = ts.filter((v) => Math.abs(axis === 'x' ? v.cy - t.cy : v.cx - t.cx) < 3);
+        const family = ts.filter((v) => Math.abs(axis === 'x' ? v.cy - t.cy : v.cx - t.cx) < alignmentTolerance(t, v));
         const unique = [...new Map(family.map((v) => [v.str.trim(), v])).values()];
         const at = (v: DrawingText) => (axis === 'x' ? v.cx : v.cy);
         const span = Math.max(...unique.map(at)) - Math.min(...unique.map(at));
-        if (unique.length >= 3 && span > (axis === 'x' ? width : height) * 0.2) rows.push({ axis, items: unique, score: unique.length });
+        if (unique.length >= 3 && span > (axis === 'x' ? width : height) * 0.2) rows.push({ axis, items: unique, members: family, score: unique.length });
       }
     rows.sort((a, b) => b.score - a.score);
     const best = rows[0];
     if (best)
-      for (const t of best.items) if (!axes[t.str.trim()]) axes[t.str.trim()] = { axis: best.axis, at: best.axis === 'x' ? t.cx : t.cy };
+      for (const t of best.items) {
+        const key = t.str.trim(), existing = axes[key];
+        // Opposite section markers can repeat the same label. A repeated pair
+        // must also belong to a multi-label family before it outranks that family.
+        // Check all members (not the deduplicated row) to preserve multiple views.
+        const corroborated = existing && rows.some(row => row.axis === existing.axis &&
+          row.members.some(member => member.str.trim() === key &&
+            Math.abs(existing.at - (row.axis === 'x' ? member.cx : member.cy)) < alignmentTolerance(t, member)));
+        if (!corroborated) axes[key] = { axis: best.axis, at: best.axis === 'x' ? t.cx : t.cy };
+      }
   }
   // Repeated numbered keynotes are not a grid: require lettered axes too.
   if (!Object.keys(axes).some((k) => /^[A-Z]$/.test(k))) return {};
@@ -114,7 +127,9 @@ export function registerSheets(project: Project, texts: DrawingTexts): Record<st
       return { s, axes: gridAxes(texts[s.id] ?? [], s.width, s.height, focus) };
     });
   found.sort((a, b) => Object.keys(b.axes).length - Object.keys(a.axes).length);
-  const ref = found[0];
+  // A long numbered legend can outscore a plan but has no crossing axes.
+  // Such a sheet cannot define the shared coordinate frame.
+  const ref = found.find(({s, axes}) => matchGridAxes(axes, s.metersPerPoint!, axes, s.metersPerPoint!));
   if (!ref) return {};
   const out: Record<string, Registration> = {};
   for (const { s, axes } of found) {

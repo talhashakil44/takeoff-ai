@@ -1436,3 +1436,30 @@ pass for source association). Posted concrete S1-1 tag545.78,193.33 forced to
 page confirms grid1 and stacked tags present. Claude asked for independent ARCH
 reference review and remaining PDFs. Next repair requires source correspondence
 and synthetic regression; do not relax distance gate. T11 remains incomplete.
+
+## 2026-10-31 14:10 UTC — grid-family and reference qualification (model49)
+Claude staged remaining Dunnville PDFs. Full-source baseline differs from prior
+ARCH/STRUCT-only diagnostic: E2-1's one-direction numbered legend wins raw axis
+count and prevents registration. Do not call that a regression caused by49.
+General fixes: glyph-relative half-capital-height tolerance for single-ended
+families; repeated section-label pairs must belong to a coherent multi-label
+family before overriding that family's location; reference must itself have two
+intersecting axis families passing existing registration gate. Synthetic tests
+cover three scales, oversized callout rejection, repeated section markers,
+one-direction legend reference, and existing multi-viewport selection.
+Full-source Dunnville49 has zero read errors. All four structural plans register
+1-6/A-D.84/100 point items within existing2.5m symbolic snap gate;16outside.
+Physical coverage unchanged118records/9solids/109unresolved. This is registration
+progress, not84verified component positions: off-grid pads (e.g.6 belowB) still
+need footprint/leader placement and must not become grid-snapped physical solids.
+Inspected original S1-1 overlay(dunnville-grid-source-overlay-v49.png): recovered
+axes coincide with drawing gridlines. Five extracted bay widths5.3234/5.5859/
+5.5838/5.3276/7.0697m vs printed5.330/5.590/5.590/5.330/7.075; residual remains
+under7mm, not snapped to printed numbers. Live originalPDF,2D/3D proof images
+(dunnville-*-v49) inspected, pageerrors empty. No new physical coverage claimed.
+Same-input Kelso comparison to47: zero element shape or quantity/unit deltas,
+project unchanged. Dunnville originalproject and acceptedtakeofftuples unchanged;
+one derived envelope quantity changes only1.4e-14 rounding from frame shift.
+Next: distinguish on-grid vs off-grid footprint placement, inspect physical
+qualification of pads/piers/columns; do not widen snap gate. BP6 source crop
+association remains open. T11 incomplete; full harness/review follows.
