@@ -1840,3 +1840,15 @@ withholding unsupported geometry is not a numerator increase. Next: Brampton
 PDF transfer, complete 3-set baseline, then local source-qualified foundation
 placement across category. Need Claude review and sealed summary gate before
 accepting a corpus improvement. T11 remains incomplete, no merge/deploy.
+
+## 2026-10-31 23:34 UTC — source-backed registration diagnosis
+No new Claude review/Brampton transfer. Independently traced Williamsburg's
+foundation registration failure using finalized dev source: structural grid
+families have only2labels each; architectural numbered keynotes overwrite real
+paired1/2grids. OriginalPDF pages17/29 visually inspected. Existing vector tracer
+recovers actual1/2/A/B on both, rejects section markers, oppositebubblewitnesses
+agree; existing fitter accepts cross-sheet candidate. No production offsets or
+thresholds changed. docs/agents/foundation-grid-diagnosis.md records evidence
+and required shared-registration propagation/tests. Next: generic stroke-backed
+grid arbitration across all registration consumers, source/live review, then
+local vertical evidence. No coverage gain claimed; original data unchanged.
