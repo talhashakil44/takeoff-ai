@@ -361,8 +361,14 @@ export function ExploreWorkspace({
         if (!l?.frame) continue;
         try {
           const full = await renderPage(revisedLayers[l.sheet.id] ?? l.sheet);
-          const ratio = Math.min(1, 2048 / Math.max(full.width, full.height)),
-            canvas = document.createElement("canvas");
+          // Match the base drawing budget: do not discard already-rendered
+          // source detail before the user zooms into a structural overlay.
+          const ratio = Math.min(1, 3500 / Math.max(full.width, full.height));
+          if (ratio === 1) {
+            if (!gone) setOverlayPages((p) => ({ ...p, [id]: full }));
+            continue;
+          }
+          const canvas = document.createElement("canvas");
           canvas.width = Math.ceil(full.width * ratio);
           canvas.height = Math.ceil(full.height * ratio);
           canvas

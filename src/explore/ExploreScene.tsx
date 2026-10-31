@@ -630,6 +630,7 @@ export function ExploreScene(props: Props) {
         g.setIndex([0, 2, 1, 0, 3, 2]);
         const tex = new THREE.CanvasTexture(layer.page);
         tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
         const mat = new THREE.MeshBasicMaterial({
           map: tex,
           side: THREE.DoubleSide,

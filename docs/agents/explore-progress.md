@@ -783,3 +783,36 @@ repair addresses depth interference, not adaptive source-raster resolution.
 Proofs: diag/explore/proofs/mass-chain-focused-{2d,3d}-v37.png and
 mass-chain-zoom-{in,out}-v37.png. Geometry checkpoint38c684a already pushed with
 592tests/tsc/build/audit PASS; renderer checkpoint follows its own clean gates.
+
+## Outer MF3 source audit and overlay clarity — October31, 03:33 wake
+
+Claude approved b551fe9. Independently read revised1/S1.0 canopy plan and2/S1.1
+section against the two unresolved outer MF3 rectangles. The apparent missing
+band intervals are actual revised return/junction gaps (17.04pt and12.72pt),
+not ordinary4.44–4.56pt dash gaps. Neither detail supplies a local footing
+height, and there is no agreeing resolved mass to the left. No new solid or
+widened dash tolerance. Durable exact coordinates and required evidence:
+docs/agents/evidence/mf3-outer-junction-review.md. Sent to Claude for any new
+applicable local datum; do not repeat unchanged searches.
+
+Independent display repair: structural overlays discarded source detail by
+resizing a3500px original-PDF rendering to2048px. They now retain the bounded
+3500px canvas (reusing it without a second allocation when already within the
+limit), and use the same hardware-supported anisotropic texture filtering as
+the base PDF. No model coordinates, datums, extraction or accepted quantities
+changed; runtime model version remains37.
+
+Actual ExploreWorkspace/Chromium review: focused MF3 outline still matches the
+original drawing; FW5/NOTE2/pier tags and hatching are visibly clearer than the
+previous screenshots at the same view. Wheel zoom in/out, settled3D and the
+original-PDF detail viewer pass without page errors or diagonal depth artifacts.
+Proofs: diag/explore/proofs/overlay-quality-focused-{2d,3d,source}-v37.png and
+overlay-quality-zoom-{in,out}-v37.png. This preserves available raster detail;
+it is not vector rendering or unlimited zoom resolution. Source geometry
+coverage remains138 physical shapes including drawing candidates.
+
+Next independent implementation candidate: selected-source detail tiling with
+explicit crop-to-sheet registration, rather than increasing whole-sheet memory
+without bounds. Continue source-defined roof/free-end and remaining datum gaps
+only when new applicable evidence is available; pending T38 remains separate.
+T11 active, no main merge/deploy, no completion claim.
