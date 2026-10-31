@@ -1,3 +1,4 @@
+import { connectMassDatums, type MassFootprint } from './massDatumChain';
 import { explainFoundationRevisionLabels } from './foundationRevisionLabels';
 import { explainFoundationSteps } from './foundationStepEvidence';
 import { recoverFoundationWalls } from './foundationWallGeometry';
@@ -3372,6 +3373,7 @@ function recoverRevisedMassFootings(
     return [{id,measurementId:id,name:`${code} – Drawing-derived mass footing`,typeId:'',typeName:code,trade:'structure',division:'03',level:current.elements.find(e=>e.sheetId===plan.sheetId&&e.measurementSource==='foundations')?.level??null,sheetId:plan.sheetId,measurementSource:'foundations',origin:'drawing' as const,status:'new' as const,shape:null,quantity:0,unit:'',planningExcluded:'Drawing-derived geometry; no accepted takeoff quantity',placement:'inferred' as const,sources:[],specs:[],issues:['Drawing-derived geometry: no accepted takeoff quantity.']}];
   });
   const generated=new Map(candidates.map(e=>[e.id,plan.texts.find(t=>`drawing:foundation:${plan.docId}:${plan.page}:${normalized(t.str)}:${t.cx.toFixed(2)}:${t.cy.toFixed(2)}`===e.id)!]));
+  const massFootprints = new Map<string, MassFootprint>();
   const resolved=[...current.elements,...candidates].map((e) => {
       if (
         e.measurementSource !== 'foundations' ||
@@ -3379,7 +3381,6 @@ function recoverRevisedMassFootings(
         !/^MF-?\d+\b/.test(e.typeName)
       )
         return e;
-      if(e.shape?.type==='point'&&e.issues.some(i=>i.startsWith('Foundation revision applied:')))return e;
       const code = normalized(/^([A-Z]+-?\d+)/.exec(e.typeName)![1]),
         ss = sections.get(code),
         section = ss?.[0];
@@ -3445,6 +3446,9 @@ function recoverRevisedMassFootings(
         return [{ x0, x1, y0, y1, w, h }];
       });
       if (rectangles.length !== 1) return e;
+      const rectangle = rectangles[0];
+      const fw = Math.abs(rectangle.w - section.width) < .015 ? section.width : section.length;
+      massFootprints.set(e.id, { box: [rectangle.x0, rectangle.y0, rectangle.x1, rectangle.y1], size: [fw, fw === section.width ? section.length : section.width, section.depth], schedule: section.source });
       const r = rectangles[0],
         onBoundary = (p: number[]) =>
           p[0] >= r.x0 - 4 &&
@@ -3546,9 +3550,16 @@ function recoverRevisedMassFootings(
         ],
       };
     });
-  const drawing=resolved.filter(e=>generated.has(e.id)&&e.shape?.type==='point');
+  const bands=current.elements.flatMap(e=>{
+    const sh=e.shape;if(sh?.type!=='run'||e.sheetId!==plan.sheetId||!/^SF-?\d+\b/.test(e.typeName))return [];
+    const proof=e.sources.find(s=>s.kind==='spec'&&s.id===plan.docId&&s.page===plan.page&&s.label==='Revised continuous strip footing'&&s.quote?.includes('Direct local elevation leader on this band.'));
+    if(!proof||!proof.box||Math.abs((proof.box[3]-proof.box[1])*scale-sh.thickness)>.015)return [];
+    return [{a:proof.box[1],b:proof.box[3],top:sh.z0+sh.height,source:proof}];
+  });
+  const connected=connectMassDatums(resolved,massFootprints,plan,bands,(a,b,lo,hi)=>hasFootingCrossbar(plan,0,a,b,lo,hi));
+  const drawing=connected.filter(e=>generated.has(e.id)&&e.shape?.type==='point');
   const retained=(current.drawingGeometry??[]).filter(e=>!e.id.startsWith('drawing:foundation:'));
-  return {...current,elements:resolved.filter(e=>!generated.has(e.id)),...((drawing.length||current.drawingGeometry)?{drawingGeometry:[...retained,...drawing]}:{})};
+  return {...current,elements:connected.filter(e=>!generated.has(e.id)),...((drawing.length||current.drawingGeometry)?{drawingGeometry:[...retained,...drawing]}:{})};
 }
 
 function pierQuantityDiscrepancy(project:Project,element:BuildElement,geometryHeight:number):string[] {

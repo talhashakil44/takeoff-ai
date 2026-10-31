@@ -722,3 +722,50 @@ no page errors. Proofs: diag/explore/proofs/revision-type-conflict-{2d,3d,source
 No new physical solids; this is evidence integration. Next: independent west Ef
 MF3 datum/section audit; await new source for east buttress top and T38 for
 revision reconciliation. T11 remains active, no main merge/deploy.
+
+## Bracketed west Ef mass datums — October31, 03:03 wake
+
+Claude approved c152b6b and confirmed FW2 is an Add5 revision, not a July
+extraction error. Independently audited all seven closed MF3 rectangles in
+Add5 S1.0. Two unresolved interior masses are bracketed by agreeing resolved
+mass datums with both SF1 edges at y1244.76/1261.80. Actual crossbar guard and
+S.F. text search found no step on the connecting intervals or mass crossings.
+The two outer unresolved candidates still have larger missing junction/return
+intervals, so ordinary dash tolerance cannot close them.
+
+Model37 adds conservative horizontal-row datum inference. It requires each
+mass's own closed scheduled footprint, a directly dimensioned strip band,
+source strokes on both connecting edges, no step, and agreeing resolved masses
+on both sides. Conflicting/missing seeds, missing edges/junctions and step
+markers reject recovery. No new connecting strip solids or wall profiles.
+Accepted type and quantities remain unchanged; source-only candidates retain
+zero quantity and planning exclusion.
+
+Exactly two new MF3 solids: tagx1642.5043 and1792.6243, footprints
+[1589.76,1189.56,1632.24,1365.24] and[1739.88,1189.56,1782.36,1365.24]. Each is
+1.5x6.2x0.4m, inferred top-0.250/bottom-0.650m. Legacy drawing-only candidates
+increase4->6 (fiveMF3 plusFW4). Current engine accepted MF3 solids increase3->5
+of7; its original accepted quantity tuples match extraction. Source-loader
+production checks pass for both projects. Legacy comparison confirms all prior
+shapes, original project and prior quantity/unit tuples unchanged, only two
+new drawing shapes. IFC independently resolves each new drawing solid to3.72m³
+with no quantity set attached.
+
+Actual-source withdrawal: removed the upper SF1 edge across1632.24..1739.88;
+normal production loader then withdraws both new solids and returns the prior
+four drawing candidates. Source and accepted quantities untouched. Unit checks
+cover missing/conflicting seeds, missing edges/junctions, step marker/callback,
+accepted quantity preservation and keeping an existing solid unchanged.
+
+Local Chromium review of actual ExploreWorkspace: checked2D footprints over
+originalPDF layers, settled3D, own footprint evidence crop, inferred qualifier,
+1500x6200mm section and0.4m depth/-0.65bottom/-0.25top. No page errors. Proofs:
+diag/explore/proofs/mass-chain-{2d,3d,source}-v37.png. Source-backed geometry
+coverage increases136->138 including drawing candidates; this does not establish
+buttress wall tops. Section1/S1.1 has no footing datum or dimensioned top profile.
+
+Next: assess the remaining two outer MF3 junction gaps against revised canopy/
+vestibule detail1/S1.0; do not bridge the missing edges by widening dash tolerance.
+T38 revision reconciliation, east buttress top profiles and roof free ends remain
+open. No main merge/deploy; T11 remains active pending complete source coverage
+and Claude review.
