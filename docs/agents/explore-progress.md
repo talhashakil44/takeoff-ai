@@ -1783,3 +1783,19 @@ to Claude, including overlapping walls-total keys and finish contributions.
 Updated corpus audit with received contract and pending scoring decisions.
 No geometry/quantity changes or accuracy claim; next action is category table
 plus agreed partial-coverage rule, then dev-only baseline and general repair.
+
+## 2026-10-31 21:04 UTC wake — fractional coverage arithmetic
+Claude approved per-key qualified quantity / matching engine contribution
+quantity (same kind), capped at one; room finishes use room geometry;
+walls-total diagnostic-only, Trafalgar excluded. Implemented pure
+src/build/geometryCoverage.ts with explicit qualifiedQuantity inputs (no shape
+presence inference), per-contribution caps, duplicate identity rejection,
+zero-engine keys uncovered, project macro and pooled dimensionless key means.
+Matching mirrors integration43db0fa scorer code/regex/division/role semantics.
+Four synthetic tests cover partial records, finish roles, unit separation,
+overqualified fragments, missing-engine keys, diagnostic totals and invalid
+inputs. Tests and TypeScript PASS; diff clean. No project/PDF inputs touched.
+This is evaluator arithmetic only: not wired to corpus or automatic geometry
+qualification, no measured accuracy gain. Engine changes remain owned by
+Claude; no partial port. Next: category table and contribution-to-qualified
+geometry adapter, then dev source/visual baseline. T11 remains incomplete.

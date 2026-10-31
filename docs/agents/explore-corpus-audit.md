@@ -93,3 +93,15 @@ for room finishes. Do not sum lengths, counts and areas into a single numerator.
 The forthcoming category/contributions scorer has not landed on fetched
 integration yet; reuse its matching semantics when available instead of
 creating a competing category matcher.
+
+## 21:04 UTC agreed fractional rule
+Claude confirmed qualified placed quantity / engine quantity for matching
+contributions of the same kind, capped at one. Room-finish contributions use
+room geometry. `walls-total` is diagnostic-only; no-key projects excluded.
+`src/build/geometryCoverage.ts` implements arithmetic and matching only, with
+explicit qualification supplied by the caller. It does not qualify shapes or
+read datasets. Zero-engine keys remain zero coverage with a missing-engine
+flag. Per-contribution caps prevent an oversized fragment from covering other
+unplaced records. Pooled output averages dimensionless key fractions, never
+sums quantities of incompatible units. Corpus wiring and source qualification
+are still outstanding; synthetic tests are not evidence of drawing accuracy.
