@@ -19,7 +19,7 @@ import { automateWalls } from './walls';
  * one after it; other members are counted.
  */
 
-export type MemberKind = 'beam' | 'column' | 'lintel' | 'brace' | 'joist' | 'post' | 'plate' | 'wall';
+export type MemberKind = 'beam' | 'column' | 'lintel' | 'brace' | 'joist' | 'post' | 'plate' | 'connector' | 'wall';
 
 export interface Member {
   mark: string;
@@ -39,6 +39,7 @@ const KIND: [RegExp, MemberKind][] = [
   [/BRAC/, 'brace'],
   [/JOIST|TRUSS|RAFTER|PURLIN/, 'joist'],
   [/BASE\s*PLATE|BEARING\s*PLATE/, 'plate'],
+  [/HOLD[\s-]*DOWN|TIE[\s-]*DOWN|STRAP|HANGER|CONNECTOR/, 'connector'],
   [/STRUCTURAL\s+WALL|SHEAR\s+WALL|BEARING\s+WALL|STUD\s+WALL/, 'wall'],
 ];
 
@@ -91,6 +92,7 @@ const NAMES: Record<MemberKind, string> = {
   joist: 'Joist / truss',
   post: 'Post',
   plate: 'Base plate',
+  connector: 'Hold-down / connector',
   wall: 'Structural wall',
 };
 
@@ -232,6 +234,9 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
   const tagOf = new Map<Measurement, Pt>();
   const counted = members.filter((m) => m.kind !== 'wall');
   const walls = new Map(members.filter((m) => m.kind === 'wall').map((m) => [norm(m.mark), m]));
+  // A shear wall schedule written as one assembly with no mark column (Williamsburg S2.1): the
+  // plans tag its walls SW-1, SW-2; those codes are its walls.
+  const shear = [...textsOf.values()].flat().find((t) => /^SHEAR\s*WALL\s+SCHEDULE\b/i.test(t.str.trim()));
 
   // Base plates sit on the foundation plan; the rest on the framing plans.
   for (const s of live) {
@@ -290,7 +295,7 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
       }
 
       // Structural walls along their tagged runs.
-      if (!framing || !walls.size || !s.metersPerPoint) return;
+      if (!framing || (!walls.size && !shear) || !s.metersPerPoint) return;
       const page = await access.page(s);
       if (!page) return;
       const read = await automateWalls({ ...p, types: [] }, page, undefined, s, maxOpening);
@@ -298,7 +303,7 @@ export async function automateStructure(p: Project, access: SetAccess, maxOpenin
       const after = read.apply({ ...p, types: [], measurements: [] });
       for (const r of after.measurements.filter((m) => m.sheetId === s.id)) {
         const code = after.types.find((t) => t.id === r.typeId)?.name.split(/\s+[–-]\s+/)[0].trim() ?? '';
-        const w = walls.get(norm(code));
+        const w = walls.get(norm(code)) ?? (shear && /^SW\d{1,2}[A-Z]?$/.test(norm(code)) ? { mark: code, kind: 'wall' as const, size: 'shear wall', schedule: 'SHEAR WALL SCHEDULE' } : undefined);
         if (!w) continue;
         let t = typeOf.get(`wall:${norm(code)}`);
         if (!t) {

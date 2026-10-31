@@ -109,6 +109,7 @@ describe('structure', () => {
       sched('WOOD LINTEL SCHEDULE', [['MARK'], ['SIZE']], [['L1', ['L1', '2 - 38x184 (2x8)']]]),
       sched('STRUCTURAL WALL SCHEDULE', [['MARK'], ['WALL TYPE']], [['WT-1', ['WT-1', '38 x 140 (2x6) @ 400 O.C.']]]),
       sched('CONCRETE FOOTING SCHEDULE', [['MARK'], ['SIZE']], [['F1', ['F1', '1500 x 1500']]]),
+      sched('HOLD DOWN SCHEDULE', [['MARK'], ['NOTES']], [['HD1', ['HD1', 'SIMPSON HDU4, 3- 38 x 140 STUD AT EACH END']]]),
     ]);
     expect(members.map((m) => [m.mark, m.kind])).toEqual([
       ['B2', 'beam'],
@@ -116,6 +117,7 @@ describe('structure', () => {
       ['C2', 'column'],
       ['L1', 'lintel'],
       ['WT-1', 'wall'],
+      ['HD1', 'connector'],
     ]);
     expect(divisionOf('265 x 608 GLULAM')).toMatch(/^06/);
     // A size of bare dimensions takes its material from the row (Kelso C1: 265 x 342 | GLULAM COLUMN).
