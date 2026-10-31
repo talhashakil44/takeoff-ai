@@ -73,5 +73,20 @@
   ],
   "projectUnchanged": true,
   "acceptedQuantitiesUnchanged": true,
-  "drawingGeometryUnchanged": true
+  "drawingGeometryUnchanged": true,
+  "validation": {
+    "harness": "PASS bc8c03e:621 tests,tsc,build,audit",
+    "sourceAblations": [
+      "plan cut removed",
+      "high datum removed",
+      "profile side face removed"
+    ],
+    "live": "Focused original PDF section, registered 2D and selected 3D inspected;8.45m drawn span and10.428m top shown separately from4.47m retained takeoff",
+    "browserErrors": [],
+    "proofs": [
+      "diag/explore/proofs/roof-e89-plan-review-v44.png",
+      "diag/explore/proofs/roof-e89-original-footprint-v44.png",
+      "diag/explore/proofs/roof-e89-withheld-3d-v44.png"
+    ]
+  }
 }

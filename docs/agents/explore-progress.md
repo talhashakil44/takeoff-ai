@@ -1294,3 +1294,8 @@ rounding conflict; new route is fallback-only, preserving existing qualified
 profiles. Evidence docs/agents/evidence/roof-e89-section-v44.json.
 Live QA/harness follows. Next: review actual source/2D/3D and request Claude review;
 then independent outer MF3 gaps. No merge/deploy; T11 incomplete.
+Validated bc8c03e: full harness PASS621tests/tsc/build/audit. Live focused2D,
+original-PDF section crop and selected3D inspected; UI shows8.45m drawn span,
+10.428m top, retained4.47m takeoff separately. No page errors. Evidence updated.
+No acceptance claim for remaining D8/B1-2 or foundation gaps; requesting Claude
+review of new fallback and actual one-member delta.
