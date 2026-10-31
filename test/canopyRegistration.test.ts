@@ -51,6 +51,7 @@ function fixture() {
     height: 500,
     page: 1,
     metersPerPoint: null,
+    views:[{title:'CANOPY FRAMING PLAN',box:[0,30,320,430],scaleLabel:'1:50',metersPerPoint:50*.0254/72},{title:'Main',box:[600,0,1600,1500],scaleLabel:'1:100',metersPerPoint:100*.0254/72}],
   } as Sheet;
   const refs = ['d1', 'd2'].map(
     (id) =>
@@ -149,7 +150,7 @@ describe('canopy viewport registration', () => {
     expect(Object.keys(r)).toEqual(['canopy']);
     expect(r.canopy.topDatum).toBe(6.623);
     expect(
-      r.canopy.sources.some((s) => s.id === 'a' && s.quote?.includes('dogleg')),
+      r.canopy.sources.some((s) => s.id === 'a' && s.quote?.includes('grid strokes')),
     ).toBe(true);
     expect(r.canopy.frame.a).toBeCloseTo(0, 10);
     expect(r.canopy.frame.b).toBeCloseTo((-50 * 0.0254) / 72, 10);
@@ -176,6 +177,7 @@ describe('canopy viewport registration', () => {
     d.texts.s[0].str='CANOPY FOUNDATION PLAN';
     delete d.texts.d1; delete d.texts.d2;
     const sheet=d.project.sheets.find(s=>s.id==='s')!;sheet.metersPerPoint=100*.0254/72;
+    sheet.views=[];
     expect(insetRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
     sheet.views=[{title:'CANOPY FOUNDATION PLAN',box:[0,30,320,430],scaleLabel:'1:50',metersPerPoint:50*.0254/72},{title:'Main',box:[600,0,1600,1500],scaleLabel:'1:100',metersPerPoint:100*.0254/72}];
     const result=insetRegistrations(d.project,d.model,d.texts,d.lines);
@@ -230,6 +232,24 @@ describe('canopy viewport registration', () => {
     sh.views=[];
     const withdrawn=retainInsetEvidence(d.project,result,d.texts,d.lines).elements.find(e=>e.id==='plate')!;
     expect(withdrawn.issues).toEqual([]);expect(withdrawn.sources).toEqual([]);
+  });
+  it('qualifies the roof datum separately from generic inset titles',()=>{
+    const d=fixture(),sheet=d.project.sheets.find(s=>s.id==='s')!;
+    for(const title of ['ENTRY CANOPY PLAN','ENLARGED ENTRY CANOPY ROOF PLAN']){
+      d.texts.s[0].str=title;sheet.views![0].title=title;
+      expect(canopyRegistrations(d.project,d.model,d.texts,d.lines).canopy?.topDatum).toBe(6.623);
+    }
+    for(const title of ['CANOPY FOUNDATION PLAN','ELEVATOR FRAMING PLAN','CANOPY FLOOR PLAN']){
+      d.texts.s[0].str=title;sheet.views![0].title=title;
+      expect(insetRegistrations(d.project,d.model,d.texts,d.lines).canopy).toBeDefined();
+      expect(canopyRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
+    }
+    d.texts.s[0].str='ENTRY CANOPY PLAN';sheet.views![0].title='ENTRY CANOPY PLAN';sheet.title='PLAN';sheet.views![1].title='HIGH ROOF FRAMING PLAN';
+    expect(canopyRegistrations(d.project,d.model,d.texts,d.lines).canopy?.topDatum).toBe(6.623);
+    sheet.views![1].title='MAIN FLOOR FRAMING PLAN';
+    expect(canopyRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
+    sheet.title='FOUNDATION PLAN';
+    expect(canopyRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
   });
   it('recentres paired beam silhouettes and rejects missing or ambiguous ink', () => {
     const ink = [line(100, 100, 100, 300), line(110, 100, 110, 300)].map(

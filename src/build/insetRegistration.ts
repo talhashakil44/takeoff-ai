@@ -1,8 +1,8 @@
-import type {Project,Pt} from '../model';
+import type {Project,Pt,Sheet} from '../model';
 import type {BuildModel,SourceRef} from './types';
 import {gridAxes,type DrawingText,type DrawingTexts} from './building';
 import type {DrawingLines} from './roof';
-import {traceGridStroke} from './canopyRegistration';
+import {traceGridStroke} from './gridStroke';
 import {sheetFrame,worldPoint,type SheetFrame} from './sheetCoordinates';
 export interface InsetRegistration {frame:SheetFrame;metersPerPoint:number;title:string;bounds:[number,number,number,number];grids:string[];sources:SourceRef[];}
 type Axis={axis:'x'|'y';at:number};
@@ -20,14 +20,19 @@ export function tracedInsetAxes(texts:DrawingText[],lines:DrawingLines[string]):
  }
  return Object.fromEntries([...found].flatMap(([label,axes])=>axes.every(a=>a.axis===axes[0].axis&&Math.abs(a.at-axes[0].at)<.5)?[[label,axes[0]]]:[]));
 }
+/** Match the engine's small-view rule without requiring one scale for a
+ * multi-scale sheet. A larger differently-scaled detected view supplies context. */
+function smallViews(sheet:Sheet){
+ const views=sheet.views??[],area=(v:typeof views[number])=>(v.box[2]-v.box[0])*(v.box[3]-v.box[1]);
+ return views.filter(v=>v.metersPerPoint>0&&(!sheet.metersPerPoint||Math.abs(v.metersPerPoint/sheet.metersPerPoint-1)>.01)&&views.some(main=>area(main)>=2*area(v)&&Math.abs(main.metersPerPoint/v.metersPerPoint-1)>.01));
+}
 /** Small differently-scaled engine views, irrespective of their title. At least
  * three traced matching axes, crossing families and redundant spacing required.
  * Quarter-turns are tested; ambiguous reference frames withdraw registration. */
 export function insetRegistrations(project:Project,model:BuildModel,texts:DrawingTexts,lines:DrawingLines):Record<string,InsetRegistration>{
  const out:Record<string,InsetRegistration>={},ambiguous=new Set<string>();
  const needed=new Set<string>();
- for(const sheet of project.sheets)for(const view of sheet.views??[]){
-  if(!sheet.metersPerPoint||Math.abs(view.metersPerPoint/sheet.metersPerPoint-1)<=.01)continue;
+ for(const sheet of project.sheets.filter(s=>!s.superseded))for(const view of smallViews(sheet)){
   for(const t of texts[sheet.id]??[])if(t.cx>=view.box[0]&&t.cx<=view.box[2]&&t.cy>=view.box[1]&&t.cy<=view.box[3]&&/^(?:[A-Z](?:[a-z])?|\d{1,2})$/.test(t.str.trim()))needed.add(t.str.trim());
  }
  if(!needed.size)return out;
@@ -44,9 +49,8 @@ export function insetRegistrations(project:Project,model:BuildModel,texts:Drawin
   });
   return frame?[{sheet,frame,axes:tracedInsetAxes(tags,lines[sheet.id]??[])}]:[];
  });
- for(const sheet of project.sheets.filter(s=>!s.superseded&&s.metersPerPoint)){
-  const views=sheet.views??[],area=(v:typeof views[number])=>(v.box[2]-v.box[0])*(v.box[3]-v.box[1]);
-  for(const view of views.filter(v=>v.metersPerPoint>0&&Math.abs(v.metersPerPoint/sheet.metersPerPoint!-1)>.01&&views.some(main=>area(main)>=2*area(v)))){
+ for(const sheet of project.sheets.filter(s=>!s.superseded)){
+  for(const view of smallViews(sheet)){
    const ts=texts[sheet.id]??[],title=ts.filter(t=>t.str.trim().toUpperCase()===view.title.trim().toUpperCase());
    if(title.length!==1||title[0].cx<view.box[0]||title[0].cx>view.box[2]||title[0].cy<view.box[1]-35||title[0].cy>view.box[3]+35)continue;
    const scales=ts.flatMap(t=>{const m=/^1\s*:\s*(\d+(?:\.\d+)?)$/.exec(t.str.trim());return m&&t.cy>title[0].cy&&t.cy-title[0].cy<35&&Math.abs(t.cx-title[0].cx)<180?[Number(m[1])*.0254/72]:[];});

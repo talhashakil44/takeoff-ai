@@ -1700,3 +1700,26 @@ Validated0710fe6:657tests(4skipped),TypeScript,build,Kelso/Frederick audit PASS.
 Live B4 revisedp24 source,2D and3D reviewed in revised-elevator-* proofs;
 browser errors empty. Beam remains explicitly unplaced, no new physical solid.
 Sent Claude source/verification evidence and request for local B4 section datum.
+
+## 2026-10-31 19:10 UTC — roof canopy uses generic inset registration (model58)
+Removed legacy exact-canopy-title/local-window/quarter-turn solver. Shared
+insetRegistrations now also handles unscaled multi-view sheets by requiring a
+larger differently-scaled detected view. Grid-stroke tracer moved unchanged to
+its own module to avoid circular imports. Roof datum remains a separate gate:
+roof sheet (or unambiguous roof view classification), canopy-semantic inset,
+no foundation/floor/ceiling context; two agreeing datum sources still required.
+Synthetic arbitrary canopy title variants, mixed/generic sheet classification,
+wrong datum context and missing/ambiguous grids tested. No floor/foundation
+inset can inherit roof canopy height merely by sharing registration code.
+Production comparison initially found4B7 solids withheld: sheetS2.1 title is
+only PLAN. Fixed with detected-view roof classification, not a sheet-name rule.
+Recheck restores all4B7. Same source project/accepted quantities preserved;
+140acceptedstructuralsolids unchanged. FourB7 shapes differ only by+0.8763mm X
+translation from generic redundant-grid fit; section profiles,z,height,length
+unchanged. Five existing column plan-footprints (1C1,4C2) follow same fit.
+20records now carry inset evidence; no new physical solid or inferred height.
+B4 qualification: Add5p24F1 is175mmCLT+50mmconcretetopping and explicitly refers
+architectural finishes.4000-225=3775 would still assume finish-depth/localflush
+support applicability; no exact B4 elevation claimed. Sent Claude this source
+qualification. Next: B4localfloorsection/finish evidence, then remaining
+foundationheight gaps. Fullharness/live review follows; T11incomplete.
