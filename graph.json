@@ -746,7 +746,7 @@
       "updated": "2026-10-31T00:20:08.941Z"
     },
     {
-      "status": "todo",
+      "status": "blocked",
       "depends": [],
       "accept": [
         "tsc",
@@ -760,7 +760,8 @@
       "title": "Kelso Addendum 5 re-issue: engine takeoffs on July S-sheets predate revised S0.2-S6.0 (e.g. vestibule left wall FW5 -> FW1, return walls added). Needs user decision to add Addendum 5 drawings as a revision (app re-issue flow) and re-run foundations/structure on them",
       "prompt": "Blocked on user: add the Addendum 5 PDF as a drawing file so the re-issue flow registers S0.2-S6.0 (Sep 16 2026) as new sheets; user chooses whether to move takeoffs; then re-run the engine on the revised sheets and diff vs July.",
       "added": "2026-10-31T02:06:53.598Z",
-      "by": "claude"
+      "by": "claude",
+      "updated": "2026-10-31T02:06:55.588Z"
     }
   ]
 }
