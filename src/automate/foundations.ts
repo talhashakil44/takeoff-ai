@@ -44,8 +44,8 @@ export interface FoundationMark {
   refer?: string;
 }
 
-/** A footing mark: F1, SF-2, P3A; or a lettered one the schedule details elsewhere (SF-N, "refer to detail"). */
-const MARK = /^[A-Z]{1,3}-?(?:\d{1,2}[A-Z]?|N)$/;
+/** A footing mark: F1, SF-2, S/F-5, P3A; or a lettered one the schedule details elsewhere (SF-N, "refer to detail"). */
+const MARK = /^(?:[A-Z]{1,3}|[A-Z]{1,2}\/[A-Z]{1,2})-?(?:\d{1,2}[A-Z]?|N)$/;
 const norm = (s: string) => s.toUpperCase().replace(/[\s.-]/g, '');
 
 /** A length in metres from schedule words: millimetres (1500) on a metric set, feet and inches (4'-6") on an imperial one. */
@@ -77,7 +77,7 @@ const column = (s: Schedule, re: RegExp) => s.columns.findIndex((c) => re.test(c
 /** The foundation marks the structural schedules list: footings, piers, mass footings, foundation walls. */
 export function foundationMarks(schedules: Schedule[], metric: boolean): FoundationMark[] {
   const out: FoundationMark[] = [];
-  for (const s of schedules) {
+  for (let s of schedules) {
     const t = s.title.toUpperCase();
     const which: FoundationKind | 'footing' | null = /MASS\s+FOOTING/.test(t)
       ? 'mass'
@@ -89,6 +89,9 @@ export function foundationMarks(schedules: Schedule[], metric: boolean): Foundat
             ? 'wall'
             : null;
     if (!which) continue;
+    // Headings read as the first row (no heading band above the rows): "PIER TAG | PIER SIZE | ...".
+    const head = s.columns.every((c) => !c.length) && s.rows[0]?.cells.length && s.rows[0].cells.every((c) => !/\d/.test(c)) ? s.rows[0] : null;
+    if (head) s = { ...s, columns: head.cells.map((c) => [c]), rows: s.rows.slice(1) };
     const size = column(s, /\bSIZE\b|DIMENSION/i);
     const depth = column(s, /DEPTH|THICK/i);
     const type = column(s, /\bTYPE\b/i);
@@ -100,10 +103,18 @@ export function foundationMarks(schedules: Schedule[], metric: boolean): Foundat
       let kind: FoundationKind;
       if (which === 'footing') {
         const ty = cell(type).toUpperCase();
-        kind = /^S|STRIP|CONT/.test(ty) ? 'strip' : /^P|PAD|SPREAD|ISOL/.test(ty) ? 'pad' : /^SF/.test(norm(mark)) ? 'strip' : 'pad';
+        kind = /^S|STRIP|CONT/.test(ty) ? 'strip' : /^P|PAD|SPREAD|ISOL/.test(ty) ? 'pad' : /^S\/?F/.test(norm(mark)) || /\bCONT/i.test(cell(size)) ? 'strip' : 'pad';
       } else kind = which;
       const sz = sizesOf(cell(size), metric);
-      const d = cell(depth) ? sizesOf(cell(depth), metric)[0] : undefined;
+      // Depth in its own column, or the last of a footing's sizes ("W x Lg x THK": 1800 x 1800 x 400; a
+      // strip's "W x THK x CONTINUOUS": 600 x 300).
+      const d = cell(depth)
+        ? sizesOf(cell(depth), metric)[0]
+        : (kind === 'pad' || kind === 'mass') && sz.length === 3
+          ? sz[2]
+          : kind === 'strip' && sz.length === 2
+            ? sz[1]
+            : undefined;
       // A wall's thickness: its type column ("200 CONCRETE", "458 ICF (300 CONCRETE)": the concrete).
       const wallWords = kind === 'wall' ? cell(column(s, /WALL\s*TYPE|THICK/i)) || r.cells[1] || '' : '';
       const wallThick = kind === 'wall' ? (sizesOf(/\((\d+)\s*CONCRETE\)/i.exec(wallWords)?.[1] ?? wallWords, metric)[0] ?? undefined) : undefined;
@@ -459,6 +470,16 @@ export async function automateFoundations(p: Project, access: SetAccess, maxOpen
         });
       };
       const reach = 4 / k; // a tag sits within about 4 m of its wall
+      // Strip footing tags whose own leader lands on a foundation wall run (Dunnville S1-1: "S/F-5"
+      // with an arrow to the footing edge beside the wall, its FW tag a few metres along).
+      const stripTexts = texts.filter((t) => strips.some((s) => norm(s.mark) === norm(t.str)));
+      const segsHere = stripTexts.length && runsByCode.size ? ((await access.segments(plan)) ?? []) : [];
+      const stripEnds = segsHere.length
+        ? resolveTags(stripTexts.map((t) => ({ code: t.str, cx: t.cx, cy: t.cy, w: t.w, h: t.h })), segsHere)
+            .filter((r) => r.leader)
+            .map((r) => ({ mark: strips.find((x) => norm(x.mark) === norm(r.code))!, end: r.paths[0][r.paths[0].length - 1], tag: [r.cx, r.cy] as Pt }))
+        : [];
+      const pointed = new Set<string>();
       for (const [code, rs] of runsByCode) {
         const sched = wallMarks.get(norm(code));
         const wt = make(`wall:${norm(code)}`, {
@@ -481,6 +502,17 @@ export async function automateFoundations(p: Project, access: SetAccess, maxOpen
             const d = toRun(pr.at, r.points);
             if (d < reach && (!best || d < best.d)) best = { mark: pr.strip, d };
           }
+          // Or a strip tag's arrow ending on this run, within the footing's half width beyond the wall.
+          if (!best) {
+            const wallW = (sched?.width ?? 0.3) / k;
+            for (const se of stripEnds) {
+              const d = toRun(se.end, r.points);
+              if (d <= wallW / 2 + (se.mark.width ?? 0.6) / k / 2 + 2 && (!best || d < best.d)) {
+                best = { mark: se.mark, d };
+                pointed.add(`${se.tag[0]},${se.tag[1]}`);
+              }
+            }
+          }
           const sf = best?.mark ?? null;
           if (!sf) continue;
           const st = stripType(sf);
@@ -493,7 +525,7 @@ export async function automateFoundations(p: Project, access: SetAccess, maxOpen
 
       // Strip footings tagged on their own, under walls that are not foundation walls (Kelso S1.0: the
       // core's masonry walls on SF-1 and SF-N): along the dashed footing edges their arrows land on.
-      const own = texts.filter((t) => strips.some((s) => norm(s.mark) === norm(t.str)) && !pairs.some((pr) => Math.hypot(pr.tag[0] - t.cx, pr.tag[1] - t.cy) < 1));
+      const own = texts.filter((t) => strips.some((s) => norm(s.mark) === norm(t.str)) && !pairs.some((pr) => Math.hypot(pr.tag[0] - t.cx, pr.tag[1] - t.cy) < 1) && !pointed.has(`${t.cx},${t.cy}`));
       if (own.length) {
         const segs = (await access.segments(plan)) ?? [];
         const markOf = (code: string) => strips.find((s) => norm(s.mark) === norm(code))!;

@@ -46,8 +46,8 @@ export function scheduleKind(title: string): ScheduleKind {
 const TITLE = /\bSCHEDULE\b|^(WALL|PARTITION|FLOOR|ROOF|CEILING)\s+(ASSEMBLIES|TYPES)$/i;
 const NOT_TITLE = /\b(PER|SEE|REFER|AS|TO|IN|ON|WITH|FOR|FROM|OF|AND)\s+(THE\s+)?([A-Z/&]+\s+){0,3}SCHEDULES?\b|^(SCHEDULES?|AND SCHEDULES?)$|\bNOTES?\b|^SCHEDULES?\s+(AND|FOR|TO|ON|IN|AT|WITH|IS|ARE)\b|\bSCHEDULES?\s+(INDICATES?|SHOWS?|IS|ARE)\b|[.&,:;]\s*$/i;
 
-/** A row's mark: D101, 101A, D000.1, W1, SC-2, EF-1, 000, B12, a fixture type A or J1. */
-const MARK = /^(?:[A-Z]{0,4}[-.]?\d{1,4}[A-Z]{0,2}(?:[-.]\d{1,3}[A-Z]?)?|[A-Z]{1,3}[-.]?\d{0,2}[A-Z]?)$/;
+/** A row's mark: D101, 101A, D000.1, W1, SC-2, EF-1, 000, B12, a fixture type A or J1, a strip footing S/F-5. */
+const MARK = /^(?:[A-Z]{0,4}[-.]?\d{1,4}[A-Z]{0,2}(?:[-.]\d{1,3}[A-Z]?)?|[A-Z]{1,3}[-.]?\d{0,2}[A-Z]?|[A-Z]{1,2}\/[A-Z]{1,2}[-.]?\d{1,3}[A-Z]?)$/;
 
 /** A column's heading word, not a row's mark (NO., TAG, ITEM, MARK). */
 const HEAD_WORD = /^(NO\.?|NOS?\.?|NUMBER|#|TAG|TAGS|ITEM|MARK|TYPE|ID|REF\.?|SYM\.?|SYMBOL|KEY|CODE|ROOM|ZONE|UNIT|QTY\.?|SIZE|HP|KW|SP|ESP|RPM|TONS?|CFM|GPM|MBH|DB|WB|EAT|LAT)$/i;

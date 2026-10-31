@@ -51,6 +51,26 @@ describe('foundations', () => {
     expect(by['FW-3']).toMatchObject({ kind: 'wall', width: 0.3 });
   });
 
+  it('reads sizes written W x Lg x THK in one column, and headings read as the first row', () => {
+    const marks = foundationMarks(
+      [
+        sched('FOOTING SCHEDULE', [['FTG.', 'TAG'], ['FOOTING SIZE', 'W x Lg x THK. (mm)', 'or', 'W x THK. x CONTINUOUS (mm)'], ['REINFORCING']], [
+          ['F-1', ['F-1', '1800 x 1800 x 400', '15M @ 200 (B) E/W']],
+          ['S/F-5', ['S/F-5', '600 x 300 x CONT.', '2-15M CONT.']],
+        ]),
+        sched('PIER SCHEDULE', [[], [], []], [
+          ['PIER TAG', ['PIER TAG', 'PIER SIZE', 'REINFORCING']],
+          ['P-1', ['P-1', '600 x 600', '8-20M (V) + TIES 2 - 10M@ 300 o/c']],
+        ]),
+      ],
+      true,
+    );
+    const by = Object.fromEntries(marks.map((m) => [m.mark, m]));
+    expect(by['F-1']).toMatchObject({ kind: 'pad', width: 1.8, length: 1.8, depth: 0.4 });
+    expect(by['S/F-5']).toMatchObject({ kind: 'strip', width: 0.6, depth: 0.3 });
+    expect(by['P-1']).toMatchObject({ kind: 'pier', width: 0.6, length: 0.6 });
+  });
+
   it('counts tags, stacked tags included, and not notes that name a footing', () => {
     const marks = [{ mark: 'F1', kind: 'pad' as const, says: '', schedule: '' }];
     const places = markPlaces([txt('F1', 1, 1), txt('F1 / P2', 5, 5), txt('PROVIDE F1 FOOTING AT ALL COLUMNS', 9, 9), txt('TYP. AT F1', 12, 12)], marks);
