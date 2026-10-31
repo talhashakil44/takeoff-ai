@@ -1518,3 +1518,25 @@ datum as evidence, expressly unverified for local applicability; no new pad
 solid. Screenshots dunnville-{plan,source,3d}-v51 inspected,pageerrors empty.
 Sent Claude scoped integration breakdown and closed stale engine-fix request.
 Next work remains physical footprint/section association, not dimensions parsing.
+
+## 2026-10-31 15:39 UTC — source-bound pad footprint candidates (model52)
+Added independent 2D-only pad outline evidence after physical qualification.
+Reads same-sheet schedules, registered sheetFrame and original tag; requires
+one closed rectangle matching width/length within15mm, no ambiguous neighbour.
+Uses existing closed-frame detector; does not bridge broken compound boundaries.
+Revised foundation pages are excluded until their own source frame is supported.
+Withdraws prior candidates when source evidence disappears. Does not alter
+physical shapes, quantities or accepted source data. UI calls these candidates,
+not verified footprints. Synthetic tests cover3page scales, missingedge,
+wrongsize, ambiguousneighbour and stale evidence withdrawal.
+Dunnville recovered3interior F-2 closed1.5x1.5m outlines at grids2/B,3/B,4/B.
+OriginalPDF overlay dunnville-pad-outlines-v52.png inspected: boxes follow
+actual outer pad edges and agree with printed1500dimension. Live2D candidate
+outlines inspected;3D retains no physical pad solid. Records118/9solids/109
+unresolved unchanged. Same-input project/shapes/quantities unchanged; only three
+planFootprint witnesses added. Tag association remains inferred, section/cut
+applicability unresolved. Next: local section correspondence for these three,
+then off-grid/compound pads requiring leaders or perimeter reconstruction.
+Claude approved51 and requested final engine-owned files from integration at
+merge (automate,walls,smart,sources,facts); keep that ownership instruction.
+T11 incomplete; full harness and final live checks follow; no main merge/deploy.

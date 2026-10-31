@@ -1126,7 +1126,7 @@ export function ExploreWorkspace({
               <dl className="ex-facts">
                 <div>
                   <dt>Geometry</dt>
-                  <dd>{element.planFootprint && (!element.shape || element.shape.type === "locator") ? "Plan footprint verified · elevation unresolved" : element.shape?.type === "axis" ? (element.origin === "drawing" ? "Plan outline only · elevation unverified" : "Plan axis · section and height unverified") : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : rooms.some(r=>r.id===element.id) ? "Measured space · no construction solid" : "Unplaced"}</dd>
+                  <dd>{element.planFootprint && (!element.shape || element.shape.type === "locator") ? (element.planFootprint.domain.startsWith("foundation:") ? "Plan footprint candidate · elevation unresolved" : "Plan footprint verified · elevation unresolved") : element.shape?.type === "axis" ? (element.origin === "drawing" ? "Plan outline only · elevation unverified" : "Plan axis · section and height unverified") : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : rooms.some(r=>r.id===element.id) ? "Measured space · no construction solid" : "Unplaced"}</dd>
                 </div>
                 <div>
                   <dt>Source</dt>
@@ -1178,7 +1178,7 @@ export function ExploreWorkspace({
                       const ring=element.planFootprint!.ring;
                       setFocus([ring.reduce((v,p)=>v+p[0],0)/ring.length,ring.reduce((v,p)=>v+p[1],0)/ring.length]);
                       setMode('sheet');setShowFootprints(true);setStructureOnly(true);
-                    }}>Locate verified footprint</button>
+                    }}>{element.planFootprint.domain.startsWith("foundation:") ? "Locate candidate footprint" : "Locate verified footprint"}</button>
                   </>}
                   {(selectedShape?.type === "run" || selectedShape?.type === "point") && (
                     (["sheet", "lift"] as const).map(view => <button

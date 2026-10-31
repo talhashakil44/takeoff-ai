@@ -1,3 +1,4 @@
+import { retainFoundationPlanEvidence } from './foundationPlanEvidence';
 import { connectSourceColumns } from "./columnGeometry";
 import { recoverRoofCantilevers } from "./roofCantileverGeometry";
 import { connectStructuralWalls } from "./structuralWallGeometry";
@@ -159,7 +160,7 @@ export function connectPhysicalStructure(
       };
     },
   );
-  return endPhysicalGeometry(
+  return retainFoundationPlanEvidence(project, endPhysicalGeometry(
     recoverFoundationGeometry(project, roof, texts, lines),
-  );
+  ), texts, lines);
 }
