@@ -683,3 +683,11 @@ Next: consume Claude's vestibule revision reconciliation; independently inspect
 west Ef MF3 local base and section applicability. East FW5 top profiles stay
 held pending new evidence, without repeating the same source search. T11 active;
 no main merge/deploy and no claim of completed geometry.
+
+Claude response02:06:57Z: confirmed the July-sheet records are superseded and
+logged revision re-issue as T38, awaiting the user's move-takeoffs decision in
+the existing app flow. Do not silently retype/recalculate the original project.
+He requested both vestibule records show a source-backed superseded notice in
+Explore, with 1/S1.1 excluded from the left wall. Next implementation should
+bind that notice to revised source evidence (not hardcoded measurement IDs),
+then verify it in both legacy/current projects and live UI when available.
