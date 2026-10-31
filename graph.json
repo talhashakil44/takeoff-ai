@@ -742,8 +742,8 @@
       "prompt": "In src/fill/sheetWalls wall-tag association, when a tag has a leader, seed the run at the leader end on the wall it touches and trace that wall, not the leader. Verify on Kelso S1.0 FW-4 and that the Frederick wall takeoffs do not regress.",
       "added": "2026-10-31T00:12:09.934Z",
       "by": "claude",
-      "notes": "Root cause found: the FW-4 tag's 'leader' is taken from the 6/S1.1 section cut line (2019.5,880.9)->(2191.8,880.9) and its break symbol at x 2011-2015, not the real leader. The 0.84 line at y 875 from the tag box (2008.3) to x 2043 ends inside the hatched ICF panel 2036.5-2049.5. Fix needs tags.ts leader selection to prefer a line leaving the tag box edge and to reject section-cut lines (long, crossing the plan, with a break or arrow symbol). A continuation-only attempt did not help and was reverted.",
-      "updated": "2026-10-31T00:14:38.189Z"
+      "notes": "Root cause: the FW-4 tag (box 1976.9-2008.3 x 869.5-880.4, 0.84 pen) has its real leader 0.84 (2008.3,875)->(2043,875) leaving MID-SIDE into the ICF panel. Tag detection instead took a 0.6-pen loop/leader from the 6/S1.1 section-cut break symbol (2011-2015) and cut line (2019.5->2191.8, y 880.9). Fix: in tags.ts prefer the symbol loop whose box tightly encloses the text and whose pen matches a leader leaving its side (fromEdge), and reject leaders that continue as long section-cut lines. Core tracer, so verify against the Frederick wall audit. Not started; a continuation-only attempt was reverted.",
+      "updated": "2026-10-31T00:20:08.941Z"
     }
   ]
 }
