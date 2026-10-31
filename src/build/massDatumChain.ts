@@ -45,7 +45,7 @@ export function connectMassDatums(elements: BuildElement[], footprints: Map<stri
     });
     const top=(e:BuildElement)=>e.shape?.type==='point' && e.issues.some(i=>i.startsWith('Foundation revision applied:')) ? e.shape.z+e.shape.size[2] : null;
     row.forEach((e,i)=>{
-      if(!['drawing','takeoff'].includes(e.origin)||(e.shape&&!['axis','locator'].includes(e.shape.type)))return;
+      if(!['drawing','takeoff'].includes(e.origin ?? 'takeoff')||(e.shape&&!['axis','locator'].includes(e.shape.type)))return;
       let left=i-1,right=i+1;
       while(left>=0&&links[left]&&top(row[left])===null)left--;
       while(right<row.length&&links[right-1]&&top(row[right])===null)right++;
