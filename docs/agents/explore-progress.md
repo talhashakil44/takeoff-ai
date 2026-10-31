@@ -623,3 +623,36 @@ its earlier raster limit; adaptive detail inside the 2D/3D scene remains open.
 Next action: return to source qualification of unresolved roof free ends and
 stepped-footing/wall bases, using the now-readable reference details. Preserve
 all unresolved coverage flags; no default solid/profile. T11 remains active.
+
+## Stepped-axis evidence — October 31, 01:33 wake
+
+Claude approved fd49f07. Re-read original revised 5/S1.2: underside slopes
+7 vertical : 10 horizontal, rise is 610 MAX, spacing MIN 1220. These are not
+actual placement dimensions. S1.0 crossbars locate steps but do not uniquely
+map the top face or ramp endpoints. No stepped solid is qualified by this pass.
+
+Model35 now explains a held strip axis when the existing vector guard finds a
+step matching both footing-edge pens. It adds a specific missing-profile warning,
+a bounded original-plan source link and the same-revision stepped-detail link.
+The latter is explicitly a reference, not proof of local applicability. Axes
+remain axes; physical shapes and quantities are untouched. Withdrawn crossbar
+evidence removes this annotation on replay; resolved solids are not annotated.
+
+Production source-loader checks pass for legacy and current engine. Exactly one
+11.650133m SF2 axis is annotated in each: legacy43f2688b-c728-430f-9242-d91de4942082,
+engine632dc9c7-870b-4964-8f37-65721520602c. All legacy shapes, drawing candidates
+and quantity/unit tuples compare identical to the model34 baseline. Current
+engine accepted tuples still match its own extraction. Do not compare regenerated
+engine IDs against the older frozen project as if the input were unchanged.
+Reports: /tmp/step-evidence-final-report.json, /tmp/step-evidence-engine-report.json.
+
+Live review confirms unchanged11.65m, explicit unresolved geometry, revision
+pages21/23, and the source crop containing the actual SF crossbars along the
+axis. Proof: diag/explore/proofs/step-axis-source-v35.png. Asked Claude for a
+specific setting-out/section reference mapping the crossbar to the transition
+face. This is an evidence/coverage improvement, not added solid coverage.
+
+Next: investigate independently source-bounded FW5 buttress profiles with known
+local MF2 bases; do not extend the west MF3 section datum to them or assume the
+sloped top is4000mm throughout. T11 remains active. Roof-end profiles and stepped
+transition placement remain unresolved; no merge/deploy.

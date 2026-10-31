@@ -1,3 +1,4 @@
+import { explainFoundationSteps } from './foundationStepEvidence';
 import { recoverFoundationWalls } from './foundationWallGeometry';
 import type { Project, Sheet } from '../model';
 import { foundationMarks, sizesOf } from '../automate/foundations';
@@ -982,7 +983,8 @@ export function recoverFoundationGeometry(
   const wallSheet=wallPlan&&project.sheets.find(s=>s.id===wallPlan.sheetId);
   const wallAcceptedFrame=wallSheet?sheetFrame(project,{...model,elements:model.elements.filter(e=>!e.issues.some(i=>i.startsWith('Foundation revision applied:')))},wallSheet):null;
   const withWalls=wallPlan?recoverFoundationWalls(project,recovered,wallPlan,texts,revision,localFootingLeaders(wallPlan),(axis,a,b,lo,hi)=>hasFootingCrossbar(wallPlan,axis,a,b,lo,hi),wallWidths,wallAcceptedFrame):recovered;
-  return {...withWalls,elements:withWalls.elements.map(e=>{
+  const explained=wallPlan?explainFoundationSteps(withWalls,wallPlan,wallWidths,(axis,a,b,lo,hi)=>hasFootingCrossbar(wallPlan,axis,a,b,lo,hi),texts,revision):withWalls;
+  return {...explained,elements:explained.elements.map(e=>{
     if(e.measurementSource!=='foundations')return e;
     const resolved=e.issues.some(i=>i.startsWith('Foundation revision applied:'));
     return {...e,sources:e.sources.filter(s=>!oldGeneric(s)&&!(resolved&&s.quote?.startsWith(noticePrefix)))};
