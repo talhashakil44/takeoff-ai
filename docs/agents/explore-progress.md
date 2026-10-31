@@ -1239,3 +1239,18 @@ PDF p23, 2D and 3D inspected; no page errors, no SF-N solids. Evidence:
 docs/agents/evidence/foundation-sfn-current-five.json. Original files unchanged.
 Next: reconcile engine fixture identity with Claude, then inspect local revised
 slab/datum evidence for each SF-N location. T11 incomplete; no merge/deploy.
+
+## 2026-10-31 10:06 UTC — engine fixture reconciled
+Claude confirmed five-run identity; his 1.9m estimate was the existing 2.30m stub.
+The previous export was pre-9da06a1, now refreshed. Unchanged Explore audit now
+returns 2027-08-30 versus old expected 08-27. Updated only two approved fixture
+pins to 08-30 / 09-17; notified gpt-build. Production loader passes with all five
+SF-N types now sized by detail, same lengths, axes only, p19/p23 links retained.
+Input project and accepted tuples unchanged by loader. Revised S1.0 PDF crop
+visually checked: six SF-N tags, right continuous run tagged twice, matching five
+runs. Typical slab note is 150mm; optional thickening detail alone still does not
+supply local elevation/applicability. No physical geometry added. Separate live
+QA uses refreshed generated snapshot; original project/PDFs untouched.
+Evidence docs/agents/evidence/foundation-sfn-refreshed.json. Full harness follows.
+Next: local SF-N slab datum association and registered outline, then source-backed
+profile recovery; retain unresolved status meanwhile. T11 incomplete; no deploy.

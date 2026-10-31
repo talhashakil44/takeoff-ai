@@ -1,0 +1,62 @@
+{
+  "result": "Claude corrected stale engine export; all five SF-N source links survive sized-by-detail type and zero depth",
+  "engineCommit": "9da06a1",
+  "records": [
+    {
+      "id": "4b838b32-7324-4254-b445-af25b034ea7a",
+      "typeName": "SF-N \u2013 Strip footing, sized by detail (DETAIL 10/S1.2)",
+      "quantity": 5.069416666666668,
+      "unit": "m",
+      "shape": "axis"
+    },
+    {
+      "id": "ee75073d-b7a7-474e-85f6-ce1b3d8a5d44",
+      "typeName": "SF-N \u2013 Strip footing, sized by detail (DETAIL 10/S1.2)",
+      "quantity": 8.911166666666672,
+      "unit": "m",
+      "shape": "axis"
+    },
+    {
+      "id": "74bc3b7a-f08a-4c17-972a-acc603f9ab47",
+      "typeName": "SF-N \u2013 Strip footing, sized by detail (DETAIL 10/S1.2)",
+      "quantity": 7.128933333333331,
+      "unit": "m",
+      "shape": "axis"
+    },
+    {
+      "id": "476a5c9e-dee1-45dc-bc1f-50da0ef89a26",
+      "typeName": "SF-N \u2013 Strip footing, sized by detail (DETAIL 10/S1.2)",
+      "quantity": 2.298700000000003,
+      "unit": "m",
+      "shape": "axis"
+    },
+    {
+      "id": "29d48ead-2003-4608-a862-c0dfa167aa0e",
+      "typeName": "SF-N \u2013 Strip footing, sized by detail (DETAIL 10/S1.2)",
+      "quantity": 7.181849999999997,
+      "unit": "m",
+      "shape": "axis"
+    }
+  ],
+  "sourceReview": {
+    "pdf": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+    "pages": [
+      21,
+      23
+    ],
+    "findings": [
+      "Six SF-N tags serve five measured runs; right-hand continuous run labelled twice",
+      "S1.0 typical interior slab note is 150mm",
+      "10/S1.2 is optional slab thickening; local elevation and applicability remain unresolved"
+    ],
+    "physicalRecovery": false
+  },
+  "validation": {
+    "production": "PASS; original project and accepted takeoff tuples unchanged",
+    "auditPins": [
+      "2027-08-30",
+      "2027-09-17"
+    ],
+    "priorPinFailure": "2027-08-30 actual vs 2027-08-27 expected after engine export refresh"
+  }
+}
