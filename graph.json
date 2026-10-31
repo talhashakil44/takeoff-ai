@@ -802,6 +802,23 @@
       "notes": "71ec22f. Engine fixed; Kelso demo's existing 31 trades double counts NOT removed (user decides: rerun trades on demo would drop them). M&E counts unchanged; Frederick unchanged.",
       "evidence": "claude/integration@71ec22f",
       "updated": "2026-10-31T07:58:21.820Z"
+    },
+    {
+      "status": "todo",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T41",
+      "owner": "claude",
+      "stream": "claude",
+      "title": "Strip footings tagged on their own (Kelso S1.0 core: SF-1, SF-N under masonry walls, no FW tag)",
+      "prompt": "Follow unpaired SF tag arrows to the dashed footing edge, pair with the parallel far edge at the scheduled width, take the centreline.",
+      "added": "2026-10-31T08:09:57.009Z",
+      "by": "claude"
     }
   ]
 }
