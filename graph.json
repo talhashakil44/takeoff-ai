@@ -784,7 +784,7 @@
       "updated": "2026-10-31T05:42:08.258Z"
     },
     {
-      "status": "todo",
+      "status": "done",
       "depends": [],
       "accept": [
         "tsc",
@@ -798,7 +798,10 @@
       "title": "Trades step double-counts structural codes (Kelso L1/L2 lintels, WT-1, R1, F1 pads as CLT span legend)",
       "prompt": "Do not count in automateTrades a code another takeoff already has on that sheet; skip structural lettered legends and wall/floor/roof assembly schedules.",
       "added": "2026-10-31T07:57:20.551Z",
-      "by": "claude"
+      "by": "claude",
+      "notes": "71ec22f. Engine fixed; Kelso demo's existing 31 trades double counts NOT removed (user decides: rerun trades on demo would drop them). M&E counts unchanged; Frederick unchanged.",
+      "evidence": "claude/integration@71ec22f",
+      "updated": "2026-10-31T07:58:21.820Z"
     }
   ]
 }
