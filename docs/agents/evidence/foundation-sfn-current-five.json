@@ -1,0 +1,109 @@
+{
+  "checkpoint": "d65bca3",
+  "modelVersion": 43,
+  "result": "Five current fixture SF-N records linked and withheld; fifth location differs from Claude handoff",
+  "records": [
+    {
+      "id": "1e6ac6ee-a971-43dd-8b4a-f8dda5c113ef",
+      "quantity": 5.069416666666668,
+      "unit": "m",
+      "shape": "axis",
+      "source": {
+        "kind": "sheet",
+        "id": "1b86f5de-8b61-4955-a1dc-5bebcfca0b48",
+        "page": 4,
+        "label": "S1.0",
+        "box": [
+          1780.02,
+          1155.93,
+          1923.72,
+          1155.93
+        ]
+      }
+    },
+    {
+      "id": "df56f1be-c6ba-4033-bd8d-c4ecf06f1abf",
+      "quantity": 8.911166666666672,
+      "unit": "m",
+      "shape": "axis",
+      "source": {
+        "kind": "sheet",
+        "id": "1b86f5de-8b61-4955-a1dc-5bebcfca0b48",
+        "page": 4,
+        "label": "S1.0",
+        "box": [
+          1916.46,
+          918.24,
+          1916.46,
+          1170.8400000000001
+        ]
+      }
+    },
+    {
+      "id": "e62bf6fe-2865-42b1-9447-43c84e78b8bb",
+      "quantity": 7.128933333333331,
+      "unit": "m",
+      "shape": "axis",
+      "source": {
+        "kind": "sheet",
+        "id": "1b86f5de-8b61-4955-a1dc-5bebcfca0b48",
+        "page": 4,
+        "label": "S1.0",
+        "box": [
+          1769.46,
+          1033.3200000000002,
+          1769.46,
+          1235.4
+        ]
+      }
+    },
+    {
+      "id": "f0b92b97-01d8-43fa-9099-174a2bee36eb",
+      "quantity": 2.298700000000003,
+      "unit": "m",
+      "shape": "axis",
+      "source": {
+        "kind": "sheet",
+        "id": "1b86f5de-8b61-4955-a1dc-5bebcfca0b48",
+        "page": 4,
+        "label": "S1.0",
+        "box": [
+          1889.6,
+          825.72,
+          1889.6,
+          890.8800000000001
+        ]
+      }
+    },
+    {
+      "id": "5e6f4aee-f69c-4638-ae2c-95f78b67532f",
+      "quantity": 7.181849999999997,
+      "unit": "m",
+      "shape": "axis",
+      "source": {
+        "kind": "sheet",
+        "id": "1b86f5de-8b61-4955-a1dc-5bebcfca0b48",
+        "page": 4,
+        "label": "S1.0",
+        "box": [
+          1722.42,
+          1022.48,
+          1926,
+          1022.48
+        ]
+      }
+    }
+  ],
+  "validation": {
+    "productionLoader": "PASS; original project and takeoff tuples unchanged",
+    "audit": "PASS with existing 2027-08-27 / 2027-09-16 pins; no repinning",
+    "live": "five results, original PDF page23, 2D and 3D visually inspected",
+    "pageErrors": []
+  },
+  "proofs": [
+    "diag/explore/proofs/sfn-option-plan-review-current-five.png",
+    "diag/explore/proofs/sfn-option-original-footprint-current-five.png",
+    "diag/explore/proofs/sfn-option-withheld-3d-current-five.png"
+  ],
+  "next": "Reconcile fifth record with Claude before any fixture/date change. Establish local profile and datum before solid recovery."
+}

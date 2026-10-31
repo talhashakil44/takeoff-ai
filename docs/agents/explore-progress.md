@@ -1225,3 +1225,17 @@ before profile recovery; await Claude engine interpretation. For8/D, identify an
 orthogonal section cutting the actual post rather than borrowing the dashed
 background depiction. OuterMF3datums/SF2step endpoints also open. T11active and
 incomplete; no main merge/deploy, no quantity changes or fabricated geometry.
+
+## 2026-10-31 09:39 UTC — current SF-N dataset reconciliation
+Claude approved d65bca3 and reported engine 9da06a1 removes assumed SF-N depth.
+Refreshed production loader against current local .agents-data: five SF-N records
+all retain revised schedule/detail links and remain axes, original project and
+accepted takeoff tuples unchanged. Fifth record is 5e6f4aee-f69c-4638-ae2c-95f78b67532f,
+7.18185m at S1.0 [[1722.42,1022.48],[1926,1022.48]], not the 1.9m stair-side
+stub described by Claude. Sent exact discrepancy to Claude through bus. Current
+local audit PASSES existing 2027-08-27 / 2027-09-16 pins; do not blindly repin to
+handoff dates. No runtime edits this iteration. Live five-result list, original
+PDF p23, 2D and 3D inspected; no page errors, no SF-N solids. Evidence:
+docs/agents/evidence/foundation-sfn-current-five.json. Original files unchanged.
+Next: reconcile engine fixture identity with Claude, then inspect local revised
+slab/datum evidence for each SF-N location. T11 incomplete; no merge/deploy.
