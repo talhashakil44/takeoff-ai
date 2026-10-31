@@ -82,7 +82,7 @@ export function dimensionLines(segs: Segment[], tick: number): Set<Segment> {
  * Grid lines: the lines run out from a grid bubble (a small circle at the edge of the plan, 1, 2,
  * A, B), dash by dash across the plan, in the bubble's line's pen. They bound nothing either.
  */
-export function gridLines(segs: Segment[]): Set<Segment> {
+export function gridLines(segs: Segment[], face?: { min: number; max: number }): Set<Segment> {
   const out = new Set<Segment>();
   // Circles: curved shapes about as wide as high, 4–30 points across.
   const subs = new Map<number, Segment[]>();
@@ -138,6 +138,36 @@ export function gridLines(segs: Segment[]): Set<Segment> {
         out.add(t);
       }
     }
+  }
+  if (!face || !out.size) return out;
+  // A wall drawn on its grid line: a piece with another line beside it a wall's thickness away is
+  // the wall's face, not the grid's (kept).
+  const lines = segs.filter((s) => !s.curve && !s.filled && !out.has(s));
+  const near = new Map<string, Segment[]>();
+  const fcell = Math.max(8, face.max);
+  for (const l of lines) {
+    const k = `${Math.floor((l.x1 + l.x2) / 2 / fcell)},${Math.floor((l.y1 + l.y2) / 2 / fcell)}`;
+    (near.get(k) ?? near.set(k, []).get(k)!).push(l);
+  }
+  for (const g of [...out]) {
+    const L = len(g);
+    const [ux, uy] = [(g.x2 - g.x1) / L, (g.y2 - g.y1) / L];
+    const [mx, my] = [(g.x1 + g.x2) / 2, (g.y1 + g.y2) / 2];
+    const reach = Math.ceil((L / 2 + face.max) / fcell) + 1;
+    const [gx, gy] = [Math.floor(mx / fcell), Math.floor(my / fcell)];
+    let paired = false;
+    for (let i = -reach; i <= reach && !paired; i++)
+      for (let j = -reach; j <= reach && !paired; j++)
+        for (const l of near.get(`${gx + i},${gy + j}`) ?? []) {
+          const ll = len(l);
+          if (ll < Math.min(L, face.max) * 0.5 || Math.abs(((l.x2 - l.x1) * uy - (l.y2 - l.y1) * ux) / ll) > 0.02) continue;
+          const off = Math.abs((l.x1 - g.x1) * -uy + (l.y1 - g.y1) * ux);
+          if (off < face.min || off > face.max) continue;
+          const t1 = (l.x1 - g.x1) * ux + (l.y1 - g.y1) * uy;
+          const t2 = (l.x2 - g.x1) * ux + (l.y2 - g.y1) * uy;
+          if (Math.min(L, Math.max(t1, t2)) - Math.max(0, Math.min(t1, t2)) >= L * 0.5) paired = true;
+        }
+    if (paired) out.delete(g);
   }
   return out;
 }

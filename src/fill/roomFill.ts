@@ -212,10 +212,10 @@ export function buildWallModel(
   const { pens, maxOpening = 3.0 } = options;
   // Grid lines bound no room (a lobby filled to one stops halfway across). (Dimension lines are left
   // in: taking them out helped the dev sets no more than this alone and cost the sealed set an item.)
-  // (`keepGrid`: a plan whose walls are drawn on its grid lines, tried for rooms that leak without them.)
-  const grid = options.keepGrid ? new Set<Segment>() : gridLines(segs);
-  if (grid.size) segs = segs.filter((s) => !grid.has(s));
   const pt = (m: number, fallback: number) => (metersPerPoint ? m / metersPerPoint : fallback);
+  // (`keepGrid`: a plan whose walls are drawn on its grid lines, tried for rooms that leak without them.)
+  const grid = options.keepGrid ? new Set<Segment>() : gridLines(segs, { min: pt(0.06, 1.5), max: pt(0.7, 20) });
+  if (grid.size) segs = segs.filter((s) => !grid.has(s));
   let stats = options.stats ?? penStats(segs, pt(0.06, 1.5), pt(0.7, 20));
   let chosen = pens?.length ? pens : detectWallPens(stats);
   if (!chosen.length && !options.stats) {
