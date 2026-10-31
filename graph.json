@@ -822,6 +822,23 @@
       "notes": "1c27b6f+d779582. Kelso S1.0 +2 SF-1 +5 SF-N (700 as drawn, D assumed 300); 2,122 measurements; saved identical; Frederick unchanged; audit 2027-08-27/2027-09-16.",
       "evidence": "claude/integration@d779582",
       "updated": "2026-10-31T08:17:15.593Z"
+    },
+    {
+      "status": "todo",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T42",
+      "owner": "claude",
+      "stream": "claude",
+      "title": "Cantilever beams noted (CANT.) taken support-to-support only (Kelso S2.1 B2, 10 beams ~4.2 m short each)",
+      "prompt": "Extend beamSpan to the free end when the tag carries a CANT note.",
+      "added": "2026-10-31T11:22:51.880Z",
+      "by": "claude"
     }
   ]
 }
