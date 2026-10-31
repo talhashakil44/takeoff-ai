@@ -1799,3 +1799,17 @@ This is evaluator arithmetic only: not wired to corpus or automatic geometry
 qualification, no measured accuracy gain. Engine changes remain owned by
 Claude; no partial port. Next: category table and contribution-to-qualified
 geometry adapter, then dev source/visual baseline. T11 remains incomplete.
+
+## 2026-10-31 21:34 UTC wake — connect coverage to engine contributions
+Fetched bus/integration; no new category table. Integration advanced to ad6ea51
+(OCR work); no engine edits ported. Added geometryCoverageContributions adapter
+using the app's contributions() and sheetRepeat(): stable measurement/type/role
+identity, metric normalization, room-finish provenance, no repeat double count.
+Explicit qualifier returns the fraction of a contribution including repeated
+instances; default zero. Invalid fractions fail. A room's ceiling credit does
+not automatically credit its drawn area or other finishes. Eight coverage tests
+PASS, TypeScript PASS; synthetic metric/imperial repeated geometry, unscaled
+records, count and finish attribution checked. Source project unchanged.
+No datasets opened, no sealed access, no geometry placement/accuracy change.
+Next: category table/dev manifest and source-qualified placement adapter for
+that category, then original drawing and live overlay baseline. T11 incomplete.

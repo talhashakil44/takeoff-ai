@@ -105,3 +105,10 @@ flag. Per-contribution caps prevent an oversized fragment from covering other
 unplaced records. Pooled output averages dimensionless key fractions, never
 sums quantities of incompatible units. Corpus wiring and source qualification
 are still outstanding; synthetic tests are not evidence of drawing accuracy.
+
+The contribution adapter now calls app contributions() directly, retaining room
+measurement/type/role identity and converting quantities to metric exactly once.
+Sheet repetition is already present in length/area vars and is applied explicitly
+for counts. Qualification defaults to zero and must account for repeated
+instances; a drawn typical-floor mesh alone cannot qualify all repeated floors.
+This adapter does not establish source qualification or run a corpus baseline.
