@@ -1178,3 +1178,11 @@ Next: audit unresolved C1 at grid8/D against3/S4.0 with its own viewport header;
 then outerMF3datum/SF2step endpoints. Do not infer members from dashed background
 or transfer roof/post bearing elevations without closed source faces. T11 active,
 incomplete; these two added solids are verified progress, not whole-model acceptance.
+
+Audit follow-up: initial full harness passed617tests/tsc/build, then failed Kelso
+no-derived-roof finish08-26 vs actual08-27. Claude confirmed his installed engine
+project grew2113→2122 measurements and extra footing concrete moves dates+1day.
+Archived previous source7c2c3fd passes the same current project with integration's
+08-27/09-16 pins. Synced only these two benchmark dates; did not merge engine or
+source-loader differences, alter quantities, or relax assertions. Final clean
+checkpoint harness reruns against these verified fixture pins.
