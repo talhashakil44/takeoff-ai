@@ -1641,3 +1641,10 @@ inspected; no browser errors. Proofs foundation-inset-* under diag/explore/proof
 Next: source-backed outlines/local foundation levels for FW-5/SF-1 using the new
 inset registration; reconcile changed plate designation with Claude first.
 T11 remains incomplete; full harness follows, no merge/deploy.
+Validated02fc0b2:649tests(4skipped),TypeScript,build,Kelso/Frederick audit PASS.
+Live source links open exact Add5p21BP5 tag andp19BP5schedule; original PDF crops
+and2D/3D inspected, browser errors empty. Final comparison again0shape/qty/unit
+deltas and identical source project. Claude confirmed BP5/BP6 is T38 Add5
+re-issue requiring user drawing-revision adoption; no engine rename. His T38
+handoff also includes MF3count,FW5-to-FW1vestibule and addedS0.3. Keep these
+conflicts visible and pursue independent geometry gaps pending that decision.
