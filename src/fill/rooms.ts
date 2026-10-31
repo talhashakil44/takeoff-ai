@@ -61,7 +61,12 @@ const penOf = (s: Segment) => s.width.toFixed(2);
 /** The rectangle closed round a text (drawn once or doubled), if any. */
 function boxAround(t: PageText, index: SegmentIndex, lines: Segment[]): Box | null {
   // A box padded round its number; failing that, a wide one round a short number (a room "2").
-  return boxWithin(t, index, lines, Math.max(t.w, t.h) * 0.5 + 14) ?? (/^\d$/.test(t.str) ? boxWithin(t, index, lines, Math.max(t.w, t.h) * 0.5 + 4.5 * t.h, true) : null);
+  return (
+    boxWithin(t, index, lines, Math.max(t.w, t.h) * 0.5 + 14) ??
+    (/^\d$/.test(t.str) ? boxWithin(t, index, lines, Math.max(t.w, t.h) * 0.5 + 4.5 * t.h, true) : null) ??
+    // A long box round a short number in big lettering ("02" in a box three times its width).
+    (t.h > 6 ? boxWithin(t, index, lines, Math.max(t.w, t.h) * 0.5 + 2.6 * t.h, true) : null)
+  );
 }
 
 function boxWithin(t: PageText, index: SegmentIndex, lines: Segment[], r: number, wide = false): Box | null {

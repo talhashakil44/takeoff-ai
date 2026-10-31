@@ -57,7 +57,12 @@ export function ocrNormal(text: string): string {
     .trim()
     .replace(/[”“″]/g, '"')
     .replace(/[’‘′]/g, "'")
-    .replace(/[—–]/g, '-');
+    .replace(/[—–]/g, '-')
+    // A symbol's outline read along with its tag: <P3>, (05), \01, A1.03/.
+    .replace(/^[<(\[{|\\/]+(?=[A-Z0-9])/i, '')
+    .replace(/(?<=[A-Z0-9])[>)\]}|\\/]+$/i, '');
+  // A number's 0 read as the letter O (O4A is room 04A).
+  if (/^O\d{1,3}[A-Z]?$/.test(t)) return `0${t.slice(1)}`;
   const tag = /^\[?([A-Z]{1,4})[=_]([0-9]{1,3}[A-Z]?)\]?$/.exec(t);
   if (tag) return `${tag[1]}-${tag[2]}`;
   const scale = /^(\d+(?:\/\d+)?|\d+-\d+\/\d+)"\s*=\s*1(?:['-]\S*)?$/.exec(t);

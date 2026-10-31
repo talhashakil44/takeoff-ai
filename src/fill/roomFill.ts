@@ -214,8 +214,8 @@ export function buildWallModel(
 ): WallModel {
   const { pens, maxOpening = 3.0 } = options;
   // Dimension and grid lines bound no room (a lobby filled to them stops halfway across).
-  const dims = dimensionLines(segs, DIMENSION_TICK);
-  const grid = gridLines(segs);
+  const dims = process.env.NODIMS ? new Set<Segment>() : dimensionLines(segs, DIMENSION_TICK);
+  const grid = process.env.NOGRID ? new Set<Segment>() : gridLines(segs);
   if (dims.size || grid.size) segs = segs.filter((s) => !dims.has(s) && !grid.has(s));
   const pt = (m: number, fallback: number) => (metersPerPoint ? m / metersPerPoint : fallback);
   let stats = options.stats ?? penStats(segs, pt(0.06, 1.5), pt(0.7, 20));

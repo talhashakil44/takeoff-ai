@@ -88,3 +88,11 @@ describe('OCR misreadings of drafting lettering', () => {
     expect(runs.map((r) => r.str)).toEqual(['1/8" = 1\'-0"']);
   });
 });
+
+describe('tags read with their outline', () => {
+  it('drops the outline marks around a tag', async () => {
+    const { ocrNormal } = await import('../src/ocrText');
+    expect(['<P3>', '(05)', '\\01', 'A1.03/', '05)'].map(ocrNormal)).toEqual(['P3', '05', '01', 'A1.03', '05']);
+    expect(ocrNormal('O4A')).toBe('04A');
+  });
+});
