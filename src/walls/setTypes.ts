@@ -30,10 +30,14 @@ export const emptySetTypes = (): SetTypes => ({ wall: [], other: [], kinds: {}, 
  * A type code as drawings write them: one to four letters (an "x" in them often marks
  * existing work: px7, fwx2), an optional dash, a number and an optional letter.
  */
-export const CODE = /^[A-Za-z]{1,4}[- ]?\d{1,3} ?[A-Za-z]?$/;
+export const CODE = /^[A-Za-z]{1,4}[- #]?\d{1,3} ?[A-Za-z]?$/;
 
-/** A code as written, without the spaces some sets put in it ("EX 1", "P1 a"). */
-export const codeOfText = (str: string) => str.trim().replace(/\s+/g, '');
+/** A code as written, without the spaces some sets put in it ("EX 1", "P1 a") or a number sign (W#1 is W1). */
+export const codeOfText = (str: string) =>
+  str
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/^([A-Za-z]{1,4})#(?=\d)/, '$1');
 
 const WALL_WORDS = /\b(?:walls?|partitions?|furring|linings?|shaft\s*walls?|demising|chase|parapets?)\b/i;
 const OTHER_WORDS = /\b(?:floors?|roofs?|ceilings?|soffits?|slabs?|decks?|doors?|windows?|openings?|frames?|glazing|storefronts?|millwork|casework|equipment|rooms?|fixtures?|finish(?:es)?|stairs?|curtain\s*walls?|louvres?|louvers?|bulkheads?)\b/i;

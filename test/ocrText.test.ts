@@ -1,0 +1,64 @@
+import { describe, expect, it } from 'vitest';
+import { ocrRuns, runsAsItems, withOcrText, type OcrWord } from '../src/ocrText';
+import type { PDFDocumentProxy, PDFPageProxy } from '../src/pdf';
+
+const word = (text: string, x0: number, y0: number, x1: number, y1: number, line = '1.1.1', rot: 0 | 90 = 0, conf = 90): OcrWord => ({ text, x0, y0, x1, y1, conf, line, rot });
+
+// A page 1000 × 800 points, not turned: PDF y runs up from the bottom.
+const viewport = {
+  width: 1000,
+  height: 800,
+  convertToPdfPoint: (x: number, y: number) => [x, 800 - y],
+  convertToViewportPoint: (x: number, y: number) => [x, 800 - y],
+};
+
+describe('OCR text layer', () => {
+  it('joins close words on a line into one run and splits at a column gap', () => {
+    const runs = ocrRuns([
+      word('MEETING', 100, 90, 160, 100),
+      word('ROOM', 165, 90, 200, 100),
+      word('P101', 400, 90, 430, 100),
+    ]);
+    expect(runs.map((r) => r.str).sort()).toEqual(['MEETING ROOM', 'P101']);
+    const r = runs.find((x) => x.str === 'MEETING ROOM')!;
+    expect([r.x, r.y, r.w, r.h]).toEqual([100, 100, 100, 10]);
+  });
+
+  it('drops unsure words and linework read as marks', () => {
+    expect(ocrRuns([word('|', 0, 0, 2, 10), word('—', 10, 0, 20, 10), word('P1', 50, 0, 60, 10, '1.1.1', 0, 30)])).toEqual([]);
+  });
+
+  it('reads text up the sheet as a run along it, its baseline on the right', () => {
+    const [r] = ocrRuns([word('W1', 300, 400, 310, 430, '2.1.1', 90)]);
+    expect(r).toMatchObject({ str: 'W1', x: 310, y: 430, w: 30, h: 10, rot: 90 });
+    // As a pdf.js item: turned a quarter anticlockwise, size from the letters' height.
+    const [item] = runsAsItems([r!], viewport);
+    const [a, b, c, d, e, f] = item!.transform;
+    expect(a).toBeCloseTo(0);
+    expect(b).toBeCloseTo(10 / 0.7);
+    expect(c).toBeCloseTo(-10 / 0.7);
+    expect(d).toBeCloseTo(0);
+    expect([e, f]).toEqual([310, 370]);
+  });
+
+  it('adds OCR text only to pages without their own and only where the page has none', async () => {
+    const own = [{ str: 'A2.1', dir: 'ltr', width: 30, height: 14, transform: [14, 0, 0, 14, 900, 50], fontName: 'f', hasEOL: false }];
+    let reads = 0;
+    const page = {
+      pageNumber: 1,
+      getViewport: () => viewport,
+      getTextContent: async () => ({ items: own, styles: {} }),
+    } as unknown as PDFPageProxy;
+    const pdf = { numPages: 1, getPage: async () => page } as unknown as PDFDocumentProxy;
+    withOcrText(pdf, async () => {
+      reads++;
+      // The sheet number again (already in the text layer) and a wall tag.
+      return [word('A2.1', 900, 740, 930, 750), word('P101', 400, 300, 430, 310)];
+    });
+    const p = await pdf.getPage(1);
+    const content = await p.getTextContent();
+    await p.getTextContent();
+    expect(reads).toBe(1);
+    expect(content.items.map((i) => ('str' in i ? i.str : ''))).toEqual(['A2.1', 'P101']);
+  });
+});

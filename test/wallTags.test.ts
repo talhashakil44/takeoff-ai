@@ -87,6 +87,11 @@ describe('what the set says its codes are', () => {
     expect(classifyCode('VS1', none, [], fallback)).toEqual({ wall: false, generic: true });
   });
 
+  it('reads a tag written with a number sign as its type (W#1 is W1)', () => {
+    const tags = tagTextsFrom([pageText('W#1', 500, 400), pageText('W#2', 700, 400)], [], undefined, [2592, 1728]);
+    expect(tags.map((t) => t.code)).toEqual(['W1', 'W2']);
+  });
+
   it('leaves out a schedule listed on the plan itself', () => {
     const texts = [pageText('WALL ASSEMBLIES', 2059, 80, 8.4, 110), pageText('VS1', 1743, 159), pageText('VS1', 1300, 1100), ...Array.from({ length: 9 }, (_, i) => pageText('note', 900, 300 + i * 9))];
     const tags = tagTextsFrom(texts, [], undefined, [2835, 2004]);

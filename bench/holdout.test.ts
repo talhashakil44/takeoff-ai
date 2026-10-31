@@ -10,10 +10,10 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it } from 'vitest';
-import { measurementVars } from '../src/quantities';
+import { contributions, sheetRepeat } from '../src/quantities';
 import type { Project } from '../src/model';
 
-type Key = { items: { code: string; kind: 'count' | 'length' | 'area'; qty: number; note?: string; match?: string }[] };
+type Key = { items: { code: string; kind: 'count' | 'length' | 'area'; qty: number; note?: string; match?: string; division?: string; role?: string; cat?: string }[] };
 
 /** A type's code as estimators write it, for matching: "FW-2 – Foundation wall" → FW2, "S/F-5" → SF5. */
 export const codeOf = (name: string) =>
@@ -24,25 +24,24 @@ export const codeOf = (name: string) =>
     .replace(/[\s/.-]/g, '');
 
 /** Engine totals per code: count of points, metres of length, m² of area (metric units). */
-export function engineTotals(p: Project): Map<string, { count: number; length: number; area: number; types: Set<string> }> {
-  const out = new Map<string, { count: number; length: number; area: number; types: Set<string> }>();
-  const sheets = new Map(p.sheets.map((s) => [s.id, s]));
-  const types = new Map(p.types.map((t) => [t.id, t]));
+type Totals = { count: number; length: number; area: number; types: Set<string>; division: string; roles: Set<string> };
+/**
+ * Engine totals per code (or per type), as the app reports them: drawn measurements and the rooms finished
+ * with a type (role floor, ceiling, base, walls), a repeated sheet counted as often as it repeats.
+ */
+export function engineTotals(p: Project, byType = false): Map<string, Totals> {
+  const out = new Map<string, Totals>();
   const toM = p.units === 'imperial' ? 0.3048 : 1;
-  for (const m of p.measurements) {
-    const t = types.get(m.typeId);
-    const s = sheets.get(m.sheetId);
-    if (!t || !s) continue;
-    const name = /slab on grade/i.test(t.name) ? 'SLAB' : codeOf(t.name);
-    const e = out.get(name) ?? { count: 0, length: 0, area: 0, types: new Set<string>() };
+  for (const c of contributions(p)) {
+    const t = c.type;
+    const name = byType ? `${t.id}:${c.role ?? ''}` : /slab on grade/i.test(t.name) ? 'SLAB' : codeOf(t.name);
+    const e = out.get(name) ?? { count: 0, length: 0, area: 0, types: new Set<string>(), division: t.division ?? '', roles: new Set<string>() };
     e.types.add(t.name);
-    if (t.kind === 'count') e.count += 1;
-    else {
-      const v = measurementVars(m, t, s, p.units);
-      if (v) {
-        if (t.kind === 'linear') e.length += v.L * toM;
-        else e.area += v.A * toM * toM;
-      }
+    e.roles.add(c.role ?? 'drawn');
+    if (t.kind === 'count') e.count += sheetRepeat(c.sheet);
+    else if (c.vars) {
+      if (t.kind === 'linear') e.length += c.vars.L * toM;
+      else e.area += c.vars.A * toM * toM;
     }
     out.set(name, e);
   }
@@ -55,6 +54,7 @@ it.skipIf(!root)('held-out scorecard (report only)', () => {
   let hit = 0;
   let total = 0;
   const sealed = !!process.env.SEALED;
+  const cats = new Map<string, { n: number; hit: number; near: number; sets: Set<string> }>();
   for (const job of readdirSync(root!).sort()) {
     const dir = join(root!, job);
     const keyPath = join(dir, 'truth', 'key.json');
@@ -70,22 +70,36 @@ it.skipIf(!root)('held-out scorecard (report only)', () => {
     const key = JSON.parse(readFileSync(keyPath, 'utf8')) as Key;
     const p = (JSON.parse(readFileSync(wholePath, 'utf8')) as { project: Project }).project;
     const got = engineTotals(p);
+    const each = [...engineTotals(p, true).values()];
     lines.push('| code | kind | estimator | engine | ratio |', '|---|---|---:|---:|---:|');
     for (const k of key.items) {
       // By code, or (types named by description, e.g. ceilings) by a pattern on the type name.
+      // A division filter (a regex on the type's division, '^$' for none) picks the types by trade.
       const e = k.match
-        ? [...got.values()].filter((x) => [...x.types].some((n) => new RegExp(k.match!, 'i').test(n))).reduce((a, b) => ({ count: a.count + b.count, length: a.length + b.length, area: a.area + b.area, types: a.types }), { count: 0, length: 0, area: 0, types: new Set<string>() })
+        ? each
+            .filter((x) => [...x.types].some((n) => new RegExp(k.match!, 'i').test(n)) && (k.division === undefined || new RegExp(k.division).test(x.division)) && (k.role === undefined || x.roles.has(k.role)))
+            .reduce((a, b) => ({ ...a, count: a.count + b.count, length: a.length + b.length, area: a.area + b.area }), { count: 0, length: 0, area: 0, types: new Set<string>(), division: '', roles: new Set<string>() })
         : got.get(k.code.toUpperCase().replace(/[\s/.-]/g, ''));
       const v = !e ? 0 : k.kind === 'count' ? e.count : k.kind === 'length' ? e.length : e.area;
       const ratio = k.qty ? v / k.qty : 0;
       total++;
       if (ratio >= 0.9 && ratio <= 1.1) hit++;
+      const c = cats.get(k.cat ?? 'other') ?? { n: 0, hit: 0, near: 0, sets: new Set<string>() };
+      c.n++;
+      c.sets.add(job);
+      if (ratio >= 0.9 && ratio <= 1.1) c.hit++;
+      if (ratio >= 0.75 && ratio <= 1.33) c.near++;
+      cats.set(k.cat ?? 'other', c);
       lines.push(`| ${k.code} | ${k.kind} | ${k.qty} | ${Math.round(v * 100) / 100} | ${v ? ratio.toFixed(2) : 'missed'} |`);
     }
     lines.push('');
     if (sealed) lines.splice(setStart, lines.length - setStart, `## ${job}`, '', `Within ±10%: ${hit - hitBefore} of ${total - totalBefore}.`, '');
   }
-  lines.push(`**Within ±10%: ${hit} of ${total}.**`);
+  lines.push(`**Within ±10%: ${hit} of ${total}.**`, '');
+  if (!sealed) {
+    lines.push('## By category, across sets', '', '| category | sets | items | ±10% | ±25% |', '|---|---:|---:|---:|---:|');
+    for (const [c, v] of [...cats].sort((a, b) => b[1].n - b[1].hit - (a[1].n - a[1].hit))) lines.push(`| ${c} | ${v.sets.size} | ${v.n} | ${v.hit} | ${v.near} |`);
+  }
   const text = lines.join('\n');
   writeFileSync(join(root!, 'SCORECARD.md'), text);
   process.stdout.write(`${text}\n`);

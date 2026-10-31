@@ -9,6 +9,8 @@ import type { Segment } from '../src/fill/vectors';
 import { newId, type Sheet, type Units } from '../src/model';
 import { pageTexts, type PageText } from '../src/pageText';
 import { inspectPage, type PDFDocumentProxy, type PDFPageProxy } from '../src/pdf';
+import { withOcrText } from '../src/ocrText';
+import { cliOcr } from './ocrCli';
 
 // pdf.js in Node runs its worker in-process from this file.
 GlobalWorkerOptions.workerSrc = new URL('../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url).href;
@@ -22,7 +24,10 @@ export interface OpenDoc {
 /** Opens a drawing PDF in Node the way the app does in the browser. */
 export async function openDoc(path: string): Promise<OpenDoc> {
   const data = new Uint8Array(readFileSync(path));
-  const pdf = (await getDocument({ data, verbosity: 0 }).promise) as unknown as PDFDocumentProxy;
+  const read = (await getDocument({ data, verbosity: 0 }).promise) as unknown as PDFDocumentProxy;
+  // Pages drawn with no text layer (lettering as linework) are read by OCR, as the app does.
+  const ocr = await cliOcr(path);
+  const pdf = ocr ? withOcrText(read, ocr) : read;
   return { id: newId(), file: basename(path), pdf };
 }
 
