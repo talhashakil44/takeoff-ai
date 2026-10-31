@@ -4,7 +4,8 @@
  * engine to it. Each job folder holds the drawing PDFs, whole.json (from bench/whole.test.ts) and
  * truth/key.json: { items: [{ code, kind: 'count' | 'length' | 'area', qty }] } in metres.
  *   HOLDOUT=/path/to/holdout npx vitest run -c bench/vitest.config.ts bench/holdout.test.ts
- * Writes HOLDOUT/SCORECARD.md and prints it.
+ * Writes HOLDOUT/SCORECARD.md and prints it. SEALED=1 (the test set nobody looks into) prints and
+ * writes only each set's and the overall score, never the items, so no fix is fitted to it.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -53,11 +54,14 @@ it.skipIf(!root)('held-out scorecard (report only)', () => {
   const lines: string[] = ['# Held-out scorecard', '', 'Engine vs the estimator\'s own takeoff. Report only: never tune on these sets.', ''];
   let hit = 0;
   let total = 0;
+  const sealed = !!process.env.SEALED;
   for (const job of readdirSync(root!).sort()) {
     const dir = join(root!, job);
     const keyPath = join(dir, 'truth', 'key.json');
     const wholePath = join(dir, 'whole.json');
     if (!existsSync(keyPath)) continue;
+    const setStart = lines.length;
+    const [hitBefore, totalBefore] = [hit, total];
     lines.push(`## ${job}`, '');
     if (!existsSync(wholePath)) {
       lines.push('No whole.json: run bench/whole.test.ts first.', '');
@@ -79,6 +83,7 @@ it.skipIf(!root)('held-out scorecard (report only)', () => {
       lines.push(`| ${k.code} | ${k.kind} | ${k.qty} | ${Math.round(v * 100) / 100} | ${v ? ratio.toFixed(2) : 'missed'} |`);
     }
     lines.push('');
+    if (sealed) lines.splice(setStart, lines.length - setStart, `## ${job}`, '', `Within ±10%: ${hit - hitBefore} of ${total - totalBefore}.`, '');
   }
   lines.push(`**Within ±10%: ${hit} of ${total}.**`);
   const text = lines.join('\n');
