@@ -40,6 +40,8 @@ export interface FoundationMark {
   /** The schedule's words for it ("1500 x 1500", "200 CONCRETE"). */
   says: string;
   schedule: string;
+  /** Where the schedule sends you for its size instead ("REFER TO DETAIL 10/S1.2"). */
+  refer?: string;
 }
 
 /** A footing mark: F1, SF-2, P3A; or a lettered one the schedule details elsewhere (SF-N, "refer to detail"). */
@@ -112,6 +114,10 @@ export function foundationMarks(schedules: Schedule[], metric: boolean): Foundat
         length: kind === 'pad' || kind === 'pier' || kind === 'mass' ? (sz[1] ?? sz[0]) : undefined,
         depth: d,
         says: r.cells.filter(Boolean).slice(1, 4).join(' · '),
+        ...(() => {
+          const refer = r.cells.find((c) => /\b(REFER|SEE)\b.*\bDETAIL\b|\bDETAIL\s+\d+\s*\//i.test(c))?.trim();
+          return refer ? { refer } : {};
+        })(),
         schedule: s.title,
       });
     }
@@ -412,8 +418,30 @@ export async function automateFoundations(p: Project, access: SetAccess, maxOpen
           }
         if (best) pairs.push({ code: norm(f.str), at: [f.cx, f.cy], strip: best.strip, tag: best.at });
       }
-      const stripType = (sf: FoundationMark, drawn?: number) =>
-        make(`strip:${norm(sf.mark)}`, {
+      const stripType = (sf: FoundationMark, drawn?: number) => {
+        // Sized by a detail, not W x D (Kelso SF-N: a slab thickening with sloped sides, detail 10/S1.2):
+        // its length is taken, its section is not guessed.
+        if (!sf.width && !sf.depth) {
+          if (!typeFor.has(`strip:${norm(sf.mark)}`))
+            checks.push(`${sf.mark}: the ${sf.schedule.toLowerCase()} sizes it by a detail${sf.refer ? ` (${sf.refer.toLowerCase()})` : ''}, not width x depth. Its length is taken; set W and D on the type (an equivalent rectangle of its section) for its concrete.`);
+          return make(`strip:${norm(sf.mark)}`, {
+            name: `${sf.mark} – Strip footing, sized by detail${sf.refer ? ` (${sf.refer.replace(/^(REFER TO|SEE)\s+/i, '')})` : ''}`,
+            color: color('strip'),
+            kind: 'linear',
+            height: 0,
+            width: toProject(drawn ?? 0),
+            depth: 0,
+            division: '03 Concrete',
+            package: 'Concrete sub',
+            description: `${sf.schedule}: ${sf.says}${sf.refer ? `, ${sf.refer}` : ''}. Taken along the dashed footing outline its own tag points to; W is the width drawn on plan${drawn ? ` (${fmtM(drawn)})` : ''}. Its section is in the detail (it may be a slab thickening with sloped sides), so D is left at 0: set W and D from the detail for its concrete.`,
+            items: [
+              item('Footing length', metric ? 'm' : 'ft', 'L'),
+              item('Concrete + 5%', vol, `L * W * D${cy} * 1.05`),
+              item('Formwork (both sides)', metric ? 'm²' : 'SF', '2 * L * D'),
+            ],
+          });
+        }
+        return make(`strip:${norm(sf.mark)}`, {
           name: `${sf.mark} – Strip footing ${fmtM(sf.width ?? drawn)} x ${fmtM(sf.depth)}`,
           color: color('strip'),
           kind: 'linear',
@@ -429,6 +457,7 @@ export async function automateFoundations(p: Project, access: SetAccess, maxOpen
             item('Formwork (both sides)', metric ? 'm²' : 'SF', '2 * L * D'),
           ],
         });
+      };
       const reach = 4 / k; // a tag sits within about 4 m of its wall
       for (const [code, rs] of runsByCode) {
         const sched = wallMarks.get(norm(code));

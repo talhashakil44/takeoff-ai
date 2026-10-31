@@ -30,7 +30,7 @@ describe('foundations', () => {
     const marks = foundationMarks(
       [
         sched('CONCRETE FOOTING SCHEDULE', [['MARK'], ['TYPE', 'P = PAD', 'S = STRIP'], ['DEPTH'], ['SIZE']], [
-          ['SF-N', ['SF-N', 'ST', '', '']],
+          ['SF-N', ['SF-N', 'ST', '', '', '2', '15M', 'B. CONT.', 'REFER TO DETAIL 10/S1.2']],
           ['SF-1', ['SF-1', 'S', '300', '600']],
           ['F1', ['F1', 'P', '300', '1500 x 1500']],
         ]),
@@ -43,7 +43,8 @@ describe('foundations', () => {
     const by = Object.fromEntries(marks.map((m) => [m.mark, m]));
     expect(by['SF-1']).toMatchObject({ kind: 'strip', width: 0.6, depth: 0.3 });
     // A strip the schedule sizes by a detail (Kelso SF-N: thickened slab under masonry, "REFER TO DETAIL 10/S1.2").
-    expect(by['SF-N']).toMatchObject({ kind: 'strip', width: undefined, depth: undefined });
+    expect(by['SF-N']).toMatchObject({ kind: 'strip', width: undefined, depth: undefined, refer: 'REFER TO DETAIL 10/S1.2' });
+    expect(by['SF-1'].refer).toBeUndefined();
     expect(by.F1).toMatchObject({ kind: 'pad', width: 1.5, length: 1.5, depth: 0.3 });
     expect(by.P2).toMatchObject({ kind: 'pier', width: 0.48, length: 0.8 });
     expect(by.MF2).toMatchObject({ kind: 'mass', width: 5, length: 1.8, depth: 0.4 });
