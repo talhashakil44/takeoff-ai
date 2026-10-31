@@ -1675,3 +1675,6 @@ no browser errors. Same frozen project, zero physical shape/quantity/unit deltas
 Next: integrate Claude's revised-view extraction fix; qualify member silhouettes
 and local elevations only after registration. T38 revision conflicts unchanged.
 T11 incomplete, no merge/deploy. Full harness follows.
+Validated58bf192:656tests(4skipped),TypeScript,build,Kelso/Frederick audit PASS.
+Production/source comparison and generic-inset-* PDF/live proofs reviewed.
+Requested Claude review of generic registration and revisedp24 engineview gap.
