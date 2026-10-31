@@ -22,4 +22,4 @@ it.runIf(!!process.env.CANOPY_SOURCE_FIXTURE)('uses the matching viewport grid r
  expect(target(connectSourceColumns(r.project,data.model,withoutOther,r.lines)).shape).toEqual(resolved.shape);
  expect(resolved.quantity).toBe(target(data.model).quantity);
  expect(JSON.stringify(data.project)).toBe(before);
-});
+},30000);

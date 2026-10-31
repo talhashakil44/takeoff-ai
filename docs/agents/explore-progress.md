@@ -1186,3 +1186,8 @@ Archived previous source7c2c3fd passes the same current project with integration
 08-27/09-16 pins. Synced only these two benchmark dates; did not merge engine or
 source-loader differences, alter quantities, or relax assertions. Final clean
 checkpoint harness reruns against these verified fixture pins.
+The final parallel test pass exposed the new optional real-PDF fixture test's
+5s default timeout (three source-resolution passes on the247MBfixture); assertions
+had passed in isolation and the first full harness. Set its explicit budget30s,
+consistent with real-source integration work; no assertion or geometry tolerance
+changed. Audit now passes with the independently verified updated date pins.
