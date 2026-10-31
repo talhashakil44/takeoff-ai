@@ -1254,3 +1254,9 @@ QA uses refreshed generated snapshot; original project/PDFs untouched.
 Evidence docs/agents/evidence/foundation-sfn-refreshed.json. Full harness follows.
 Next: local SF-N slab datum association and registered outline, then source-backed
 profile recovery; retain unresolved status meanwhile. T11 incomplete; no deploy.
+Validation complete: a7b3406 full harness PASS (620 tests, tsc, build, audit).
+Live refreshed-five screenshots inspected for original PDF page23, 2D and 3D;
+browser errors empty. These checks validate integration of the corrected engine
+fixture, not new physical coverage. Next independent source pass: roof/C1 grid8/D
+orthogonal section or B2 free-end profiles; do not spend another wake repeating
+unchanged SF-N links without a new local datum/outline witness.

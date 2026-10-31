@@ -57,6 +57,13 @@
       "2027-08-30",
       "2027-09-17"
     ],
-    "priorPinFailure": "2027-08-30 actual vs 2027-08-27 expected after engine export refresh"
+    "priorPinFailure": "2027-08-30 actual vs 2027-08-27 expected after engine export refresh",
+    "harness": "PASS tsc, 620 tests, build, audit at a7b3406",
+    "live": "original PDF page23, 2D and 3D screenshots inspected; no page errors",
+    "proofs": [
+      "diag/explore/proofs/sfn-option-plan-review-refreshed-five.png",
+      "diag/explore/proofs/sfn-option-original-footprint-refreshed-five.png",
+      "diag/explore/proofs/sfn-option-withheld-3d-refreshed-five.png"
+    ]
   }
 }
