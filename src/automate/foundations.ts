@@ -9,6 +9,8 @@ import { titleBlockBox } from '../titleBlock';
 import { replaceRun, type Automation } from './result';
 import { perSheet, type SetAccess } from './set';
 import { automateWalls } from './walls';
+import { stripsFromTags } from './stripTags';
+import { resolveTags } from '../walls/tags';
 
 /**
  * Foundations, off the foundation plan and the structural schedules, as an estimator takes them:
@@ -40,7 +42,8 @@ export interface FoundationMark {
   schedule: string;
 }
 
-const MARK = /^[A-Z]{1,3}-?\d{1,2}[A-Z]?$/;
+/** A footing mark: F1, SF-2, P3A; or a lettered one the schedule details elsewhere (SF-N, "refer to detail"). */
+const MARK = /^[A-Z]{1,3}-?(?:\d{1,2}[A-Z]?|N)$/;
 const norm = (s: string) => s.toUpperCase().replace(/[\s.-]/g, '');
 
 /** A length in metres from schedule words: millimetres (1500) on a metric set, feet and inches (4'-6") on an imperial one. */
@@ -379,8 +382,7 @@ export async function automateFoundations(p: Project, access: SetAccess, maxOpen
       if (!page) return;
       // Fresh wall types: an architectural FW1 assembly is not the structural FW-1 concrete wall.
       const walls = await automateWalls({ ...p, types: [] }, page, undefined, plan, maxOpening);
-      if (!walls.apply) return;
-      const after = walls.apply({ ...p, types: [], measurements: [] });
+      const after = walls.apply?.({ ...p, types: [], measurements: [] }) ?? { ...p, types: [], measurements: [] };
       const runs = after.measurements.filter((m) => m.sheetId === plan.id);
       const wallMarks = new Map(marks.filter((m) => m.kind === 'wall').map((m) => [norm(m.mark), m]));
       const strips = marks.filter((m) => m.kind === 'strip');
@@ -397,20 +399,36 @@ export async function automateFoundations(p: Project, access: SetAccess, maxOpen
         if (leader(r)) continue;
         runsByCode.set(code, [...(runsByCode.get(code) ?? []), r]);
       }
-      if (!runsByCode.size) return;
       // Each strip footing tag sits beside the foundation wall tag it goes with (FW-1 | SF-1): paired by nearness.
       const fwTags = texts.filter((t) => /^FW/i.test(norm(t.str)));
       const tagW = Math.max(12, ...fwTags.map((t) => t.w));
-      const pairs: { code: string; at: Pt; strip: FoundationMark }[] = [];
+      const pairs: { code: string; at: Pt; strip: FoundationMark; tag: Pt }[] = [];
       for (const f of fwTags) {
-        let best: { strip: FoundationMark; d: number } | null = null;
+        let best: { strip: FoundationMark; d: number; at: Pt } | null = null;
         for (const s of strips)
           for (const at of stripTags.get(s.mark) ?? []) {
             const d = Math.hypot(at[0] - f.cx, at[1] - f.cy);
-            if (d < tagW * 2.5 && (!best || d < best.d)) best = { strip: s, d };
+            if (d < tagW * 2.5 && (!best || d < best.d)) best = { strip: s, d, at };
           }
-        if (best) pairs.push({ code: norm(f.str), at: [f.cx, f.cy], strip: best.strip });
+        if (best) pairs.push({ code: norm(f.str), at: [f.cx, f.cy], strip: best.strip, tag: best.at });
       }
+      const stripType = (sf: FoundationMark, drawn?: number) =>
+        make(`strip:${norm(sf.mark)}`, {
+          name: `${sf.mark} – Strip footing ${fmtM(sf.width ?? drawn)} x ${fmtM(sf.depth)}`,
+          color: color('strip'),
+          kind: 'linear',
+          height: 0,
+          width: toProject(sf.width ?? drawn ?? 0.6),
+          depth: toProject(sf.depth ?? 0.3),
+          division: '03 Concrete',
+          package: 'Concrete sub',
+          description: `${sf.schedule}: ${sf.says}. Taken along the foundation wall runs it is tagged beside, or the dashed footing outline its own tag points to${sf.width ? '' : drawn ? `; width (W) as drawn, ${fmtM(drawn)}` : ''}${sf.depth ? '' : '; depth (D) assumed 300: set it from the detail'}.`,
+          items: [
+            item('Footing length', metric ? 'm' : 'ft', 'L'),
+            item('Concrete + 5%', vol, `L * W * D${cy} * 1.05`),
+            item('Formwork (both sides)', metric ? 'm²' : 'SF', '2 * L * D'),
+          ],
+        });
       const reach = 4 / k; // a tag sits within about 4 m of its wall
       for (const [code, rs] of runsByCode) {
         const sched = wallMarks.get(norm(code));
@@ -436,26 +454,29 @@ export async function automateFoundations(p: Project, access: SetAccess, maxOpen
           }
           const sf = best?.mark ?? null;
           if (!sf) continue;
-          const st = make(`strip:${norm(sf.mark)}`, {
-            name: `${sf.mark} – Strip footing ${fmtM(sf.width)} x ${fmtM(sf.depth)}`,
-            color: color('strip'),
-            kind: 'linear',
-            height: 0,
-            width: toProject(sf.width ?? 0.6),
-            depth: toProject(sf.depth ?? 0.3),
-            division: '03 Concrete',
-            package: 'Concrete sub',
-            description: `${sf.schedule}: ${sf.says}. Taken along the foundation wall runs it is tagged beside.`,
-            items: [
-              item('Footing length', metric ? 'm' : 'ft', 'L'),
-              item('Concrete + 5%', vol, `L * W * D${cy} * 1.05`),
-              item('Formwork (both sides)', metric ? 'm²' : 'SF', '2 * L * D'),
-            ],
-          });
+          const st = stripType(sf);
           added.push({ ...r, id: newId(), typeId: st.id, source: 'foundations', label: sf.mark });
           let L = 0;
           for (let i = 1; i < r.points.length; i++) L += Math.hypot(r.points[i][0] - r.points[i - 1][0], r.points[i][1] - r.points[i - 1][1]);
           stripLen += L * k;
+        }
+      }
+
+      // Strip footings tagged on their own, under walls that are not foundation walls (Kelso S1.0: the
+      // core's masonry walls on SF-1 and SF-N): along the dashed footing edges their arrows land on.
+      const own = texts.filter((t) => strips.some((s) => norm(s.mark) === norm(t.str)) && !pairs.some((pr) => Math.hypot(pr.tag[0] - t.cx, pr.tag[1] - t.cy) < 1));
+      if (own.length) {
+        const segs = (await access.segments(plan)) ?? [];
+        const markOf = (code: string) => strips.find((s) => norm(s.mark) === norm(code))!;
+        const fwRuns = [...runsByCode.values()].flat();
+        for (const f of stripsFromTags(resolveTags(own.map((t) => ({ code: t.str, cx: t.cx, cy: t.cy, w: t.w, h: t.h })), segs), segs, k, (c) => markOf(c).width)) {
+          const mid: Pt = [(f.line[0][0] + f.line[1][0]) / 2, (f.line[0][1] + f.line[1][1]) / 2];
+          // Under a foundation wall: that wall's own strip footing, taken with it.
+          if (fwRuns.some((r) => toRun(mid, r.points) < f.width)) continue;
+          const sf = markOf(f.code);
+          const st = stripType(sf, sf.width ? undefined : Math.round(f.width * k * 20) / 20);
+          added.push({ id: newId(), sheetId: plan.id, typeId: st.id, points: f.line, holes: [], source: 'foundations', label: sf.mark });
+          stripLen += Math.hypot(f.line[1][0] - f.line[0][0], f.line[1][1] - f.line[0][1]) * k;
         }
       }
 

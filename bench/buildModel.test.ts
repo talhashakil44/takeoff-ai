@@ -63,8 +63,8 @@ it.skipIf(!root)(
         expect(out.schedule.activities.find((a) => a.id === 'work:envelope:roof-covering')).toMatchObject({ duration: 14, durationBasis: 'inferred' });
         expect(out.scopeSuggestions.some((s) => s.key === 'envelope')).toBe(false);
         const withoutDerivedRoof = replan({ ...out.model, roofPlan: undefined }, out.setup, input).schedule;
-        expect(withoutDerivedRoof.feasibility.earliestFinish).toBe('2027-08-26');
-        expect(out.schedule.feasibility.earliestFinish).toBe('2027-09-15');
+        expect(withoutDerivedRoof.feasibility.earliestFinish).toBe('2027-08-27');
+        expect(out.schedule.feasibility.earliestFinish).toBe('2027-09-16');
         const slabs = out.model.elements
           .filter((e) => e.origin === 'building' && e.id.endsWith(':slab'))
           .map((e) => e.shape)

@@ -1,3 +1,5 @@
+import { stripsFromTags } from '../src/automate/stripTags';
+import type { WallTag } from '../src/walls/tags';
 import { describe, expect, it } from 'vitest';
 import { enclosedOutline, foundationMarks, lengthOf, markPlaces, sizesOf, slabThickness } from '../src/automate/foundations';
 import { beamSpan, divisionOf, structuralMembers } from '../src/automate/structure';
@@ -28,6 +30,7 @@ describe('foundations', () => {
     const marks = foundationMarks(
       [
         sched('CONCRETE FOOTING SCHEDULE', [['MARK'], ['TYPE', 'P = PAD', 'S = STRIP'], ['DEPTH'], ['SIZE']], [
+          ['SF-N', ['SF-N', 'ST', '', '']],
           ['SF-1', ['SF-1', 'S', '300', '600']],
           ['F1', ['F1', 'P', '300', '1500 x 1500']],
         ]),
@@ -39,6 +42,8 @@ describe('foundations', () => {
     );
     const by = Object.fromEntries(marks.map((m) => [m.mark, m]));
     expect(by['SF-1']).toMatchObject({ kind: 'strip', width: 0.6, depth: 0.3 });
+    // A strip the schedule sizes by a detail (Kelso SF-N: thickened slab under masonry, "REFER TO DETAIL 10/S1.2").
+    expect(by['SF-N']).toMatchObject({ kind: 'strip', width: undefined, depth: undefined });
     expect(by.F1).toMatchObject({ kind: 'pad', width: 1.5, length: 1.5, depth: 0.3 });
     expect(by.P2).toMatchObject({ kind: 'pier', width: 0.48, length: 0.8 });
     expect(by.MF2).toMatchObject({ kind: 'mass', width: 5, length: 1.8, depth: 0.4 });
@@ -128,5 +133,38 @@ describe('beam spans', () => {
     expect(beamSpan(t, [...beam, ...ticks], 900, tags)).toEqual([[1310.8, 216.6], [1460.9, 216.6]]);
     // A lone dash with no column tagged near it is still not a support.
     expect(beamSpan(t, [...beam, ...ticks], 900, [[1475.9, 212.1]])).toEqual([[1085, 216.6], [1460.9, 216.6]]);
+  });
+});
+
+describe('strip footings tagged on their own', () => {
+  const k = (100 * 0.0254) / 72; // 1:100
+  const P = (m: number) => m / k;
+  /** A dashed line along y from x0 to x1 (metres): 9 pt dashes, 4.6 pt gaps. */
+  const dashed = (y: number, x0: number, x1: number, width = 0.6): Segment[] => {
+    const out: Segment[] = [];
+    for (let x = P(x0); x < P(x1); x += 13.6) out.push({ x1: x, y1: P(y), x2: Math.min(x + 9, P(x1)), y2: P(y), width, filled: false });
+    return out;
+  };
+  const tag = (code: string, x: number, y: number, tipY: number): WallTag => ({
+    code, cx: P(x), cy: P(y), w: 18, h: 5, target: [P(x), P(tipY)], paths: [[[P(x), P(y) - 6], [P(x), P(tipY)]]], leader: true, tick: true,
+  });
+
+  it('runs along the two dashed edges its arrow lands on, the scheduled width apart, once for two tags', () => {
+    // A 600 footing under a wall from x 2 to x 6, edges at y 5.0 and 5.6; tags below, arrows up onto y 5.6.
+    const segs = [...dashed(5, 2, 6), ...dashed(5.6, 2, 6), ...dashed(4.6, 0, 8), ...dashed(6.3, 0, 8)];
+    const found = stripsFromTags([tag('SF-1', 3, 6.6, 5.6), tag('SF-1', 5, 6.6, 5.6)], segs, k, () => 0.6);
+    expect(found).toHaveLength(1);
+    const [a, b] = found[0].line;
+    expect(a[1] * k).toBeCloseTo(5.3, 1);
+    expect(Math.abs(b[0] - a[0]) * k).toBeGreaterThan(3.8);
+    expect(Math.abs(b[0] - a[0]) * k).toBeLessThan(4.1);
+    expect(found[0].width * k).toBeCloseTo(0.6, 1);
+  });
+
+  it('takes the nearest edge beyond 300 when the schedule gives no width, and nothing without a far edge', () => {
+    const segs = [...dashed(5, 2, 6), ...dashed(5.7, 2, 6)];
+    const [f] = stripsFromTags([tag('SF-N', 3, 6.6, 5.7)], segs, k, () => undefined);
+    expect(f.width * k).toBeCloseTo(0.7, 1);
+    expect(stripsFromTags([tag('SF-N', 3, 6.6, 5.7)], dashed(5.7, 2, 6), k, () => undefined)).toHaveLength(0);
   });
 });
