@@ -1376,3 +1376,22 @@ Next: Claude review of unified qualifier and coordinate-window inventory; apply
 further rule changes against run-only held-out gate once available. Continue
 source-specific missing datum/section work without treating generic details as
 local elevations. No new physical coverage claimed in this checkpoint.
+
+## 2026-10-31 13:09 UTC — report-only held-out Explore runner
+Claude reports held-out datasets live in cloud scratch, no local PDFs in empty
+holdout-staging. Engine scorecards are not Explore geometry acceptance. Added
+bench/exploreHoldout.test.ts accepting whole.json+files map or installed project,
+using production source loader/buildAll with cache disabled. Outputs only to a
+separate directory: evidence/coverage report, review snapshot, originalPDF paths.
+Asserts input project bytes/object and accepted takeoff tuples unchanged; no
+project-specific expected counts or tuning. Reports source read failures and
+missing required text sheets. Spec facts/schedule explicitly not evaluated.
+Docs docs/agents/explore-heldout-runner.md provide exact run and review contract.
+Smoke: Frederick PASS,53 source sheets,zero source-read errors,zero structural
+records (not geometry acceptance). Kelso PASS,185 source entries,no source errors
+or missing required text;426 structural records,140 solids,286 unresolved. Tsc
+PASS. These are harness smoke checks only, neither a new held-out pass nor new
+source coverage. Runtime geometry untouched; no new live geometry claim.
+Next: Claude run current Explore branch against cloud-only Dunnville and return
+report+originalPDF overlay/2D/3D evidence. Do not tune to held-out counts. Continue
+independent source gaps after result, no main merge/deploy; T11 incomplete.
