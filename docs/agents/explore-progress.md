@@ -1584,3 +1584,11 @@ wholly outside coordinates; apply existing30pt visualcontext only for rendering.
 No source coordinates, model dimensions or accepted quantities altered. Tests
 cover countpoint, line, pagecorner and outsidepage points. Original page sources
 remain the authority; this fixes evidence visibility, not member placement.
+Validated 8b47dea: 649 tests, TypeScript, build and Kelso/Frederick audit PASS.
+Live BP6 count source detail now shows the actual BP6 label and plate outline;
+original PDF and 2D/3D screenshots count-source-* inspected, no browser errors.
+Correction to earlier notes: this was NOT an off-page coordinate/PDF mismatch.
+The valid point box was rejected solely for zero area. Placement remains open:
+check separate canopy viewport scale/registration against the main-sheet grid.
+No model extraction or accepted quantities changed. Sent Claude correction and
+source evidence; T11 remains incomplete, no main merge/deploy.
