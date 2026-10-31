@@ -12,7 +12,7 @@ import { it } from 'vitest';
 import { measurementVars } from '../src/quantities';
 import type { Project } from '../src/model';
 
-type Key = { items: { code: string; kind: 'count' | 'length' | 'area'; qty: number; note?: string }[] };
+type Key = { items: { code: string; kind: 'count' | 'length' | 'area'; qty: number; note?: string; match?: string }[] };
 
 /** A type's code as estimators write it, for matching: "FW-2 – Foundation wall" → FW2, "S/F-5" → SF5. */
 export const codeOf = (name: string) =>
@@ -68,7 +68,10 @@ it.skipIf(!root)('held-out scorecard (report only)', () => {
     const got = engineTotals(p);
     lines.push('| code | kind | estimator | engine | ratio |', '|---|---|---:|---:|---:|');
     for (const k of key.items) {
-      const e = got.get(k.code.toUpperCase().replace(/[\s/.-]/g, ''));
+      // By code, or (types named by description, e.g. ceilings) by a pattern on the type name.
+      const e = k.match
+        ? [...got.values()].filter((x) => [...x.types].some((n) => new RegExp(k.match!, 'i').test(n))).reduce((a, b) => ({ count: a.count + b.count, length: a.length + b.length, area: a.area + b.area, types: a.types }), { count: 0, length: 0, area: 0, types: new Set<string>() })
+        : got.get(k.code.toUpperCase().replace(/[\s/.-]/g, ''));
       const v = !e ? 0 : k.kind === 'count' ? e.count : k.kind === 'length' ? e.length : e.area;
       const ratio = k.qty ? v / k.qty : 0;
       total++;
