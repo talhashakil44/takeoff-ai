@@ -1,3 +1,4 @@
+import { measurementScale } from '../quantities';
 import { recoverFacadeOpenings, rejectUnsupportedCurtainWalls } from './facades';
 import { imperialDatumEvidence } from './datumEvidence';
 import { quarantineDetachedSheets } from './placementQuality';
@@ -30,7 +31,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 53;
+export const MODEL_VERSION = 54;
 
 export interface Trade {
   key: string;
@@ -377,6 +378,7 @@ export function extractModel(input: ExtractInput): BuildModel {
       elIssues.push('Saved demolition keynote labels on A201–A204 may be shifted by one note; the measured marker remains, but its removal type and production basis need drawing review.');
     if (inferredRoofView) elIssues.push('Roof level inferred from multiple coincident equipment marks on a separately titled roof plan; confirm the unpaired marks on this sheet.');
     const gridCount = trade === 'structure' && type.kind === 'count' && /\b(?:footing|pier|base\s*plate|column)\b/i.test(type.name);
+    const effectiveScale = measurementScale(m, s);
     let shape: ElementShape | null = null;
     let placement: Basis = 'unknown';
     if (exclusion) {
@@ -408,6 +410,8 @@ export function extractModel(input: ExtractInput): BuildModel {
     } else if (!level) {
       elIssues.push(`The level of ${s.name} (${s.title ?? ''}) isn't known: set it in Build setup.`);
       unplaced.set(s.id, 'level unknown');
+    } else if (effectiveScale !== null && Math.abs(effectiveScale / s.metersPerPoint - 1) > 0.01) {
+      elIssues.push('Measurement uses a separately scaled inset. Main-sheet geometry withheld until that inset has its own source-backed registration; quantity retains the effective inset scale.');
     } else if (!placeable(s) && !viewportRegistration.has(m.id)) {
       elIssues.push(`${s.name} is at another scale than the main plans: not placed with them.`);
       unplaced.set(s.id, 'other scale');

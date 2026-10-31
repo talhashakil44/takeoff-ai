@@ -1592,3 +1592,21 @@ The valid point box was rejected solely for zero area. Placement remains open:
 check separate canopy viewport scale/registration against the main-sheet grid.
 No model extraction or accepted quantities changed. Sent Claude correction and
 source evidence; T11 remains incomplete, no main merge/deploy.
+
+## 2026-10-31 17:10 UTC — inset scale qualification (model54)
+Integrated Claude a56f277 and b35a203 as 6b6be68/f0e6b05, preserving engine
+ownership. Engine detects separately scaled small insets and exports shared
+measurementScale. Claude reports corrected Kelso lengths: FW-5 38.3 to32.5m,
+SF-1 127.8 to124.9m, B4 34.1 to18.9m. Source project files remain untouched.
+Explore now withholds generic main-sheet geometry when that effective scale
+differs. Synthetic inset test retains6m quantity with no misplaced wall shape;
+manual calibrated override retains12m with shape, matching engine policy.
+Same frozen project comparison against engine-corrected baseline: zero quantity
+or unit deltas. Seven incorrect axes withheld (2FW-5,1SF-1,4B4); removing them
+recentres model Y by+8.8032166667m, including corner fill coordinates. Remaining
+physical geometry retains dimensions. Production source invariants PASS.
+Live original BP6 PDF crop, 2D and3D reviewed in inset-scale-* proofs: inset
+reason visible, BP6 remains unplaced, no browser errors. 140/427 structural
+records have solid geometry; this is not completion. Next: register canopy
+foundation inset using its own3/E/Ef grids and sheet.views, without borrowing
+roof canopy elevation. Full harness follows before pushing this checkpoint.
