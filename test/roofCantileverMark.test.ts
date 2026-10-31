@@ -17,3 +17,10 @@ it('is invariant to text/drawing scale and supports vertical spans and combined 
   expect(hasLocalRoofCantilever(points,'X7',[{str:'X7',cx:at[0],cy:at[1]}])).toBe(false);
  }
 });
+it('uses the gap between text boxes for a long adjacent CANT label',()=>{
+ for(const s of [.25,1,4]){
+ const p:any=[[0,50*s],[250*s,50*s]],ts:any=[{str:'B2',cx:150*s,cy:45*s,w:9*s,h:5*s},{str:'(CANT.)',cx:173*s,cy:45*s,w:27*s,h:5*s}];
+ expect(hasLocalRoofCantilever(p,'B2',ts)).toBe(true);
+ expect(hasLocalRoofCantilever(p,'B2',[ts[0],{...ts[1],cx:250*s}])).toBe(false);
+ }
+});

@@ -1340,3 +1340,9 @@ project unchanged. Requested read-only third held-out fixture and harness from
 Claude; not supplied yet, so third-set gate explicitly pending (no merge claim).
 Full harness/live checks follow. Next: obtain held-out evaluation without tuning,
 then remaining source geometry; outerMF3 local datums still unresolved.
+Correction during production comparison: initial9c740a9 lost one E1-2 beam despite
+passing code gates. Its adjacent long CANT label has centre gap23pt but box-edge
+gap5pt. Replaced centre distance with glyph-box gap, still scaled by mark width,
+and added three-scale long-label regression. Re-ran actual identical-project
+comparison after correction: zero shape/quantity deltas confirmed. Initial
+zero-delta statement above applies to corrected follow-up, not9c740a9 alone.

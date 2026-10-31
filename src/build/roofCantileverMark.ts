@@ -16,6 +16,6 @@ export function hasLocalRoofCantilever(points:Pt[],code:string,texts:DrawingText
    const along=axis===0?t.cx:t.cy,across=cross===0?t.cx:t.cy;
    if(along<=lo||along>=hi||Math.abs(across-points[0][cross])>3.5*h)return false;
    return cant.test(t.str)||texts.some(c=>/^\(?CANT(?:ILEVER)?\.?\)?$/i.test(c.str.trim())&&
-     Math.abs((axis===0?c.cx:c.cy)-along)<=2*w&&Math.abs((cross===0?c.cx:c.cy)-across)<=3.5*h);
+     Math.max(0,Math.abs((axis===0?c.cx:c.cy)-along)-((axis===0?w:h)+(axis===0?(c.w??0):(c.h??0)))/2)<=2*w&&Math.abs((cross===0?c.cx:c.cy)-across)<=3.5*h);
  });
 }
