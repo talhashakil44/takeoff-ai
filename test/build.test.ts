@@ -439,7 +439,7 @@ it('exports all indexed roof beam triangles as a closed manifold IFC mesh',()=>{
 });
 it('retains inset quantity but withholds a main-sheet shape at the wrong scale',()=>{
  const p=project();p.units='metric';const s=p.sheets[0];s.metersPerPoint=.02;s.scaleSource='detected';
- s.views=[{id:'inset',title:'Inset plan',box:[0,0,500,800],metersPerPoint:.01},{id:'main',title:'Main plan',box:[1000,0,3000,1800],metersPerPoint:.02}] as typeof s.views;
+ s.views=[{scaleLabel:'1:50',title:'Inset plan',box:[0,0,500,800],metersPerPoint:.01},{scaleLabel:'1:100',title:'Main plan',box:[1000,0,3000,1800],metersPerPoint:.02}];
  p.measurements=[{id:'inset-wall',sheetId:s.id,typeId:'P1',points:[[100,100],[100,700]],holes:[]}];
  const out=extractModel({project:p,sections:[],floorToFloor:3.6}).elements.find(e=>e.measurementId==='inset-wall')!;
  expect(out.quantity).toBe(6);expect(out.shape).toBeNull();
