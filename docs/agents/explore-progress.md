@@ -1571,3 +1571,16 @@ Kelso and Dunnville physical shapes and quantities unchanged. Sent Claude the
 pier footprint evidence and requested an explicit general note/specification for
 interior footing datum and pier top; the typical detail's vertical break does
 not provide height. Continue independent footprint gaps while that is reviewed.
+
+## 2026-10-31 16:36 UTC — count source crop repair
+Claude approved53 and located general notes: base plates300mm belowSOG; ALL
+footings bear at least1220belowfinishedgrade. The latter is a minimum bearing
+constraint, not a local interiorTOF. Plate/grout and exact pier-top relation
+still require source interpretation. Physical extrusion remains withheld.
+Independent BP6 source viewer defect isolated: its valid in-page measurement
+point has a zero-area SourceBox, which sourceRegion rejected as outsidepage.
+Allow point/axis source bounds while still rejecting reversed, nonfinite and
+wholly outside coordinates; apply existing30pt visualcontext only for rendering.
+No source coordinates, model dimensions or accepted quantities altered. Tests
+cover countpoint, line, pagecorner and outsidepage points. Original page sources
+remain the authority; this fixes evidence visibility, not member placement.

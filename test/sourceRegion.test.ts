@@ -18,3 +18,12 @@ it('clamps padded detail bounds before passing them to the registered scene', ()
  expect(Math.ceil(r.width*r.scale)).toBeLessThanOrEqual(1800);
  expect(Math.ceil(r.height*r.scale)).toBeLessThanOrEqual(1800);
 });
+it('renders count points and axis lines with context without inventing measurement extents',()=>{
+ const point:[number,number,number,number]=[290,1323,290,1323];
+ expect(sourceRegion(point,2592,1728)).toEqual({left:260,top:1293,width:60,height:60,scale:4});
+ expect(point).toEqual([290,1323,290,1323]);
+ expect(sourceRegion([20,20,20,80],100,100)).toEqual({left:0,top:0,width:50,height:100,scale:4});
+ expect(sourceRegion([0,0,0,0],100,100)).toEqual({left:0,top:0,width:30,height:30,scale:4});
+ expect(sourceRegion([101,20,101,20],100,100)).toBeNull();
+ expect(sourceRegion([-1,20,-1,20],100,100)).toBeNull();
+});
