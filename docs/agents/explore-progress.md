@@ -1696,3 +1696,7 @@ Model version bumped so cached models acquire newly recovered inset evidence.
 Next: actual main-floorB4 outline/elevation qualification and legacy roof-canopy
 migration to generic insetregistration with separate datum semantics.
 T11 remains incomplete, no merge/deploy. Live review/full harness follows.
+Validated0710fe6:657tests(4skipped),TypeScript,build,Kelso/Frederick audit PASS.
+Live B4 revisedp24 source,2D and3D reviewed in revised-elevator-* proofs;
+browser errors empty. Beam remains explicitly unplaced, no new physical solid.
+Sent Claude source/verification evidence and request for local B4 section datum.
