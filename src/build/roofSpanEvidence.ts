@@ -1,4 +1,4 @@
-import {hasLocalRoofCantilever} from './roofCantileverMark';
+import {hasLocalRoofCantilever,roofBeamMarkMatches} from './roofCantileverMark';
 import type { Pt } from '../model';
 import type { DrawingTexts } from './building';
 import type { DrawingLines } from './roof';
@@ -225,7 +225,7 @@ export function recoverRoofBeamSpan(
     if (
       !ts.some(
         (t) =>
-          t.str.trim() === code &&
+          roofBeamMarkMatches(t.str,code) &&
           (axis === 0 ? t.cx : t.cy) > ordered[i - 1][axis] + 3 &&
           (axis === 0 ? t.cx : t.cy) < ordered[i][axis] - 3 &&
           Math.abs((cross === 0 ? t.cx : t.cy) - ordered[i][cross]) * scale <

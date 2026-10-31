@@ -1353,3 +1353,19 @@ user connection of MMA Submitted Estimates; no third-set evaluation or universal
 accuracy claimed. Next: held-out run-only gate once available; continue independent
 geometry/source work meanwhile, preserve source holds and finish other legacy
 scale windows incrementally. No merge/deploy; T11 incomplete.
+
+## 2026-10-31 12:38 UTC — one cantilever annotation rule (model47)
+Claude approved46 and requested remaining fixed-window inventory. Source review
+of revised S1.1p22 buttress section again requires plan dimensions/local footing
+association; no basis to promote two outerMF3 masses. Instead closed an actual
+rule inconsistency: physical roofCantileverGeometry still used fixed30pt CANT
+search after registration had switched to glyph-relative parsing. It now uses
+the same local qualifier. Per-bay bearing mark matching also accepts combined
+mark+CANTILEVER, with escaped exact code (B1 cannot match B10). Rule-level test
+verifies combined annotation through bearing recovery, not just token parsing.
+Inventory docs/agents/drawing-window-inventory.md lists search candidates by
+file:line, migration priorities and failure modes. It deliberately distinguishes
+layout windows, crop padding, physical tolerances; multiline search may miss
+candidates. No blind global constant replacement or whole-extractor claim.
+Production comparison and live/full harness validation follow. Third held-out
+set remains pending; T11 incomplete, no merge/deploy.

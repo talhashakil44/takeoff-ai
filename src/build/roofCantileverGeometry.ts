@@ -1,3 +1,4 @@
+import {hasLocalRoofCantilever} from './roofCantileverMark';
 import { roofSectionEndEvidence } from './roofSectionEndEvidence';
 import type { Project, Pt } from "../model";
 import type { BuildModel, SourceRef } from "./types";
@@ -173,19 +174,7 @@ export function recoverRoofCantilevers(
           Object.values(sections).filter((s) => /^C\d+$/.test(s.code)),
         );
       if (!supports || supports.length !== 2) return e;
-      if (
-        !ts.some(
-          (c) =>
-            /^\(?CANT\.?\)?$/i.test(c.str.trim()) &&
-            ts.some(
-              (t) =>
-                t.str.trim() === code &&
-                Math.abs(t.cx - c.cx) < 30 &&
-                Math.abs(t.cy - c.cy) < 30,
-            ),
-        )
-      )
-        return e;
+      if (!hasLocalRoofCantilever(m.points, code!, ts)) return e;
       const maxes = ts.flatMap((t) => {
         const n = t.str.match(/^MAX\.?\s*(\d+)$/i);
         return n &&

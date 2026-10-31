@@ -139,3 +139,8 @@ it('recovers two real bearings inside a locally CANT-noted line with one free en
  expect(run([[-100,100],[300,100]],f.lines,f.texts.filter((t:any)=>t.str!=='(CANT.)'))).toBeNull();
  expect(run([[-100,100],[300,100]],f.lines.slice(0,-1))).toBeNull();
 });
+it('accepts a combined mark and CANTILEVER annotation through bearing recovery',()=>{
+ const f=fixture();f.texts[0].str='B1 CANTILEVER';
+ expect(recoverRoofBeamSpan([[-100,100],[300,100]],'B1',f.r,f.texts,f.lines,f.sec)).toEqual([[100,100],[300,100]]);
+ expect(recoverRoofBeamSpan([[-100,100],[300,100]],'B10',f.r,f.texts,f.lines,f.sec)).toBeNull();
+});
