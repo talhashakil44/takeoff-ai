@@ -1,13 +1,16 @@
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
 import type { OcrWord, PageOcr } from '../src/ocrText';
 
 /**
  * OCR in the benchmark: the page rendered by pdftoppm and read by the tesseract command, level and
- * turned a quarter (text along vertical walls), cached beside the PDF in .ocr/ so a set is read once.
+ * turned a quarter (text along vertical walls), cached outside the job (OCR_CACHE, else the system's
+ * temp folder) by the file's path, size and date, so a set is read once and its folder never written to.
  * The app reads pages with Tesseract in the browser instead (src/ocr.ts); both hand words to
  * src/ocrText.ts. Off with OCR=0, or when the commands are missing.
  */
@@ -47,10 +50,11 @@ async function tesseract(png: Buffer): Promise<string> {
 /** OCR for pages of the PDF at `path`, or null when OCR is off or not installed. */
 export async function cliOcr(path: string): Promise<PageOcr | null> {
   if (process.env.OCR === '0' || !(await haveCommands())) return null;
-  const cache = join(dirname(path), '.ocr');
+  const st = statSync(path);
+  const cache = join(process.env.OCR_CACHE ?? join(tmpdir(), 'takeoff-ocr'), createHash('sha1').update(`${path}|${st.size}|${st.mtimeMs}`).digest('hex').slice(0, 16));
   return async (page) => {
     const n = page.pageNumber;
-    const file = join(cache, `${basename(path)}-${n}.json`);
+    const file = join(cache, `${n}.json`);
     if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8')) as OcrWord[];
     const { stdout: png } = await run('pdftoppm', ['-f', String(n), '-l', String(n), '-r', String(DPI), '-gray', '-png', '-singlefile', path], { encoding: 'buffer', maxBuffer: 256 << 20 });
     const k = 72 / DPI;

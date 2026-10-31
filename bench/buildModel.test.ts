@@ -6,6 +6,9 @@ import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openDoc } from './nodeSet';
+
+// The demos carry their own text: the audit reads them as they are, the same everywhere (no OCR).
+process.env.OCR = '0';
 import { pageTexts } from '../src/pageText';
 import { buildAll, replan } from '../src/build/run';
 import { applySetupEdits } from '../src/build/plan';
