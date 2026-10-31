@@ -89,9 +89,10 @@ export function resolveTags(texts: TagText[], segs: Segment[]): WallTag[] {
     const candidates = local.filter(clear);
     // Tags and their leaders are drawn with one pen. Furniture or hatching can sit under
     // a tag, so each pen is tried and the smallest loop with a leader wins.
-    let best: { paths: Pt[][]; size: number; tick?: boolean } | null = null;
+    let best: { paths: Pt[][]; size: number; tick?: boolean; area?: number } | null = null;
     const loops: Segment[][] = [];
     const outlines: Segment[][] = [];
+    const boxes: { pen: number; symbol: Segment[]; area: number }[] = [];
     for (const pen of new Set(candidates.map((s) => s.width))) {
       const groups = symbolLoops(
         candidates.filter((s) => s.width === pen),
@@ -102,9 +103,23 @@ export function resolveTags(texts: TagText[], segs: Segment[]): WallTag[] {
       if (symbol.length < 3) continue;
       outlines.push(...groups);
       loops.push(symbol);
+      const area = boxArea(symbol);
+      if (groups.length === 1 && outlineShape(symbol) === 'box') boxes.push({ pen, symbol, area });
       if (best && symbol.length >= best.size) continue;
       const paths = leadersFrom(symbol, local.filter((s) => s.width === pen), t, index, lines);
-      if (paths.length) best = { paths, size: symbol.length };
+      if (paths.length) best = { paths, size: symbol.length, area };
+    }
+    // A box drawn round the text with a tick from the middle of its side, in its own
+    // pen, is the tag; a larger outline round it (a section bubble drawn over the tag) whose
+    // corners other lines run from is not (Kelso S1.0 FW-4 under the 6/S1.1 section mark).
+    if (best?.area !== undefined) {
+      for (const { pen, symbol } of boxes.filter((q) => q.area < best!.area! * 0.8).sort((a, b) => a.area - b.area)) {
+        const paths = leadersFrom(symbol, local.filter((s) => s.width === pen), t, index, lines, true);
+        if (paths.length) {
+          best = { paths, size: symbol.length, tick: true };
+          break;
+        }
+      }
     }
     // Filled outlines round the text (a solid diamond): part of the symbol, never a leader.
     const filled = dedupe(fillIndex.query(t.cx - r, t.cy - r, t.cx + r, t.cy + r).map((i) => fills[i])).filter(clear);
@@ -138,6 +153,13 @@ export function resolveTags(texts: TagText[], segs: Segment[]): WallTag[] {
     if (!best) return { ...t, target: [t.cx, t.cy] as Pt, paths: [], leader: false, ...extra };
     return { ...t, target: best.paths[0][1], paths: best.paths, leader: true, ...(best.tick ? { tick: true } : {}), ...extra };
   });
+}
+
+/** The area of the box round some lines. */
+function boxArea(segs: Segment[]): number {
+  const xs = segs.flatMap((s) => [s.x1, s.x2]);
+  const ys = segs.flatMap((s) => [s.y1, s.y2]);
+  return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
 }
 
 /** Names the outlines round a tag's text (see `TagSymbol`). */

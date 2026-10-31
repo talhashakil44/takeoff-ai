@@ -210,6 +210,23 @@ describe('tag symbols', () => {
     const end = r.paths[0][r.paths[0].length - 1];
     expect(end[0] * MPP).toBeCloseTo(4.5, 2);
   });
+
+  it('takes the tick off a tag box, not a section bubble drawn over it with a cut line from its side', () => {
+    // Kelso S1.0 FW-4: a box with a tick from the middle of its right side onto the wall at x 4.5,
+    // and a section bubble (a polyline circle in a finer pen) over it with its cut line running off.
+    const box = poly(0.84, [2.6, 2.86], [3.4, 2.86], [3.4, 3.14], [2.6, 3.14], [2.6, 2.86]);
+    const tick = poly(0.84, [3.4, 3], [4.5, 3]);
+    const bubble: Segment[] = [];
+    for (let k = 0; k < 16; k++) {
+      const [a0, a1] = [(k * Math.PI) / 8, ((k + 1) * Math.PI) / 8];
+      bubble.push(...poly(0.6, [3.1 + 0.35 * Math.cos(a0), 3.05 + 0.35 * Math.sin(a0)], [3.1 + 0.35 * Math.cos(a1), 3.05 + 0.35 * Math.sin(a1)]));
+    }
+    const cut = poly(0.6, [3.45, 3.05], [8, 3.05]);
+    const [r] = resolveTags([text('FW-4', 2.95, 3, { w: 18.6, h: 5.2 })], [...box, ...tick, ...bubble, ...cut]);
+    expect(r.leader).toBe(true);
+    expect(r.target[0] * MPP).toBeCloseTo(4.5, 2);
+    expect(r.target[1] * MPP).toBeCloseTo(3, 2);
+  });
 });
 
 describe('labelling walls from tags', () => {
