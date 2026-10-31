@@ -741,7 +741,9 @@
       "title": "Wall tracer: follow a wall tag leader onto the wall it lands on (Kelso S1.0 FW-4: 2.59 m ICF panel at x 2043, y 827-900 missed; the leader itself was taken as wall until 0a38bfc)",
       "prompt": "In src/fill/sheetWalls wall-tag association, when a tag has a leader, seed the run at the leader end on the wall it touches and trace that wall, not the leader. Verify on Kelso S1.0 FW-4 and that the Frederick wall takeoffs do not regress.",
       "added": "2026-10-31T00:12:09.934Z",
-      "by": "claude"
+      "by": "claude",
+      "notes": "Root cause found: the FW-4 tag's 'leader' is taken from the 6/S1.1 section cut line (2019.5,880.9)->(2191.8,880.9) and its break symbol at x 2011-2015, not the real leader. The 0.84 line at y 875 from the tag box (2008.3) to x 2043 ends inside the hatched ICF panel 2036.5-2049.5. Fix needs tags.ts leader selection to prefer a line leaving the tag box edge and to reject section-cut lines (long, crossing the plan, with a break or arrow symbol). A continuation-only attempt did not help and was reverted.",
+      "updated": "2026-10-31T00:14:38.189Z"
     }
   ]
 }
