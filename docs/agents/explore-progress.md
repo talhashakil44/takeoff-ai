@@ -691,3 +691,34 @@ He requested both vestibule records show a source-backed superseded notice in
 Explore, with 1/S1.1 excluded from the left wall. Next implementation should
 bind that notice to revised source evidence (not hardcoded measurement IDs),
 then verify it in both legacy/current projects and live UI when available.
+
+## Revised wall label evidence — October31, 02:33 wake
+
+Model36 follows straight perpendicular wall-label leaders with heavy target
+bars to registered unresolved foundation axes. A unique FW label becomes a
+bounded revised-PDF source link. A different code adds a local type-conflict
+warning, never a new type, length, elevation or solid. Matching labels explicitly
+do not validate old extents. Missing/ambiguous evidence removes this annotation
+on replay. No hardcoded document or measurement IDs.
+
+Production source-loader runs pass in legacy and current engine projects:
+22 axes have target-matched revised labels; two have type conflicts. Known
+vestibule FW5->FW1 is one; the other is a FW2 callout on the39.4335m FW4 axis
+(legacy1858d899-c10f-4dfc-bff7-e3333521aea3; engine31aa4e01-a79c-4c35-ac9c-1d8b1b50b32f).
+Original revised-PDF crop [1350,740,1460,855] independently confirms the latter
+FW2 target bar. This is a local conflict, not proof the entire long run is FW2.
+Legacy project and all physical shapes/candidates compare exactly to baseline;
+production tests preserve accepted quantities in both project versions.
+
+The right vestibule FW5 fails the tight old-axis/leader-tip association, so it
+is not force-linked. Its extent/placement remains a re-issue reconciliation gap.
+Claude has the exact findings. T38 is still the revision workflow, not automatic
+mutation of the original project.
+
+CUA again reported browser.user unavailable. Used isolated local Chromium with
+the actual ExploreWorkspace and production model/source data instead: verified
+5.78m unchanged, conflict warning, original-PDF FW1 leader crop and 2D/3D modes;
+no page errors. Proofs: diag/explore/proofs/revision-type-conflict-{2d,3d,source}-v36.png.
+No new physical solids; this is evidence integration. Next: independent west Ef
+MF3 datum/section audit; await new source for east buttress top and T38 for
+revision reconciliation. T11 remains active, no main merge/deploy.
