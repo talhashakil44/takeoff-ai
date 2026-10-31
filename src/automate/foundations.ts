@@ -1,3 +1,4 @@
+import { polylineLength } from '../geometry';
 import { drawSegments, floodFill, makeGrid, simplify, toSheet, traceBoundary, type Grid } from '../fill/raster';
 import type { Segment } from '../fill/vectors';
 import { newId, type AssemblyItem, type Measurement, type Project, type Pt, type Sheet, type TakeoffType } from '../model';
@@ -385,9 +386,15 @@ export async function automateFoundations(p: Project, access: SetAccess, maxOpen
       const strips = marks.filter((m) => m.kind === 'strip');
       const stripTags = markPlaces(texts, strips);
       const runsByCode = new Map<string, Measurement[]>();
+      // A short run starting at a wall tag is the tag's leader to its wall, not wall (Kelso S1.0 FW-4).
+      const fwBoxes = texts.filter((t) => /^FW/i.test(norm(t.str))).map((t) => ({ t, box: [t.cx - t.w / 2, t.cy - t.h / 2, t.cx + t.w / 2, t.cy + t.h / 2] }));
+      const nearTag = (q: Pt) =>
+        fwBoxes.some(({ t, box }) => Math.hypot(Math.max(0, box[0] - q[0], q[0] - box[2]), Math.max(0, box[1] - q[1], q[1] - box[3])) <= Math.max(16, t.h * 3));
+      const leader = (r: Measurement) => r.points.length === 2 && polylineLength(r.points) * k < 1.5 && (nearTag(r.points[0]) || nearTag(r.points[1]));
       for (const r of runs) {
         const code = after.types.find((t) => t.id === r.typeId)?.name.split(/\s+[–-]\s+/)[0].trim() ?? '';
         if (!/^FW/i.test(norm(code)) && !wallMarks.has(norm(code))) continue; // only foundation walls
+        if (leader(r)) continue;
         runsByCode.set(code, [...(runsByCode.get(code) ?? []), r]);
       }
       if (!runsByCode.size) return;
