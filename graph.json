@@ -824,7 +824,7 @@
       "updated": "2026-10-31T08:17:15.593Z"
     },
     {
-      "status": "todo",
+      "status": "done",
       "depends": [],
       "accept": [
         "tsc",
@@ -838,7 +838,10 @@
       "title": "Cantilever beams noted (CANT.) taken support-to-support only (Kelso S2.1 B2, 10 beams ~4.2 m short each)",
       "prompt": "Extend beamSpan to the free end when the tag carries a CANT note.",
       "added": "2026-10-31T11:22:51.880Z",
-      "by": "claude"
+      "by": "claude",
+      "notes": "6883eb0. Kelso S2.1 B2 rows B-E 4.47->8.62 m both ends (44.5->78.7 m); Frederick unchanged; audit 2027-09-01/2027-09-21; Mac data md5 31f9eec5.",
+      "evidence": "claude/integration@6883eb0",
+      "updated": "2026-10-31T11:24:26.440Z"
     }
   ]
 }
