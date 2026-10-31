@@ -22,8 +22,8 @@ export function dimensionLines(segs: Segment[], tick: number): Set<Segment> {
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const m of grid.get(`${gx + i},${gy + j}`) ?? []) out.push(m);
     return out;
   };
-  /** Where along s (0 at its start, in points) a slash crosses it, or null. */
-  const crossAt = (s: Segment, m: Segment, L: number): number | null => {
+  /** Where along s (0 at its start, in points) a slash crosses it, and from which side when it only touches it; or null. */
+  const crossAt = (s: Segment, m: Segment, L: number): { at: number; side: number } | null => {
     const [ux, uy] = [(s.x2 - s.x1) / L, (s.y2 - s.y1) / L];
     const side = (x: number, y: number) => (x - s.x1) * uy - (y - s.y1) * ux;
     const a = side(m.x1, m.y1);
@@ -37,7 +37,8 @@ export function dimensionLines(segs: Segment[], tick: number): Set<Segment> {
     const t = Math.abs(a) < 0.3 ? 0 : Math.abs(b) < 0.3 ? 1 : a / (a - b);
     const x = m.x1 + (m.x2 - m.x1) * t;
     const y = m.y1 + (m.y2 - m.y1) * t;
-    return (x - s.x1) * ux + (y - s.y1) * uy;
+    const from = touch ? Math.sign(Math.abs(a) < 0.3 ? b : a) : 0;
+    return { at: (x - s.x1) * ux + (y - s.y1) * uy, side: from };
   };
   const out = new Set<Segment>();
   for (const s of segs) {
@@ -53,16 +54,21 @@ export function dimensionLines(segs: Segment[], tick: number): Set<Segment> {
       // Ticks within reach of this end.
       const ux = (s.x2 - s.x1) / L;
       const uy = (s.y2 - s.y1) / L;
+      // A tick crosses the line; one drawn as two halves out from it has a half on each side at one
+      // point. (Hatching only meets a wall's face from one side.)
+      const halves: { at: number; side: number }[] = [];
+      const seen = new Set<Segment>();
       for (const p of [0, 0.5, 1]) {
         const d = isStart ? reach * p : -reach * p;
         for (const m of near(x + ux * d, y + uy * d)) {
-          if (m === s) continue;
-          const at = crossAt(s, m, L);
-          if (at === null) continue;
-          if (isStart ? at >= -1 && at <= reach : at <= L + 1 && at >= L - reach) {
+          if (m === s || seen.has(m)) continue;
+          seen.add(m);
+          const c = crossAt(s, m, L);
+          if (c === null || !(isStart ? c.at >= -1 && c.at <= reach : c.at <= L + 1 && c.at >= L - reach)) continue;
+          if (c.side === 0 || halves.some((h) => h.side === -c.side && Math.abs(h.at - c.at) < 0.6)) {
             if (isStart) start = true;
             else end = true;
-          }
+          } else halves.push(c);
         }
         if (isStart ? start : end) break;
       }

@@ -72,3 +72,19 @@ describe('Tesseract words as sheet words', () => {
     expect(wordsOfRecognized(page, 0.5, 1000)[0]).toMatchObject({ x0: 25, x1: 35, y0: 420, y1: 450, rot: 90 });
   });
 });
+
+describe('OCR misreadings of drafting lettering', () => {
+  it('reads tags, quotes and a broken scale as drawn', async () => {
+    const { ocrNormal } = await import('../src/ocrText');
+    expect(ocrNormal('FT=1')).toBe('FT-1');
+    expect(ocrNormal('[FT=4]')).toBe('FT-4');
+    expect(ocrNormal('7-1/2”')).toBe('7-1/2"');
+    expect(ocrNormal('1/8"=1—')).toBe('1/8" = 1\'-0"');
+    expect(ocrNormal('MEETING')).toBe('MEETING');
+  });
+
+  it('keeps an unsure word when it reads as a scale', () => {
+    const runs = ocrRuns([word('1/8"=1—', 100, 90, 160, 100, '1.1.1', 0, 10), word('ROOM', 300, 90, 340, 100, '1.1.2', 0, 10)]);
+    expect(runs.map((r) => r.str)).toEqual(['1/8" = 1\'-0"']);
+  });
+});

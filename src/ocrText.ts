@@ -47,10 +47,31 @@ export interface OcrRun {
   rot: 0 | 90;
 }
 
+/**
+ * A word as the drawing wrote it, from the usual misreadings of drafting lettering: curly quotes
+ * and primes for inch and foot marks, dashes for hyphens, a tag's hyphen read as "=" (FT=1 is
+ * FT-1), and a scale whose "1'-0"" came out as noise after "1/8"=1".
+ */
+export function ocrNormal(text: string): string {
+  const t = text
+    .trim()
+    .replace(/[”“″]/g, '"')
+    .replace(/[’‘′]/g, "'")
+    .replace(/[—–]/g, '-');
+  const tag = /^\[?([A-Z]{1,4})[=_]([0-9]{1,3}[A-Z]?)\]?$/.exec(t);
+  if (tag) return `${tag[1]}-${tag[2]}`;
+  const scale = /^(\d+(?:\/\d+)?|\d+-\d+\/\d+)"\s*=\s*1(?:['-]\S*)?$/.exec(t);
+  if (scale) return `${scale[1]}" = 1'-0"`;
+  return t;
+}
+
+/** Shapes worth keeping even when OCR is unsure of them: a scale, a type tag. */
+const STRONG = /^(\d+(?:\/\d+)?|\d+-\d+\/\d+)" = 1'-0"$|^1:\d{2,4}$|^[A-Z]{1,4}-\d{1,3}[A-Z]?$/;
+
 /** Is this word worth keeping: confident, and not a lone mark that linework reads as (|, -, l). */
 function keep(w: OcrWord): boolean {
   const t = w.text.trim();
-  if (!t || w.conf < MIN_CONF) return false;
+  if (!t || (w.conf < MIN_CONF && !(w.conf >= 5 && STRONG.test(t)))) return false;
   if (!/[A-Z0-9]/i.test(t)) return false;
   // A single letter is linework far more often than a word, except a grid or detail letter on its own.
   if (t.length === 1 && !/[A-Z0-9]/.test(t)) return false;
@@ -64,7 +85,11 @@ function keep(w: OcrWord): boolean {
  */
 export function ocrRuns(words: OcrWord[]): OcrRun[] {
   const lines = new Map<string, OcrWord[]>();
-  for (const w of words) if (keep(w)) lines.set(`${w.rot}|${w.line}`, [...(lines.get(`${w.rot}|${w.line}`) ?? []), w]);
+  for (const raw of words) {
+    const w = { ...raw, text: ocrNormal(raw.text) };
+    if (!keep(w)) continue;
+    lines.set(`${w.rot}|${w.line}`, [...(lines.get(`${w.rot}|${w.line}`) ?? []), w]);
+  }
   const out: OcrRun[] = [];
   for (const ws of lines.values()) {
     const rot = ws[0]!.rot;
