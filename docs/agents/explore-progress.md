@@ -1678,3 +1678,21 @@ T11 incomplete, no merge/deploy. Full harness follows.
 Validated58bf192:656tests(4skipped),TypeScript,build,Kelso/Frederick audit PASS.
 Production/source comparison and generic-inset-* PDF/live proofs reviewed.
 Requested Claude review of generic registration and revisedp24 engineview gap.
+
+## 2026-10-31 18:38 UTC — revised elevator view recovery (model57)
+Claude approved56 and fixed the engine view detector in3b49f0c. A crossing line
+joined two differently scaled drawing bodies; the generic gutter split now
+separates them. Clean cherry-pick ad0dcc8 preserves engine ownership.
+Add5p24 elevator1:50 [144,1096,576,1480] now registers through the unchanged
+inset path using6/7/C/B, residual3.603mm. FourB4,WP1,ML1,ML2 gain current revision
+registration evidence; total14insetrecords including7foundationrecords.
+Same frozen pre-fix project comparison: identical input and0physicalshape,
+quantity or unit deltas. Current engineproject also passed source invariants.
+Original Add5p33 detail5/S5.0 ELEVATOR WALL TOP CONNECTION inspected:7940flat
+roof beam top,8000roof,8568lowbeam. This is a roof connection and does not
+establish the S2.0main-floorB4 elevation. Sent Claude exact source and request
+for localmain-floor section correspondence; no roof-height extrusion.
+Model version bumped so cached models acquire newly recovered inset evidence.
+Next: actual main-floorB4 outline/elevation qualification and legacy roof-canopy
+migration to generic insetregistration with separate datum semantics.
+T11 remains incomplete, no merge/deploy. Live review/full harness follows.
