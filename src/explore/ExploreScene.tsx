@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { planProjection } from "./planProjection";
 import { geometryOf } from "../build/sceneGeometry";
 import type { BuildElement, BuildModel } from "../build/types";
 import type { Pt, Sheet } from "../model";
@@ -219,38 +220,28 @@ export function ExploreScene(props: Props) {
             : 1;
       items.push({ e, mesh, edge, min: g.boundingBox!.min.y, layer });
     }
-    // Project the actual takeoff geometry onto the same datum as the PDF.
-    // No hull, envelope or roof allowance participates in this alignment check.
+    // Project registered members onto the PDF datum, including other visible
+    // discipline sheets. Axes stay axes; locator symbols are not footprints.
     const footprints = new THREE.Group();
-    for (const e of floorEls.filter(
-      (e) => e.origin !== "building" && e.sheetId === props.sheet.id,
-    )) {
-      const shape = e.shape;
-      const paths: Pt[][] =
-        shape?.type === "run" || shape?.type === "axis"
-          ? [shape.points]
-          : shape?.type === "surface"
-            ? [shape.ring, ...(shape.holes ?? [])].map((r) => [...r, r[0]])
-            : [];
-      for (const path of paths) {
-        if (path.length < 2) continue;
-        const geometry = new THREE.BufferGeometry().setFromPoints(
-          path.map(([x, y]) => new THREE.Vector3(x, base + 0.025, y)),
-        );
-        footprints.add(
-          new THREE.Line(
-            geometry,
-            new THREE.LineBasicMaterial({
-              color: "#007a75",
-              depthTest: false,
-              transparent: true,
-              opacity: 0.85,
-            }),
-          ),
-        );
-      }
+    const planItems: { e: BuildElement; line: THREE.LineSegments; min: number }[] = [];
+    for (const { e, mesh, min } of items) {
+      if (e.origin === "building" || e.shape?.type === "locator") continue;
+      let geometry: THREE.BufferGeometry;
+      if (e.shape?.type === "axis") {
+        const points: THREE.Vector3[] = [];
+        for (let i = 1; i < e.shape.points.length; i++)
+          for (const [x, y] of [e.shape.points[i - 1], e.shape.points[i]])
+            points.push(new THREE.Vector3(x, base + 0.025, y));
+        geometry = new THREE.BufferGeometry().setFromPoints(points);
+      } else geometry = planProjection(mesh.geometry, base + 0.025);
+      const line = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
+        color: e.origin === "drawing" ? "#a66b22" : e.shape?.type === "axis" ? "#b47620" : "#007a75",
+        depthTest: false, transparent: true, opacity: 0.85,
+      }));
+      line.renderOrder = 50;
+      footprints.add(line);
+      planItems.push({ e, line, min });
     }
-    footprints.renderOrder = 5;
     scene.add(footprints);
     const corners: [
       [number, number],
@@ -576,6 +567,11 @@ export function ExploreScene(props: Props) {
         line.renderOrder = 50;
         sourceMarker.add(line);
       }
+      for (const { e, line } of planItems) {
+        (line.material as THREE.LineBasicMaterial).color.set(
+          e.id === live.current.selected ? "#df4b12" : e.origin === "drawing" ? "#a66b22" : e.shape?.type === "axis" ? "#b47620" : "#007a75",
+        );
+      }
       for (const { e, mesh, edge } of items) {
         const selected = e.id === live.current.selected;
         (mesh.material as THREE.MeshStandardMaterial).color.set(
@@ -807,6 +803,7 @@ export function ExploreScene(props: Props) {
       paper.visible = p.showBase !== false;
       gridGroup.visible = !!p.showGrids;
       footprints.visible = !!p.showFootprints && p.mode === "sheet";
+      for (const item of planItems) item.line.visible = itemVisible(item.e, item.min, p);
       pins.forEach((pin) => {
         pin.sprite.visible =
           p.mode !== "room" && !!p.visibleSheets?.has(pin.sheetId);

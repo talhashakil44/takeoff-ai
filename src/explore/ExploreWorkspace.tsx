@@ -1049,7 +1049,7 @@ export function ExploreWorkspace({
             <p>{room ? room.name : "Select a measured space"}</p>
           </div>
           <div className="ex-stage-foot">
-            <span>{showAllowances ? "GUESSED SHELL VISIBLE · NOT DRAWING GEOMETRY" : mode === "sheet" ? (showFootprints ? "TEAL = TAKEOFF FOOTPRINTS · CHECK AGAINST PDF" : "ORIGINAL DRAWING · TAKEOFF FOOTPRINTS HIDDEN") : "MEASURED FOOTPRINTS · INFERRED HEIGHTS · SHELL HIDDEN"}</span>
+            <span>{showAllowances ? "GUESSED SHELL VISIBLE · NOT DRAWING GEOMETRY" : mode === "sheet" ? (showFootprints ? "TEAL = MODEL FOOTPRINTS · AMBER = DRAWING-ONLY / UNRESOLVED" : "ORIGINAL DRAWING · TAKEOFF FOOTPRINTS HIDDEN") : "MEASURED FOOTPRINTS · INFERRED HEIGHTS · SHELL HIDDEN"}</span>
             <label>
               <input
                 type="checkbox"
@@ -1125,7 +1125,8 @@ export function ExploreWorkspace({
                 >
                   <h3>{element.origin === "drawing" && selectedShape?.type === "axis" ? "DRAWING COVERAGE" : "STRUCTURAL GEOMETRY"}</h3>
                   {(selectedShape?.type === "run" || selectedShape?.type === "point") && (
-                    <button
+                    (["sheet", "lift"] as const).map(view => <button
+                      key={view}
                       onClick={() => {
                         if (selectedShape.type === "point") setFocus(selectedShape.at);
                         else {
@@ -1136,11 +1137,12 @@ export function ExploreWorkspace({
                           ]);
                         }
                         setStructureOnly(true);
-                        setMode("lift");
+                        setMode(view);
+                        if (view === "sheet") setShowFootprints(true);
                       }}
                     >
-                      Focus member in 3D
-                    </button>
+                      {view === "sheet" ? "Locate member on drawing" : "Focus member in 3D"}
+                    </button>)
                   )}
                   {selectedShape?.type === "run" && (
                     <dl>

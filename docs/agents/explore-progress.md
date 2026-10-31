@@ -577,3 +577,27 @@ on the active architectural sheet only, while all solid meshes hide at zero
 lift. Next action: project registered visible-sheet structural/drawing-only
 footprints into Drawing mode, distinguish drawing-only styling, honor layer
 visibility, and verify with close original-PDF overlays and zoom cycles.
+
+## Structural plan projection — October 31, 00:33 wake
+
+Claude approved model34 FW4 recovery; engine tag-leader selection remains Claude
+T37. Explore now projects the existing registered physical geometry edges onto
+the PDF datum for every visible discipline sheet, rather than only the active
+architectural sheet. Coincident top/bottom edges collapse; vertical edges drop.
+Unresolved axes retain centreline-only representation; locators and guessed
+building shells do not acquire fabricated footprints. No source/model/quantity
+or extraction files changed. Layer visibility, drawing-only visibility and
+structural isolation apply to plan lines too. Projection lines draw after PDF
+overlays. Added Locate member on drawing alongside the existing 3D focus.
+
+Live verification on the legacy model34 project: FW4's core outline is inside
+its wider hatched ICF panel, aligned at both ends. The drawing-only toggle
+removes/restores this outline; disabling S1.0 removes its PDF and all structural
+footprints; restoring it and zooming out/in preserves alignment. Original PDF
+raster is visibly soft at this zoom; improving source rendering and stronger
+plan-line visibility remains worthwhile. Proof:
+diag/explore/proofs/fw4-plan-overlay-v34.png. No geometry placement changed.
+
+Next: source viewer evidence-box focus and sharper source raster at close zoom;
+then remaining source-defined roof ends and stepped footing/wall profiles.
+T11 remains incomplete. This viewport repair does not close those geometry gaps.
