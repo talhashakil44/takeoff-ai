@@ -1369,3 +1369,10 @@ layout windows, crop padding, physical tolerances; multiline search may miss
 candidates. No blind global constant replacement or whole-extractor claim.
 Production comparison and live/full harness validation follow. Third held-out
 set remains pending; T11 incomplete, no merge/deploy.
+Validated cb9834e:627tests/tsc/build/Kelso+Frederick audit PASS. Same current project
+comparison vs46: zero shape and quantity/unit deltas; project unchanged. Original
+PDF, focused2D/3D screenshots roof-e89-*-v47 inspected; browsererrors empty.
+Next: Claude review of unified qualifier and coordinate-window inventory; apply
+further rule changes against run-only held-out gate once available. Continue
+source-specific missing datum/section work without treating generic details as
+local elevations. No new physical coverage claimed in this checkpoint.
