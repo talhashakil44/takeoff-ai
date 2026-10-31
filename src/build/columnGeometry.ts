@@ -1,3 +1,4 @@
+import { retainColumnPlanEvidence, type ColumnPlanWitness } from './columnPlanEvidence';
 import { joinCollinearRoofStrokes } from './roofSpanEvidence';
 import type { Project, Pt, Sheet } from '../model';
 import type { BuildModel, SourceRef } from './types';
@@ -203,7 +204,7 @@ export function connectSourceColumns(
   const joinedPlans = new Map<string, Line[]>();
   const located = new Map<
     string,
-    { at: Pt; code: string; width: number; depth: number; domain: string }
+    ColumnPlanWitness
   >();
   const resolved = new Map<
     string,
@@ -244,6 +245,7 @@ export function connectSourceColumns(
       domain: r.title === 'FLOOR FRAMING' ? 'floor' : 'roof',
       width: rect.width,
       depth: rect.depth,
+      source: {kind:'sheet',id:m.sheetId,page:r.source.page,label:r.source.label,box:rect.box},
     });
     const letter = pt
       .filter(
@@ -444,7 +446,7 @@ export function connectSourceColumns(
       resolved.set(id, matches[0][1]);
     }
   }
-  return {
+  return retainColumnPlanEvidence({
     ...model,
     elements: model.elements.map((e) => {
       const p = resolved.get(e.id);
@@ -488,5 +490,5 @@ export function connectSourceColumns(
         ],
       };
     }),
-  };
+  }, located);
 }

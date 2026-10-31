@@ -931,3 +931,45 @@ Next geometry iteration: audit independent unplaced structural coverage against
 available source references, excluding the already exhausted roof endpoints,
 outerMF3 and stepped-footing datum gaps unless new evidence arrives. No broader
 geometry acceptance implied by this UI correction. T11 active; no merge/deploy.
+
+## 2026-10-31 05:41 UTC — retain registered column footprints and cross-view review
+
+Claude approved ownership of columnGeometry.ts and requested per-column centres
+and pairings for engine T39. Read original S2.1/page8 visually: separate LOW ROOF,
+HIGH ROOF and CANOPY viewports. Page-coordinate proximity alone is not evidence
+of duplicate physical columns. Existing viewport registration plus closed plan
+rectangles matching the scheduled sections locates86 column records; the direct
+section tracer resolves16 before its existing duplicate-display handling.
+
+Previously the located-but-unresolved records discarded their footprint evidence
+and still reported no scale/calibrated floor registration required. Model38 now
+retains the source footprint reference and reports the actual remaining gap:
+base/top elevations or distinct-storey identity. It compares registered centres
+within10mm and matching code/section across different source/view footprints to
+flag possible same column lines. It never merges counts or adds/removes shapes.
+Resolved coincident viewport records do not get a false unresolved-height note.
+Stale evidence is withdrawn when its source no longer qualifies. UI notes use
+source/page/view descriptions; stable record IDs live in the review artifact.
+
+Production loaders (legacy fixture and current2113 engine project) both pass.
+Legacy source comparison: exact original project and all2112(id,shape,quantity,
+unit) tuples unchanged.86footprint refs,73records with cross-view candidates;
+46of47shape-lessC1 have recovered footprint evidence.138physicalshapes unchanged.
+Three targeted tests cover count/shape invariance, nearby/different-section
+rejection and stale evidence withdrawal. Model version38 invalidates stale cache.
+
+Actual ExploreWorkspace reviewed selected C1 unresolved record, source review
+notes, original Add5/page25 PDF footprint and settled2D/3D. No new column solid
+appears and the original1ea remains. No page errors. Proofs:
+diag/explore/proofs/c1-plan-review-v38.png,
+c1-original-footprint-v38.png,c1-withheld-3d-v38.png.
+Review data with registered centres, source boxes/pages, candidate IDs and PDF
+hashes: docs/agents/evidence/column-plan-review-v38.json. These are possible
+column-line matches, not duplicate or separate-storey determinations.
+
+Next: investigate the lone C1 without a qualifying plan rectangle/registration,
+2ef1bfde-26e8-4fde-b239-33000abbda2e at originalS2.1(495.4173,1315.2360), in the
+separate1:50canopy detail. Establish that viewport's own grids/scale before any
+placement. For the main C1 group, trace explicit S3/S4 column base/top sections
+before replacing any unresolved record with a solid. Claude uses candidate data
+for T39 read-only; accepted counts remain untouched. T11 incomplete, no deploy.
