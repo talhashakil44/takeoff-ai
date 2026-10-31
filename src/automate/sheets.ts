@@ -34,8 +34,9 @@ export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, 
   // Several noted (a plan with its details): the main drawing's.
   const several = inUnits.length > 1 ? inUnits : hints;
   if (!detected && several.length > 1) detected = mainDrawingScale(several, texts, await segmentsOnce(pg), units ?? 'metric', title ?? undefined)?.label ?? null;
-  // Still none: each drawing on the sheet at the scale under its title.
-  const views = !detected && several.length > 1 && texts.length ? sheetViews(texts, (await segmentsOnce(pg)) ?? [], info.width, info.height) : [];
+  // Each drawing on the sheet at the scale under its title: the sheet's scale where none is, an
+  // inset's own where one differs (a 1:50 canopy plan beside a 1:100 plan).
+  const views = several.length > 1 && texts.length ? sheetViews(texts, (await segmentsOnce(pg)) ?? [], info.width, info.height) : [];
   // No scale printed (a plan whose title gives none): the one its dimensions agree on.
   if (!detected && !hints.length && info.textRuns >= 20) {
     const read = checkScale(texts, await segmentsOnce(pg), units ?? 'metric');
@@ -64,14 +65,14 @@ export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, 
 }
 
 /**
- * Sheets holding drawings at different scales with no sheet scale set (Kelso S2.1: two roof
- * framing plans at 1:100, the canopy's at 1:50): each drawing's extent and scale, so takeoffs in
- * them are measured. Sheets with a scale, or with their views read, are left as they are.
+ * Sheets holding drawings at different scales (Kelso S2.1: two roof framing plans at 1:100, the
+ * canopy's at 1:50; S1.0: the 1:50 canopy foundation plan beside the 1:100 plan): each drawing's
+ * extent and scale, so takeoffs in them are measured at their own. Sheets with views read are left.
  */
 export async function automateSheetViews(p: Project, access: SetAccess): Promise<Automation> {
   const found = new Map<string, NonNullable<Sheet['views']>>();
   for (const s of p.sheets) {
-    if (s.superseded || s.metersPerPoint || s.views || s.scaleHints.length < 2) continue;
+    if (s.superseded || s.views || s.scaleHints.length < 2) continue;
     await perSheet(access, s, async () => {
       const texts = await access.texts(s);
       const segs = texts.length ? await access.segments(s) : null;
@@ -79,11 +80,11 @@ export async function automateSheetViews(p: Project, access: SetAccess): Promise
       if (views.length) found.set(s.id, views);
     });
   }
-  if (!found.size) return { message: 'No unscaled sheets with drawings at their own scales.' };
+  if (!found.size) return { message: 'No sheets with drawings at their own scales.' };
   const names = p.sheets.filter((s) => found.has(s.id)).map((s) => `${s.name} (${found.get(s.id)!.map((v) => v.scaleLabel).join(', ')})`);
   return {
     message: `Drawings at their own scales read on ${names.join('; ')}`,
-    apply: (q) => ({ ...q, sheets: q.sheets.map((s) => (found.has(s.id) && !s.metersPerPoint && !s.views ? { ...s, views: found.get(s.id) } : s)) }),
+    apply: (q) => ({ ...q, sheets: q.sheets.map((s) => (found.has(s.id) && !s.views ? { ...s, views: found.get(s.id) } : s)) }),
   };
 }
 

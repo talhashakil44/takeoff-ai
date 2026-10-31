@@ -55,4 +55,17 @@ describe('drawings at their own scales on one sheet', () => {
     expect(measurementVars({ ...m, points: [[1100, 200], [200, 1200]] } as Measurement, beam, sheet, 'metric')).toBeNull();
     expect(measurementVars(m, beam, { ...sheet, metersPerPoint: 0.001 }, 'metric')?.L).toBeCloseTo(0.15, 6);
   });
+
+  it('measures a takeoff in a smaller inset at the inset\'s own scale when the sheet scale was read off the sheet (Kelso S1.0 canopy 1:50 on a 1:100 sheet)', () => {
+    const views = sheetViews(texts, segs, W, H);
+    const k100 = (0.0254 / 72) * 100;
+    const beam = { kind: 'linear', height: 0 } as TakeoffType;
+    const inCanopy = { points: [[200, 1200], [350, 1200]], holes: [] } as unknown as Measurement;
+    const inMain = { points: [[1100, 200], [1250, 200]], holes: [] } as unknown as Measurement;
+    const detected = { id: 's', metersPerPoint: k100, scaleSource: 'detected', views } as unknown as Sheet;
+    expect(measurementVars(inCanopy, beam, detected, 'metric')?.L).toBeCloseTo(150 * k100 / 2, 6);
+    expect(measurementVars(inMain, beam, detected, 'metric')?.L).toBeCloseTo(150 * k100, 6);
+    // A scale set or calibrated by hand stands for the whole sheet.
+    expect(measurementVars(inCanopy, beam, { ...detected, scaleSource: 'calibrated' } as Sheet, 'metric')?.L).toBeCloseTo(150 * k100, 6);
+  });
 });
