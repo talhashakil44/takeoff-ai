@@ -656,3 +656,30 @@ Next: investigate independently source-bounded FW5 buttress profiles with known
 local MF2 bases; do not extend the west MF3 section datum to them or assume the
 sloped top is4000mm throughout. T11 remains active. Roof-end profiles and stepped
 transition placement remain unresolved; no merge/deploy.
+
+## FW5 source reconciliation — October31, 02:03 wake
+
+Claude approved e95d4cd. Directly compared original structural S1.0 and revised
+Add5 S1.0 vestibule crops: original labels both vertical walls FW5; revised
+changes the left to FW1 and alters/adds return extents. Current engine still has
+left FW5 record00f61a83-b5d1-46da-a2d7-b7bbc6dca7bc at5.784850m. This is an
+addendum reconciliation gap, not an original-sheet extraction mistake. Sent
+exact label/leader positions and engine/legacy IDs to Claude; changing type
+alone would leave stale length. Originals, accepted tuples and runtime untouched.
+Durable source report: docs/agents/evidence/fw5-revision-review.md.
+
+East MF2/FW5 investigation reached a specific source limit: plan NOTE5 explicitly
+requires stair/grading coordination for wall tops. Claude visually reviewed
+A5.2 exterior stair sections: no local buttress top endpoints; the5065 wall-top
+note belongs to an interior stair and must not be borrowed. He is raising the
+specific RFI. No uniform4000mm top or west Ef profile assigned to east panels.
+
+Original/revised PDF crops inspected, current/legacy model records checked.
+Live browser verification unavailable on both attempts (`browser.user is
+unavailable`); no new live-pass claim. No runtime edits or new test run in this
+source-only checkpoint; e95d4cd remains the last verified code checkpoint.
+
+Next: consume Claude's vestibule revision reconciliation; independently inspect
+west Ef MF3 local base and section applicability. East FW5 top profiles stay
+held pending new evidence, without repeating the same source search. T11 active;
+no main merge/deploy and no claim of completed geometry.
