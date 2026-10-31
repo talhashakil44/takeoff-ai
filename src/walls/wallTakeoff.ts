@@ -203,7 +203,7 @@ export function wallTakeoff(
     }
   });
   // A wall carries on through an opening drawn in its line (a window, a storefront, an overhead
-  // door): free ends facing each other on one line up to a few metres apart, with the opening's
+  // door up to 3 m; a wider one, an overhead door, is left out as estimators do): free ends facing each other on one line, with the opening's
   // own lines (glazing, sill, frame) running along the wall between them for most of the gap.
   // A doorway or an open end has no such lines across it.
   const lineIndex = new SegmentIndex(allSegments, 32);
@@ -235,7 +235,7 @@ export function wallTakeoff(
     }
     return covered >= 0.6 * L;
   };
-  const reachO = pt(4.5);
+  const reachO = pt(3);
   index = endBoxes(runs);
   runs.forEach((r, ri) => {
     for (const end of ['a', 'b'] as const) {
