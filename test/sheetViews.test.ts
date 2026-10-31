@@ -41,6 +41,21 @@ describe('drawings at their own scales on one sheet', () => {
     expect(views[0].box[2]).toBeGreaterThanOrEqual(1900);
   });
 
+  it('splits two drawings at different scales that one line runs between (Kelso Addendum 5 S2.0)', () => {
+    // An elevator plan at 1:50 beside the main plan at 1:100, a beam line running from one into the other.
+    const main = drawing(700, 600, 1400, 800);
+    const lift = drawing(150, 1000, 400, 400);
+    const join = [line(550, 1200, 700, 1200), line(550, 1300, 700, 1300)];
+    const tt = [t('MAIN FLOOR FRAMING PLAN', 1400, 1440), t('SCALE: 1 : 100', 1350, 1456, 5), t('ELEVATOR FRAMING PLAN', 350, 1450), t('SCALE: 1 : 50', 300, 1466, 5)];
+    const views = sheetViews(tt, [...main, ...lift, ...join], W, H);
+    expect(views.map((v) => [v.title, v.scaleLabel]).sort()).toEqual([
+      ['ELEVATOR FRAMING PLAN', '1:50'],
+      ['MAIN FLOOR FRAMING PLAN', '1:100'],
+    ]);
+    expect(viewScaleAt(views, [[300, 1200]])?.scaleLabel).toBe('1:50');
+    expect(viewScaleAt(views, [[1200, 900]])?.scaleLabel).toBe('1:100');
+  });
+
   it('measures a takeoff at the scale of the one drawing it lies in, never across two, and the sheet scale wins', () => {
     const views = sheetViews(texts, segs, W, H);
     expect(viewScaleAt(views, [[1100, 200], [1500, 200]])?.scaleLabel).toBe('1:100');
