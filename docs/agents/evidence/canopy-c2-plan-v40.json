@@ -1,0 +1,143 @@
+{
+  "version": 40,
+  "originalProjectAndMeasurementsUnchanged": true,
+  "elementShapesAndQuantitiesUnchanged": true,
+  "footprintRecordsBefore": 87,
+  "footprintRecordsAfter": 91,
+  "c2": [
+    {
+      "id": "3b6d7e09-b78e-419d-8c7f-e8ea563eec59",
+      "shape": null,
+      "quantity": 1,
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 20,
+          "label": "S0.3 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            605.2016911438748,
+            1531.6860717256016,
+            763.12497034819,
+            1550.6860717256016
+          ],
+          "quote": "COLUMN SCHEDULE: C2 SIZE HSS 127 x 127 x 9.5. Outside dimensions for plan footprint only; height and steel solid section unresolved."
+        },
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 25,
+          "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            308.15999999999997,
+            1355.52,
+            315.36,
+            1362.72
+          ],
+          "quote": "Registered column footprint: C2 closed plan outline matches scheduled 0.127 x 0.127m section; viewport registered to architectural grids. Plan centre is from the outline envelope, not the tag. Height is not established by this footprint. Registration: CANOPY FRAMING PLAN; printed 1:50; grid E/3, E\u2013Ef 0.559 m from actual grid strokes"
+        }
+      ]
+    },
+    {
+      "id": "08d965cb-2fc1-4693-a35c-129423069d34",
+      "shape": null,
+      "quantity": 1,
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 20,
+          "label": "S0.3 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            605.2016911438748,
+            1531.6860717256016,
+            763.12497034819,
+            1550.6860717256016
+          ],
+          "quote": "COLUMN SCHEDULE: C2 SIZE HSS 127 x 127 x 9.5. Outside dimensions for plan footprint only; height and steel solid section unresolved."
+        },
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 25,
+          "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            308.15999999999997,
+            1459.8,
+            315.36,
+            1467
+          ],
+          "quote": "Registered column footprint: C2 closed plan outline matches scheduled 0.127 x 0.127m section; viewport registered to architectural grids. Plan centre is from the outline envelope, not the tag. Height is not established by this footprint. Registration: CANOPY FRAMING PLAN; printed 1:50; grid E/3, E\u2013Ef 0.559 m from actual grid strokes"
+        }
+      ]
+    },
+    {
+      "id": "21a62c88-d4f8-4d1f-b6c5-e3c39e522684",
+      "shape": null,
+      "quantity": 1,
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 20,
+          "label": "S0.3 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            605.2016911438748,
+            1531.6860717256016,
+            763.12497034819,
+            1550.6860717256016
+          ],
+          "quote": "COLUMN SCHEDULE: C2 SIZE HSS 127 x 127 x 9.5. Outside dimensions for plan footprint only; height and steel solid section unresolved."
+        },
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 25,
+          "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            462.24,
+            1459.8,
+            469.44,
+            1467
+          ],
+          "quote": "Registered column footprint: C2 closed plan outline matches scheduled 0.127 x 0.127m section; viewport registered to architectural grids. Plan centre is from the outline envelope, not the tag. Height is not established by this footprint. Registration: CANOPY FRAMING PLAN; printed 1:50; grid E/3, E\u2013Ef 0.559 m from actual grid strokes"
+        }
+      ]
+    },
+    {
+      "id": "326cbb95-e296-4a0c-9066-07393d259fbd",
+      "shape": null,
+      "quantity": 1,
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 20,
+          "label": "S0.3 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            605.2016911438748,
+            1531.6860717256016,
+            763.12497034819,
+            1550.6860717256016
+          ],
+          "quote": "COLUMN SCHEDULE: C2 SIZE HSS 127 x 127 x 9.5. Outside dimensions for plan footprint only; height and steel solid section unresolved."
+        },
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 25,
+          "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            462.24,
+            1355.52,
+            469.44,
+            1362.72
+          ],
+          "quote": "Registered column footprint: C2 closed plan outline matches scheduled 0.127 x 0.127m section; viewport registered to architectural grids. Plan centre is from the outline envelope, not the tag. Height is not established by this footprint. Registration: CANOPY FRAMING PLAN; printed 1:50; grid E/3, E\u2013Ef 0.559 m from actual grid strokes"
+        }
+      ]
+    }
+  ],
+  "sourceAblation": "Removing an actual outside corner withdraws only that footprint. Unit checks reject absent/open/displaced inside faces.",
+  "visual": "Original revised PDF crop and settled2D/3D inspected; no page errors; no C2 solids."
+}

@@ -1,3 +1,5 @@
+import { hssColumnPlanSections } from './hssColumnPlanSections';
+import { roundedColumnFootprint } from './roundedColumnFootprint';
 import { canopyRegistrations } from './canopyRegistration';
 import { retainColumnPlanEvidence, type ColumnPlanWitness } from './columnPlanEvidence';
 import { joinCollinearRoofStrokes } from './roofSpanEvidence';
@@ -188,7 +190,8 @@ export function connectSourceColumns(
   registeredFrames:Record<string,SheetFrame> = {},
 ): BuildModel {
   const regs = roofViewportRegistrations(project, model, texts),
-    sections = structuralSections(project, texts);
+    sections = structuralSections(project, texts),
+    hssPlans = hssColumnPlanSections(project, texts);
   // A separate 1:50 canopy view must use its own independently corroborated
   // grid frame. Its entry-canopy datum is NOT a column base or top.
   for(const [id,r] of Object.entries(canopyRegistrations(project,model,texts,lines))) {
@@ -229,8 +232,8 @@ export function connectSourceColumns(
   >();
   for (const e of model.elements) {
     const code = e.typeName.match(/^(C\d+)\b/)?.[1],
-      sec = code ? sections[code] : undefined,
       r = regs[e.measurementId],
+      sec = code ? sections[code] ?? (r?.title === 'CANOPY FRAMING PLAN' && /\bHSS\b/i.test(e.typeName) ? hssPlans[code] : undefined) : undefined,
       m = project.measurements.find((m) => m.id === e.measurementId);
     if (!sec || sec.conflict || !r || !m || m.points.length !== 1) continue;
     if (!joinedPlans.has(m.sheetId)) {
@@ -239,17 +242,14 @@ export function connectSourceColumns(
     }
     const pt = texts[m.sheetId] ?? [],
       pl = joinedPlans.get(m.sheetId)!,
-      rect = planRectangle(
-        pl,
-        m.points[0],
-        r.metersPerPoint,
-        sec.width,
-        sec.depth,
-      );
+      rect = r.title === 'CANOPY FRAMING PLAN' && code && hssPlans[code] === sec
+        ? roundedColumnFootprint(lines[m.sheetId]??[],m.points[0],r.metersPerPoint,sec.width,sec.depth,hssPlans[code].wall)
+        : planRectangle(pl,m.points[0],r.metersPerPoint,sec.width,sec.depth);
     if (!rect) continue;
     located.set(e.id, {
       at: worldPoint(rect.at, r.frame),
       code: code!,
+      schedule: code && hssPlans[code] === sec ? sec.source : undefined,
       domain: r.title === 'CANOPY FRAMING PLAN' ? 'canopy' : r.title === 'FLOOR FRAMING' ? 'floor' : 'roof',
       width: rect.width,
       depth: rect.depth,

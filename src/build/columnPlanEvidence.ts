@@ -2,7 +2,7 @@ import type { BuildModel, SourceRef } from './types';
 import type { Pt } from '../model';
 export interface ColumnPlanWitness {
   at: Pt; code: string; width: number; depth: number; domain: string;
-  source: SourceRef;
+  source: SourceRef; schedule?: SourceRef;
 }
 const prefix='Registered column footprint:';
 /** Plan placement is evidence, not a height or a count reconciliation. */
@@ -21,6 +21,6 @@ export function retainColumnPlanEvidence(model: BuildModel, located: Map<string,
       !s.startsWith('Counted footing, pier, base plate or column retained; its grid position is unverified'));
     if((!e.shape || e.shape.type==='locator') && !issues.some(s=>/^Physical (roof|floor) column: coincident viewport record/.test(s)))notes.push(`${prefix} plan position and section size are source-backed; base/top elevations or distinct-storey identity remain unresolved. No new physical solid generated; accepted quantity retained.`);
     if(matches.length)notes.push(`${prefix} possibly the same column line across drawing views as ${matches.map(id=>{const q=located.get(id)!;return `${q.code} on ${q.source.label}, page ${q.source.page} (${q.domain} view)`;}).join('; ')}. Registered centres agree within 10mm and scheduled sections match; separate storeys versus a continuous post require section review. Counts remain unreconciled.`);
-    return {...e,sources:[...sources,{...p.source,quote:`${prefix} ${p.code} closed plan rectangle matches scheduled ${p.width} x ${p.depth}m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint.${p.source.quote ? ` Registration: ${p.source.quote}` : ''}`}],issues:notes};
+    return {...e,sources:[...sources,...(p.schedule && !sources.some(s=>s.id===p.schedule!.id && s.quote===p.schedule!.quote) ? [p.schedule] : []),{...p.source,quote:`${prefix} ${p.code} closed plan outline matches scheduled ${p.width} x ${p.depth}m section; viewport registered to architectural grids. Plan centre is from the outline envelope, not the tag. Height is not established by this footprint.${p.source.quote ? ` Registration: ${p.source.quote}` : ''}`}],issues:notes};
   })};
 }

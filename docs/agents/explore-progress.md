@@ -1044,3 +1044,32 @@ unresolved main-roofC1 groups; canopy C2 closed outline must match its actual
 scheduled section before any column marker/solid. Do not infer C1 height from
 entry-canopy datum or an unrelated building section. T11 remains incomplete;
 no main merge/deploy.
+
+## 2026-10-31 07:12 UTC — four canopy C2 plan witnesses
+
+C2 recognition failed for two independent reasons: the generic structural section
+reader intentionally excludes HSS solids, and the actual plan symbols have rounded
+corners rather than rectangular closed faces. Added a separate schedule-linked HSS
+plan-envelope reader (COLUMN SCHEDULE, MARK/SIZE/NOTES column and row boundaries,
+positive wall thickness, conflicting rows withheld). The generic solid reader is
+unchanged. The canopy-only path reads actual closed black stroke loops; rejects
+open/branched/filled/dashed/ambiguous outlines. The outside dimensions retain the
+8mm schedule tolerance. Following Claude's review, also require a closed inside
+face matching width/depth minus twice the scheduled wall, concentric within2mm
+(source vertices quantized to0.12PDFpt, about2.12mm at1:50). No bridging missing ink.
+
+Revised S0.3/Add5p20 specifies C2 HSS127x127x9.5; revised S2.1/Add5p25 shows
+7.20pt outside /6.12pt inside outlines at1:50, approximately127/108mm. All four
+C2 records now retain schedule and registered footprint evidence. Model version40;
+no new heights or solids and no count reconciliation. Source ablation removes
+one actual outside corner stroke: that footprint is withdrawn, other3 remain.
+Targeted tests also reject a missing inside face or displaced inside loop.
+
+Live UI inspected original revised C2 source crop, settled2D and3D. Source modal
+opens the actual rounded C2 outline. Review notes explicitly retain unresolved
+base/top elevations; no fabricated C2 solid appears. Browser errors=[].
+Proofs: diag/explore/proofs/canopy-c2-{original-footprint,plan-review,withheld-3d}-v40.png.
+Production comparison and full clean harness follow this checkpoint. T11 remains
+incomplete. Next: exact canopy C2 section-cut identity and base/top endpoints;
+main-roofC1 vertical endpoints, outerMF3 datum and steppedSF2 remain unresolved.
+Do not infer elevations from the entry-canopy datum. No main merge or deploy.

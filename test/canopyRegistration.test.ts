@@ -236,6 +236,18 @@ describe('canopy viewport registration', () => {
       expect(c1.shape).toBeNull(); // entry-canopy datum is not a column height
       expect(c1.sources.some(s=>s.quote?.startsWith('Registered column footprint:') && s.quote.includes('CANOPY FRAMING PLAN'))).toBe(true);
       expect(c1.quantity).toBe(data.model.elements.find((e:any)=>e.id===c1.id).quantity);
+      const c2s=columns.elements.filter(e=>/^C2\b/.test(e.typeName) && result[e.measurementId]);
+      expect(c2s).toHaveLength(4);
+      const proof=(e:typeof c1)=>e.sources.find(s=>s.quote?.startsWith('Registered column footprint:'));
+      for(const e of c2s){expect(proof(e)).toBeTruthy();expect(e.shape).toBeNull();expect(e.quantity).toBe(data.model.elements.find((old:any)=>old.id===e.id).quantity);}
+      const source=proof(c2s[0])!,box=source.box!;
+      const raw=data.drawingLines[source.id];
+      const corner=raw.findIndex((l:any)=>!l.filled && l.color==='#000000' && Math.abs(l.x1-l.x2)>.05 && Math.abs(l.y1-l.y2)>.05 &&
+        (Math.abs(l.x1-box[0])<.01 || Math.abs(l.x2-box[0])<.01 || Math.abs(l.y1-box[1])<.01 || Math.abs(l.y2-box[1])<.01) && Math.min(l.x1,l.x2)>=box[0]-.01 && Math.max(l.x1,l.x2)<=box[2]+.01 && Math.min(l.y1,l.y2)>=box[1]-.01 && Math.max(l.y1,l.y2)<=box[3]+.01);
+      expect(corner).toBeGreaterThanOrEqual(0);
+      const broken=connectSourceColumns(data.project,columns,data.drawingTexts,{...data.drawingLines,[source.id]:raw.filter((_:any,i:number)=>i!==corner)});
+      expect(proof(broken.elements.find(e=>e.id===c2s[0].id)!)).toBeUndefined();
+      for(const e of c2s.slice(1))expect(proof(broken.elements.find(x=>x.id===e.id)!)).toBeTruthy();
       // Withdraw the corroborating grid from the actual source; a printed scale
       // and single intersection alone must not retain this registration.
       const withoutEf={...data.drawingTexts,[canopyColumn.sheetId]:data.drawingTexts[canopyColumn.sheetId].filter((t:any)=>t.str.trim()!=='Ef')};
