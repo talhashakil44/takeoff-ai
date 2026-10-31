@@ -1191,3 +1191,37 @@ The final parallel test pass exposed the new optional real-PDF fixture test's
 had passed in isolation and the first full harness. Set its explicit budget30s,
 consistent with real-source integration work; no assertion or geometry tolerance
 changed. Audit now passes with the independently verified updated date pins.
+
+## 2026-10-31 09:10 UTC — SF-N schedule/detail evidence, no assumed solid
+
+Claude approved40a5fe5. Fetched bus/integration/current prompt. Audited grid8/D
+in revised3/S4.0(Add5p31): only dashed background grid/post indication beneath
+beam section, no closed vertical faces. Withholding that post remains correct;
+no height copied from grid5. Moved to independent foundation gap.
+
+Original revised S0.2/Add5p19 explicitly lists SF-N, typeST, REFER TO DETAIL10/S1.2.
+Original revised S1.2/p23 detail10 is SLAB THICKENING OPTION, visually dimensioned
+200mm total depth from finishedfloor,600mm flatbottom,2:1 sloped sides. These are
+not directly equivalent to the700mm planband or engine's assumed300mm rectangle.
+Sent source finding to Claude for engine interpretation review; no accepted
+quantity changes. Model43 links the actual schedule row and matching numbered
+sheet/detail to unresolved SF-N records. Review issue explains local slab depth,
+top elevation, sloped profile and applicability are still needed. No dimensions
+are applied as physical geometry from this optional detail alone. Missing row,
+wrong detail number/sheet, non-ST row, or conflicting reference withdraws link.
+
+Production current-engine fixture contains4SF-N records, all linked. Compared
+against archived40a5fe5 on exactsame snapshot: original project, every shape,
+quantity/unit, planfootprint and drawingcandidate unchanged. Frozen original
+project left untouched. Separate ignored QA page engine-sfn.html reads generated
+engine-sfn-data.json; main frozen preview input not replaced. Live original-PDF
+page23, 2D/3D and reviewnotes inspected; all4 remain axes, no new solids,
+browsererrors=[]. Evidence docs/agents/evidence/foundation-slab-option-v43.json;
+proofs diag/explore/proofs/sfn-option-*-v43.png. Real-source row-ablation test
+and synthetic wrong-reference/conflicting-document tests pass. Full harness follows.
+
+Next: establish SF-N option applicability from revised plan and local slab datum
+before profile recovery; await Claude engine interpretation. For8/D, identify an
+orthogonal section cutting the actual post rather than borrowing the dashed
+background depiction. OuterMF3datums/SF2step endpoints also open. T11active and
+incomplete; no main merge/deploy, no quantity changes or fabricated geometry.

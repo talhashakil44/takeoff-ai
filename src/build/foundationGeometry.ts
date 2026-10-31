@@ -1,3 +1,4 @@
+import { explainFoundationSlabOption } from './foundationSlabOptionEvidence';
 import { connectMassDatums, type MassFootprint } from './massDatumChain';
 import { explainFoundationRevisionLabels } from './foundationRevisionLabels';
 import { explainFoundationSteps } from './foundationStepEvidence';
@@ -986,7 +987,8 @@ export function recoverFoundationGeometry(
   const wallAcceptedFrame=wallSheet?sheetFrame(project,{...model,elements:model.elements.filter(e=>!e.issues.some(i=>i.startsWith('Foundation revision applied:')))},wallSheet):null;
   const withWalls=wallPlan?recoverFoundationWalls(project,recovered,wallPlan,texts,revision,localFootingLeaders(wallPlan),(axis,a,b,lo,hi)=>hasFootingCrossbar(wallPlan,axis,a,b,lo,hi),wallWidths,wallAcceptedFrame):recovered;
   const stepped=wallPlan?explainFoundationSteps(withWalls,wallPlan,wallWidths,(axis,a,b,lo,hi)=>hasFootingCrossbar(wallPlan,axis,a,b,lo,hi),texts,revision):withWalls;
-  const explained=wallPlan?explainFoundationRevisionLabels(stepped,wallPlan):stepped;
+  const labelled=wallPlan?explainFoundationRevisionLabels(stepped,wallPlan):stepped;
+  const explained=explainFoundationSlabOption(labelled,texts,revision);
   return {...explained,elements:explained.elements.map(e=>{
     if(e.measurementSource!=='foundations')return e;
     const resolved=e.issues.some(i=>i.startsWith('Foundation revision applied:'));
