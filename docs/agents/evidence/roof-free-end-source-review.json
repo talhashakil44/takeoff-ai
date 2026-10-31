@@ -1,0 +1,107 @@
+{
+  "checkpoint": "50f85b1",
+  "sourceReview": {
+    "revisedS31": {
+      "document": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+      "page": 30,
+      "finding": "Upper left title claims grid E from 8 to 9; actual grid bubbles are 6 and 7 and beam mark is B3. This cannot establish B2 E8-9 free-end profile. Upper right title claims E1-2 but actual bubbles are4/5, also B3."
+    },
+    "column8D": {
+      "reviewed": [
+        "revised S4.0 p31",
+        "original S4.1 p15",
+        "revised S4.2 p32"
+      ],
+      "finding": "No directly associated closed roof-post top/base recovered; longitudinal views do not provide an independently registered D8 post envelope. No inferred height promoted."
+    }
+  },
+  "b2Coverage": [
+    {
+      "id": "4e637c3a-a45a-49e5-a796-f031de0ee775",
+      "shape": "run",
+      "status": "extension recovered",
+      "issues": [
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation title and actual grid bubbles. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "0423aaad-83b8-4aa5-ae0f-a3625094ca29",
+      "shape": "run",
+      "status": "extension unresolved",
+      "issues": [
+        "Roof framing detail: cantilever callout applies near this member. Current support-to-support envelope does not establish free-end extensions or continuous-member connections.",
+        "Roof cantilever elevation unresolved: B2 at row B, grids 1\u20132, has a drawn free end but no unique matching section/profile level. Extension withheld; the current support-to-support beam does not represent the full cantilever. Conflicting elevation titles or unmatched grid bubbles are not accepted as proof."
+      ]
+    },
+    {
+      "id": "c93388ca-22d0-4a23-8fe5-5f5f790b3273",
+      "shape": "run",
+      "status": "extension recovered with source discrepancy",
+      "issues": [
+        "Roof cantilever source discrepancy: elevation title names grid A with lettered range C\u2013E; plan reference 6/S3.0 and adjacent low-girt grid-1 note establish this frame location. Title discrepancy remains unresolved; geometry association is inferred from those explicit plan references.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame association is inferred from the explicit plan reference and adjacent named girt; the conflicting elevation title remains unresolved. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "3b2f64cd-ce9e-4c88-a084-3740d75ee0eb",
+      "shape": "run",
+      "status": "extension recovered with source discrepancy",
+      "issues": [
+        "Roof cantilever source discrepancy: elevation title names grid A with lettered range C\u2013E; plan reference 6/S3.0 and adjacent low-girt grid-1 note establish this frame location. Title discrepancy remains unresolved; geometry association is inferred from those explicit plan references.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame association is inferred from the explicit plan reference and adjacent named girt; the conflicting elevation title remains unresolved. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "1bb30629-5997-4e33-afd9-63d1a333289b",
+      "shape": "run",
+      "status": "extension recovered with source discrepancy",
+      "issues": [
+        "Roof cantilever source discrepancy: elevation title names grid A with lettered range C\u2013E; plan reference 6/S3.0 and adjacent low-girt grid-1 note establish this frame location. Title discrepancy remains unresolved; geometry association is inferred from those explicit plan references.",
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame association is inferred from the explicit plan reference and adjacent named girt; the conflicting elevation title remains unresolved. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "0cf9dd1d-71fb-4698-933b-ca5d255cdc58",
+      "shape": "run",
+      "status": "extension recovered",
+      "issues": [
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation title and actual grid bubbles. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "c6def56b-9871-4ee1-8d55-1dec833744f9",
+      "shape": "run",
+      "status": "extension recovered",
+      "issues": [
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation title and actual grid bubbles. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "d4471dd9-800c-4602-924c-e9ef5a47a82c",
+      "shape": "run",
+      "status": "extension unresolved",
+      "issues": [
+        "Roof framing detail: cantilever callout applies near this member. Current support-to-support envelope does not establish free-end extensions or continuous-member connections.",
+        "Roof cantilever elevation unresolved: B2 at row E, grids 8\u20139, has a drawn free end but no unique matching section/profile level. Extension withheld; the current support-to-support beam does not represent the full cantilever. Conflicting elevation titles or unmatched grid bubbles are not accepted as proof."
+      ]
+    },
+    {
+      "id": "d2231c05-4f11-44e5-9e2b-289a34cda60e",
+      "shape": "run",
+      "status": "extension recovered",
+      "issues": [
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation title and actual grid bubbles. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    },
+    {
+      "id": "fb9cb27e-7f5c-47d9-b9f9-674c43609352",
+      "shape": "run",
+      "status": "extension recovered",
+      "issues": [
+        "Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. Frame location is corroborated by the elevation title and actual grid bubbles. Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled."
+      ]
+    }
+  ],
+  "geometryChanged": false,
+  "quantitiesChanged": false
+}

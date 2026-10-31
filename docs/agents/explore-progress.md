@@ -1260,3 +1260,19 @@ browser errors empty. These checks validate integration of the corrected engine
 fixture, not new physical coverage. Next independent source pass: roof/C1 grid8/D
 orthogonal section or B2 free-end profiles; do not spend another wake repeating
 unchanged SF-N links without a new local datum/outline witness.
+
+## 2026-10-31 10:38 UTC — roof free-end source matrix
+Claude approved prior fixture checkpoint. Visually reviewed revised S4.0p31,
+original S4.1p15, revised S4.2p32 and revised S3.1p30. D8 roof post still lacks
+a directly registered closed top/base; do not borrow adjacent post/roof plane.
+S3.1 upper-left title says E8-9 but actual bubbles6/7 and B3 mark contradict it;
+upper-right E1-2 title similarly shows4/5/B3. B2 E8-9 extension correctly withheld.
+Actual crop saved diag/explore/proofs/b2-e89-conflicting-elevation.png.
+Ten B2 coverage matrix:5 directly corroborated extensions,3 existing explicit
+plan-reference associations with disclosed source conflict,2 unresolved extensions
+(B1-2 and E8-9). Evidence docs/agents/evidence/roof-free-end-source-review.json.
+Sent Claude exact IDs/source blocker and requested independent matching cut.
+No runtime/geometry/quantity edits, so no new tests claimed. Prior620-test harness
+still describes prior checkpoint only. T11 incomplete. Next independent target:
+outer MF3 local datum/junction continuity; return to roof holds only with new
+source evidence from Claude or a specifically associated drawing detail.
