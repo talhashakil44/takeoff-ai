@@ -1,3 +1,5 @@
+import { drawingTiles } from './drawingTiles';
+import type { SourceTile } from './sourceRegion';
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -39,6 +41,7 @@ interface Props {
     frame: SheetFrame;
     page: HTMLCanvasElement;
     opacity: number;
+    detail?: SourceTile;
   }[];
   showBase?: boolean;
   showAllowances?: boolean;
@@ -589,16 +592,18 @@ export function ExploreScene(props: Props) {
     const overlayGroup = new THREE.Group();
     scene.add(overlayGroup);
     const clearOverlays = () => {
+      const textures = new Set<THREE.Texture>();
       for (const o of [...overlayGroup.children]) {
         const mesh = o as THREE.Mesh<
           THREE.BufferGeometry,
           THREE.MeshBasicMaterial
         >;
         mesh.geometry.dispose();
-        mesh.material.map?.dispose();
+        if (mesh.material.map) textures.add(mesh.material.map);
         mesh.material.dispose();
         overlayGroup.remove(mesh);
       }
+      textures.forEach(texture => texture.dispose());
     };
     const overlays = () => {
       clearOverlays();
@@ -609,40 +614,33 @@ export function ExploreScene(props: Props) {
           [box.max.x + 2, box.max.z + 2],
           [box.min.x - 2, box.max.z + 2],
         ];
-        const g = new THREE.BufferGeometry();
-        g.setAttribute(
-          "position",
-          new THREE.Float32BufferAttribute(
-            points.flatMap((p) => [p[0], base + 0.01 + i * 0.015, p[1]]),
-            3,
-          ),
-        );
-        g.setAttribute(
-          "uv",
-          new THREE.Float32BufferAttribute(
-            points.flatMap((p) => {
-              const s = sheetPoint(p, layer.frame);
-              return [s[0] / layer.sheet.width, 1 - s[1] / layer.sheet.height];
-            }),
-            2,
-          ),
-        );
-        g.setIndex([0, 2, 1, 0, 3, 2]);
+        const sourcePoints = points.map(p=>sheetPoint(p,layer.frame));
+        const tile = layer.detail;
+        const pieces = tile ? drawingTiles(sourcePoints,layer.sheet.width,layer.sheet.height,tile.box) : [];
+        const parts = pieces.length ? pieces : [{points:sourcePoints,detail:false,uvBox:[0,0,layer.sheet.width,layer.sheet.height]}];
         const tex = new THREE.CanvasTexture(layer.page);
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-        const mat = new THREE.MeshBasicMaterial({
-          map: tex,
-          side: THREE.DoubleSide,
-          transparent: true,
-          opacity: layer.opacity,
-          depthWrite: false,
-          blending: THREE.MultiplyBlending,
-          premultipliedAlpha: true,
-        });
-        const mesh = new THREE.Mesh(g, mat);
-        mesh.renderOrder = 10 + i;
-        overlayGroup.add(mesh);
+        const detailTexture = tile && pieces.some(p=>p.detail) ? new THREE.CanvasTexture(tile.page) : null;
+        for(const texture of [tex,detailTexture]) if(texture) {
+          texture.colorSpace=THREE.SRGBColorSpace;
+          texture.anisotropy=renderer.capabilities.getMaxAnisotropy();
+        }
+        for(const part of parts) {
+          const g=new THREE.BufferGeometry();
+          g.setAttribute('position',new THREE.Float32BufferAttribute(part.points.flatMap(p=>{
+            const w=worldPoint(p,layer.frame);return [w[0],base+.01+i*.015,w[1]];
+          }),3));
+          const [x0,y0,x1,y1]=part.uvBox;
+          g.setAttribute('uv',new THREE.Float32BufferAttribute(part.points.flatMap(p=>[(p[0]-x0)/(x1-x0),1-(p[1]-y0)/(y1-y0)]),2));
+          g.setIndex(part.points.slice(2).flatMap((_,j)=>[0,j+2,j+1]));
+          const mat=new THREE.MeshBasicMaterial({map:part.detail?detailTexture:tex,
+            side:THREE.DoubleSide,transparent:true,opacity:layer.opacity,depthWrite:false,
+            blending:THREE.MultiplyBlending,premultipliedAlpha:true});
+          const mesh=new THREE.Mesh(g,mat);mesh.renderOrder=10+i;overlayGroup.add(mesh);
+        }
+        // The focus may cover the complete clipped overlay; release its unused
+        // low-resolution texture rather than retaining a full-sheet GPU copy.
+        if(parts.every(p=>p.detail))tex.dispose();
+
       }
       dirty = true;
     };

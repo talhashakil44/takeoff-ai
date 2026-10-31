@@ -1,4 +1,5 @@
-import { sourceRegion, type SourceBox } from "./sourceRegion";
+import { renderSourceTile } from './renderSourceTile';
+import { type SourceBox } from "./sourceRegion";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { loadCurrentProject, loadPdf } from "../storage";
 import { measurementVars, primaryOf } from "../quantities";
@@ -130,20 +131,8 @@ export function ExploreHost({
         await page.render({ canvas, viewport }).promise;
         return canvas;
       };
-      const renderDetail = async (s: Sheet, box: SourceBox) => {
-        const page = await (await getPdf(s)).getPage(s.page);
-        const original = page.getViewport({ scale: 1 });
-        const region = sourceRegion(box, original.width, original.height);
-        if (!region) throw new Error("The evidence region is outside this original page.");
-        const viewport = page.getViewport({ scale: region.scale });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.ceil(region.width * region.scale);
-        canvas.height = Math.ceil(region.height * region.scale);
-        await page.render({ canvas, viewport,
-          transform: [1, 0, 0, 1, -region.left * region.scale, -region.top * region.scale],
-        }).promise;
-        return canvas;
-      };
+      const renderTile = async (s: Sheet, box: SourceBox) => renderSourceTile(await (await getPdf(s)).getPage(s.page), box);
+      const renderDetail = async (s: Sheet, box: SourceBox) => (await renderTile(s, box)).page;
       if (!cancelled) {
         setStamp(saved.savedAt);
         // Use the same source selection/cache as Build. Do not display saved
@@ -194,6 +183,7 @@ export function ExploreHost({
             model: saved.output.model,
             renderPage,
             renderDetail,
+            renderTile,
             drawingTexts,
             drawingLines,
             indexing: false,

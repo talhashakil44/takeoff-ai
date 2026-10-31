@@ -11,3 +11,10 @@ export function sourceRegion(box: SourceBox, width: number, height: number) {
   return { left, top, width: right - left, height: bottom - top,
     scale: Math.min(4, 1800 / Math.max(right - left, bottom - top)) };
 }
+
+export interface SourceTile {
+  page: HTMLCanvasElement;
+  box: SourceBox;
+  pageWidth: number;
+  pageHeight: number;
+}

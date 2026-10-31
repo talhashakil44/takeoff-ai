@@ -816,3 +816,43 @@ explicit crop-to-sheet registration, rather than increasing whole-sheet memory
 without bounds. Continue source-defined roof/free-end and remaining datum gaps
 only when new applicable evidence is available; pending T38 remains separate.
 T11 active, no main merge/deploy, no completion claim.
+
+## Registered source-detail tiles — October31, 04:03 wake
+
+Claude approved a5696bd and agreed bounded detail tiles are the next independent
+improvement while remaining geometry awaits applicable source evidence. Added
+optional renderTile host capability carrying actual PDF crop bounds and actual
+page dimensions. It reuses the existing1800px maximum/4px-per-point source
+region budget. Exact allocated pixel edges map to exact PDF bounds, including
+integer raster rounding. SourceViewer remains compatible through renderDetail.
+
+A focused structural member gets one local detail tile. Only source boxes on
+the applicable page containing that member's registered centre qualify; a stale
+focus from another member does not. The first live review caught a smaller
+inherited datum source being chosen instead of the selected member: fixed with
+the centre-containing guard and a regression test. Dimension mismatch, failed
+render or unavailable capability falls back to the existing whole-sheet image.
+Changing focus, source layer or selection cancels stale requests/clears detail.
+
+Scene clips the registered viewport polygon in PDF coordinates into disjoint
+coarse/detail pieces, then transforms them through the existing sheet frame.
+Detail replaces coarse ink rather than darkening it twice. Coarse texture is
+shared by its pieces and disposed once; one bounded detail texture is added.
+Tests cover rotated polygons/area preservation, page-edge crops, invalid bounds,
+source-page selection and inherited evidence/stale focus rejection.
+
+Actual ExploreWorkspace with the production renderSourceTile helper and original
+Add5 p21: first MF3 tile bounds[1709.88,1159.56,1812.36,1395.24],410x943px;
+second member correctly switches to[1559.76,1159.56,1662.24,1395.24]. Inspected
+close2D, wheel zoom in/out, settled3D, originalPDF viewer and view reset. Fine
+hatching, pier/rebar symbols and FW5/NOTE2 text visibly sharpen while the source
+outline remains coincident. No page errors or depth artifacts. Proofs:
+diag/explore/proofs/detail-tile-focused-{2d,3d,source}-v37.png,
+detail-tile-zoom-{in,out}-v37.png and detail-tile-fit-restored-v37.png.
+
+No extraction/model/accepted quantity changes; model37 and138physicalshapes
+remain. This adds focused structural-source detail, not unlimited viewport
+rasterization or new geometry. Next: extend explicit crop registration to base
+floor-plan evidence/focused spaces, then bounded viewport-driven requests if
+needed. Remaining roof/footing datums require new source evidence, not repeated
+unchanged searches. T11 active; no main merge/deploy or completion claim.

@@ -1,3 +1,4 @@
+import { focusedTileBox } from './focusedTileBox';
 import { suppressCoincidentStructure } from "../build/coincidentStructure";
 import { canopyRegistrations } from "../build/canopyRegistration";
 import { useEffect, useMemo, useState } from "react";
@@ -21,7 +22,7 @@ import {
 import type { DrawingLines } from "../build/roof";
 import { connectStructure } from "../build/connectStructure";
 import { roofViewportRegistrations } from "../build/roofRegistration";
-import type { SourceBox } from "./sourceRegion";
+import type { SourceBox, SourceTile } from "./sourceRegion";
 import { SourceViewer } from "./SourceViewer";
 import { structuralRevisionContext } from "../build/structuralRevisions";
 export interface ExploreWorkspaceProps {
@@ -29,6 +30,7 @@ export interface ExploreWorkspaceProps {
   model: BuildModel;
   renderPage: (sheet: Sheet) => Promise<HTMLCanvasElement>;
   renderDetail?: (sheet: Sheet, box: SourceBox) => Promise<HTMLCanvasElement>;
+  renderTile?: (sheet: Sheet, box: SourceBox) => Promise<SourceTile>;
   onClose: () => void;
   drawingTexts?: DrawingTexts;
   drawingLines?: DrawingLines;
@@ -45,6 +47,7 @@ export function ExploreWorkspace({
   model,
   renderPage,
   renderDetail,
+  renderTile,
   onClose,
   drawingTexts = emptyTexts,
   drawingLines = emptyLines,
@@ -109,6 +112,7 @@ export function ExploreWorkspace({
       Record<string, HTMLCanvasElement>
     >({}),
     [layerError, setLayerError] = useState("");
+  const [detailTile, setDetailTile] = useState<(SourceTile & { sheetId: string; elementId: string }) | null>(null);
   const alignmentKey = `explore-alignments:${project.id}:${model.sourceHash}`;
   const [manual, setManual] = useState<
       Record<string, { baseId: string; frame: SheetFrame }>
@@ -338,11 +342,12 @@ export function ExploreWorkspace({
                 frame: l.frame,
                 page: overlayPages[l.sheet.id],
                 opacity,
+                detail: detailTile && focus && selected === detailTile.elementId && l.sheet.id === detailTile.sheetId ? detailTile : undefined,
               },
             ]
           : [],
       ),
-    [available, enabled, overlayPages, opacity],
+    [available, enabled, overlayPages, opacity, focus, selected, detailTile],
   );
   useEffect(() => {
     setEnabled(new Set());
@@ -402,6 +407,22 @@ export function ExploreWorkspace({
   const drawingGeometry = structuralModel.drawingGeometry ?? [];
   const room = rooms.find((r) => r.id === roomId) ?? null,
     element = structuralModel.elements.find((e) => e.id === selected) ?? drawingGeometry.find(e => e.id === selected) ?? null;
+  useEffect(() => {
+    let cancelled=false;
+    setDetailTile(null);
+    if(!focus || !element || !renderTile || !enabled.has(element.sheetId))return;
+    const layer=available.find(l=>l.sheet.id===element.sheetId);
+    if(!layer?.frame || layer.geometryOnly)return;
+    const source=revisedLayers[layer.sheet.id] ?? layer.sheet;
+    const box=focusedTileBox(element,focus,layer.frame,source);
+    if(!box)return;
+    renderTile(source,box).then(tile=>{
+      // Refuse a crop from a differently sized revision until its frame is known.
+      if(!cancelled && Math.abs(tile.pageWidth-layer.sheet.width)<.1 && Math.abs(tile.pageHeight-layer.sheet.height)<.1)
+        setDetailTile({...tile,sheetId:layer.sheet.id,elementId:element.id});
+    }).catch(()=>{ /* Full drawing remains available if a detail cannot render. */ });
+    return ()=>{cancelled=true;};
+  }, [focus, element, enabled, available, revisedLayers, renderTile]);
   const measurements = useMemo(
     () => new Map(project.measurements.map((m) => [m.id, m])),
     [project],
