@@ -361,5 +361,15 @@
   "before": "8 of10 B2 records null after refreshed longer measured lines;2 retained runs",
   "after": "10 B2 runs, B1-2 free end still unresolved",
   "inputProjectUnchanged": true,
-  "acceptedTakeoffTuplesUnchanged": true
+  "acceptedTakeoffTuplesUnchanged": true,
+  "validation": {
+    "harness": "ff45a3f PASS:624tests,tsc,build,audit",
+    "live": "Original revised PDF section, focused2D/3D inspected; E8-9 takeoff8.62m separately shown from8.45m drawn geometry",
+    "pageErrors": [],
+    "proofs": [
+      "diag/explore/proofs/roof-e89-plan-review-v45.png",
+      "diag/explore/proofs/roof-e89-original-footprint-v45.png",
+      "diag/explore/proofs/roof-e89-withheld-3d-v45.png"
+    ]
+  }
 }

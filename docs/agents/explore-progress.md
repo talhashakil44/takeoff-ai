@@ -1316,3 +1316,8 @@ and both ends unsupported. Evidence docs/agents/evidence/cantilever-registration
 Confirmed refreshed audit first pin actually09-01; sync approved09-01/09-21 pins.
 OuterMF3 source crop still has no own local datum; deferred to fix this regression.
 Full harness and focused originalPDF/2D/3D follow. T11 incomplete; no merge/deploy.
+Validation complete: ff45a3f PASS624tests/tsc/build/audit, updated09-01/09-21 pins.
+Live revisedPDF crop, focused2D/3D inspected; E8-9 now shows8.62m engine quantity
+separately from8.45m source geometry. No page errors. Next: Claude review of
+registration/bearing fallback, then independent outerMF3 datum/section association.
+Source holds forD8/B1-2 remain; no completion claim or unqualified solid.
