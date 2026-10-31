@@ -144,11 +144,10 @@ function canopyDatum(
  * number intersection fixes translation; a second parallel grid independently
  * corroborates printed scale and rotation using actual strokes on both plans.
  * Does not alter sheet scale, measured quantities, or generate member solids. */
-/** Plan registration is independent of any framing elevation. Foundation insets
- * require detected view bounds/scale; roof callers retain their existing policy. */
+/** Legacy roof canopy placement; detected differently-scaled insets use
+ * insetRegistrations independently of this roof-only datum path. */
 export function canopyPlanRegistrations(
   project: Project, model: BuildModel, texts: DrawingTexts, lines: DrawingLines,
-  kind: 'framing' | 'foundation' = 'framing',
 ): Record<string, CanopyPlanRegistration> {
   const output: Record<string, CanopyPlanRegistration> = {};
   const references = project.sheets
@@ -173,11 +172,8 @@ export function canopyPlanRegistrations(
     const ts = texts[sheet.id] ?? [],
       ls = lines[sheet.id] ?? [];
     for (const title of ts.filter((t) =>
-      (kind === 'foundation' ? /^CANOPY FOUNDATION PLAN$/i : /^CANOPY FRAMING PLAN$/i).test(t.str.trim()),
+      /^CANOPY FRAMING PLAN$/i.test(t.str.trim()),
     )) {
-      const views = (sheet.views ?? []).filter(v => v.title.trim().toUpperCase() === title.str.trim().toUpperCase());
-      if (kind === 'foundation' && views.length !== 1) continue;
-      const view = kind === 'foundation' ? views[0] : undefined;
       const scales = ts.flatMap((t) => {
         const m = /^1\s*:\s*(\d+)$/.exec(t.str.trim());
         return m &&
@@ -188,11 +184,9 @@ export function canopyPlanRegistrations(
           : [];
       });
       if (scales.length !== 1) continue;
-      if (view && Math.abs(view.metersPerPoint / scales[0] - 1) > .001) continue;
       const scale = scales[0],
         local = ts.filter(
           (t) =>
-            view ? (t.cx >= view.box[0] && t.cx <= view.box[2] && t.cy >= view.box[1] && t.cy <= view.box[3]) :
             t.cx > title.cx - 220 &&
             t.cx < title.cx + 220 &&
             t.cy > title.cy - 450 &&
@@ -267,7 +261,7 @@ export function canopyPlanRegistrations(
             ty: anchor[1] - b * x - a * y,
             residual: Math.max(ref.frame.residual, residual),
           };
-          const bounds: [number, number, number, number] = view ? view.box : [
+          const bounds: [number, number, number, number] = [
             parent.cx - 20,
             number.cy + 15,
             number.cx + 100,

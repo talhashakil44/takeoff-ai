@@ -3,22 +3,23 @@ import type {Project} from '../model';
 import type {BuildModel} from './types';
 import type {DrawingTexts} from './building';
 import type {DrawingLines} from './roof';
-import {canopyPlanRegistrations} from './canopyRegistration';
+import {insetRegistrations} from './insetRegistration';
 import {structuralRevisionContext} from './structuralRevisions';
 import {sheetViews} from '../sheetViews';
-const prefix='Canopy foundation registration:';
+const prefix='Inset registration:';
+const own=(s:string)=>s.startsWith(prefix)||s.startsWith('Canopy foundation registration:');
 /** Register the source view, not a guessed foundation solid. A revised plate
  * designation remains a conflict against the saved takeoff, never a silent rename. */
-export function retainCanopyFoundationEvidence(project:Project,model:BuildModel,texts:DrawingTexts,lines:DrawingLines):BuildModel{
+export function retainInsetEvidence(project:Project,model:BuildModel,texts:DrawingTexts,lines:DrawingLines):BuildModel{
  const clean={...model,elements:model.elements.map(e=>({...e,
-  sources:e.sources.filter(s=>!s.quote?.startsWith(prefix)),issues:e.issues.filter(s=>!s.startsWith(prefix)),
+  sources:e.sources.filter(s=>!own(s.quote??'')),issues:e.issues.filter(s=>!own(s)),
  }))};
  const ctx=structuralRevisionContext(project,texts,lines);
  if(ctx.pending)return clean;
  const current={...ctx.project,sheets:ctx.project.sheets.map(s=>ctx.replacements[s.id]?{...s,
   views:sheetViews((ctx.texts[s.id]??[]).map(t=>({...t,w:t.w??0,h:t.h??0})),ctx.lines[s.id]??[],s.width,s.height),
  }:s)};
- const registrations=canopyPlanRegistrations(current,clean,ctx.texts,ctx.lines,'foundation');
+ const registrations=insetRegistrations(current,clean,ctx.texts,ctx.lines);
  return {...clean,elements:clean.elements.map(e=>{
   const r=e.measurementId?registrations[e.measurementId]:undefined;
   if(!r||e.status==='demolished'||e.shape)return e;
@@ -30,7 +31,7 @@ export function retainCanopyFoundationEvidence(project:Project,model:BuildModel,
   if(mismatch){
    for(const sh of current.sheets.filter(s=>!s.superseded&&/^S/i.test(s.name))){
     const schedules=readSchedules((ctx.texts[sh.id]??[]).map(t=>({...t,w:t.w??0,h:t.h??0})),ctx.lines[sh.id]??[]);
-    for(const table of schedules.filter(s=>/^BASE PLATE SCHEDULE$/i.test(s.title.trim())))
+    for(const table of schedules.filter(s=>/(?:BASE\s*PLATE|BEARING\s*PLATE).*SCHEDULE/i.test(s.title.trim())))
      for(const row of table.rows.filter(row=>row.mark.toUpperCase()===mismatch.str.trim().toUpperCase()))
       sources.push(ctx.source({kind:'sheet',id:sh.id,page:sh.page,label:sh.name,box:row.box??table.box,
        quote:`${prefix} ${table.title}; ${row.cells.join('; ')}. Source designation conflicts with saved ${mark}; dimensions are evidence for review, not an automatic substitution.`}));

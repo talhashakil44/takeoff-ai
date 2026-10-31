@@ -1,4 +1,5 @@
-import {retainCanopyFoundationEvidence} from '../src/build/canopyFoundationEvidence';
+import {insetRegistrations} from '../src/build/insetRegistration';
+import {retainInsetEvidence} from '../src/build/insetEvidence';
 import { connectSourceColumns } from '../src/build/columnGeometry';
 import { describe, expect, it } from 'vitest';
 import { structuralRevisionContext } from '../src/build/structuralRevisions';
@@ -10,7 +11,6 @@ import {
 } from '../src/build/canopyMemberGeometry';
 import {
   canopyRegistrations,
-  canopyPlanRegistrations,
   traceGridStroke,
 } from '../src/build/canopyRegistration';
 import type { Project, Sheet } from '../src/model';
@@ -175,33 +175,60 @@ describe('canopy viewport registration', () => {
     const d=fixture();
     d.texts.s[0].str='CANOPY FOUNDATION PLAN';
     delete d.texts.d1; delete d.texts.d2;
-    const sheet=d.project.sheets.find(s=>s.id==='s')!;
-    expect(canopyPlanRegistrations(d.project,d.model,d.texts,d.lines,'foundation')).toEqual({});
-    sheet.views=[{title:'CANOPY FOUNDATION PLAN',box:[0,30,320,430],scaleLabel:'1:50',metersPerPoint:50*.0254/72}];
-    const result=canopyPlanRegistrations(d.project,d.model,d.texts,d.lines,'foundation');
+    const sheet=d.project.sheets.find(s=>s.id==='s')!;sheet.metersPerPoint=100*.0254/72;
+    expect(insetRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
+    sheet.views=[{title:'CANOPY FOUNDATION PLAN',box:[0,30,320,430],scaleLabel:'1:50',metersPerPoint:50*.0254/72},{title:'Main',box:[600,0,1600,1500],scaleLabel:'1:100',metersPerPoint:100*.0254/72}];
+    const result=insetRegistrations(d.project,d.model,d.texts,d.lines);
     expect(Object.keys(result)).toEqual(['canopy']);
     expect(result.canopy).not.toHaveProperty('topDatum');
     expect(result.canopy.sources).toHaveLength(2);
     expect(canopyRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
     sheet.views[0].metersPerPoint*=2;
-    expect(canopyPlanRegistrations(d.project,d.model,d.texts,d.lines,'foundation')).toEqual({});
+    expect(insetRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
+  });
+  it.each(['ENLARGED STAIR PLAN','VESTIBULE FOUNDATION PLAN','ELEVATOR FRAMING PLAN - MAIN FLOOR'])('registers %s by detected scale and traced grids, not title semantics', title=>{
+    const d=fixture(),sheet=d.project.sheets.find(s=>s.id==='s')!;
+    d.texts.s[0].str=title;sheet.metersPerPoint=100*.0254/72;
+    sheet.views=[{title,box:[0,30,320,430],scaleLabel:'1:50',metersPerPoint:50*.0254/72},{title:'Main',box:[600,0,1600,1500],scaleLabel:'1:100',metersPerPoint:100*.0254/72}];
+    const r=insetRegistrations(d.project,d.model,d.texts,d.lines).canopy;
+    expect(r).toBeDefined();expect(r.frame.b).toBeCloseTo(-50*.0254/72,10);expect(r.grids.sort()).toEqual(['3','E','Ef']);
+    d.lines.s=d.lines.s.filter(l=>l.y1!==132);
+    expect(insetRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
+  });
+  it.each([0,1,2,3])('registers a rotated inset at quarter turn %i without moving its world point', turn=>{
+    const d=fixture(),sheet=d.project.sheets.find(s=>s.id==='s')!;
+    sheet.metersPerPoint=100*.0254/72;
+    sheet.views=[{title:'CANOPY FRAMING PLAN',box:[0,0,400,430],scaleLabel:'1:50',metersPerPoint:50*.0254/72},{title:'Main',box:[600,0,1600,1500],scaleLabel:'1:100',metersPerPoint:100*.0254/72}];
+    const before=insetRegistrations(d.project,d.model,d.texts,d.lines).canopy;
+    const world=(p:number[],f:typeof before.frame)=>[f.a*p[0]-f.b*p[1]+f.tx,f.b*p[0]+f.a*p[1]+f.ty];
+    const expected=world([150,160],before.frame);
+    const c=Math.round(Math.cos(turn*Math.PI/2)),sn=Math.round(Math.sin(turn*Math.PI/2));
+    const rotate=(x:number,y:number):[number,number]=>[200+c*(x-200)-sn*(y-220),220+sn*(x-200)+c*(y-220)];
+    d.texts.s=d.texts.s.map(t=>/^(E|Ef|3)$/.test(t.str)?{...t,cx:rotate(t.cx,t.cy)[0],cy:rotate(t.cx,t.cy)[1]}:t);
+    d.lines.s=d.lines.s.map(l=>({...l,x1:rotate(l.x1,l.y1)[0],y1:rotate(l.x1,l.y1)[1],x2:rotate(l.x2,l.y2)[0],y2:rotate(l.x2,l.y2)[1]}));
+    d.project.measurements.find(m=>m.id==='canopy')!.points=[[150,160],[200,160]].map(([x,y])=>rotate(x,y));
+    const after=insetRegistrations(d.project,d.model,d.texts,d.lines).canopy;
+    expect(after).toBeDefined();const actual=world(rotate(150,160),after.frame);
+    expect(actual[0]).toBeCloseTo(expected[0],8);expect(actual[1]).toBeCloseTo(expected[1],8);
+    sheet.views.push({...sheet.views[0]},{...sheet.views[0]});
+    expect(insetRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
   });
   it('preserves a saved plate while exposing a source designation conflict, and withdraws stale registration', () => {
     const d=fixture();d.texts.s[0].str='CANOPY FOUNDATION PLAN';
-    const sh=d.project.sheets.find(s=>s.id==='s')!;
-    sh.views=[{title:'CANOPY FOUNDATION PLAN',box:[0,30,320,430],scaleLabel:'1:50',metersPerPoint:50*.0254/72}];
+    const sh=d.project.sheets.find(s=>s.id==='s')!;sh.metersPerPoint=100*.0254/72;
+    sh.views=[{title:'CANOPY FOUNDATION PLAN',box:[0,30,320,430],scaleLabel:'1:50',metersPerPoint:50*.0254/72},{title:'Main plan',box:[600,0,1600,1500],scaleLabel:'1:100',metersPerPoint:100*.0254/72}];
     d.project.measurements.find(m=>m.id==='canopy')!.points=[[150,160]];
     d.texts.s.push({...tag('BP5',150,160),w:20,h:8});
     d.model.elements=d.model.elements.map(e=>({...e,sources:[],issues:[]}));
     d.model.elements.push({id:'plate',measurementId:'canopy',sheetId:'s',typeName:'BP6 – Base plate',shape:null,quantity:1,unit:'ea',sources:[],issues:[]} as any);
     const before=JSON.stringify(d.project);
-    const result=retainCanopyFoundationEvidence(d.project,d.model,d.texts,d.lines);
+    const result=retainInsetEvidence(d.project,d.model,d.texts,d.lines);
     const plate=result.elements.find(e=>e.id==='plate')!;
     expect(plate.issues.some(s=>s.includes('drawing label BP5 conflicts with saved takeoff BP6'))).toBe(true);
     expect(plate.shape).toBeNull();expect(plate.quantity).toBe(1);expect(plate.typeName).toBe('BP6 – Base plate');
     expect(JSON.stringify(d.project)).toBe(before);
     sh.views=[];
-    const withdrawn=retainCanopyFoundationEvidence(d.project,result,d.texts,d.lines).elements.find(e=>e.id==='plate')!;
+    const withdrawn=retainInsetEvidence(d.project,result,d.texts,d.lines).elements.find(e=>e.id==='plate')!;
     expect(withdrawn.issues).toEqual([]);expect(withdrawn.sources).toEqual([]);
   });
   it('recentres paired beam silhouettes and rejects missing or ambiguous ink', () => {

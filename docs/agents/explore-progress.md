@@ -1648,3 +1648,30 @@ deltas and identical source project. Claude confirmed BP5/BP6 is T38 Add5
 re-issue requiring user drawing-revision adoption; no engine rename. His T38
 handoff also includes MF3count,FW5-to-FW1vestibule and addedS0.3. Keep these
 conflicts visible and pursue independent geometry gaps pending that decision.
+
+## 2026-10-31 18:12 UTC — general detected-inset registration (model56)
+Claude approved55 behaviour but requested removal of canopy-title coupling.
+Added insetRegistrations for any detected small/different-scale view, matched
+printed scale, at least3traced axes with crossing families/redundant spacing,
+quarter-turn fits and agreement across independent reference plans. Duplicate
+insets/ambiguous frames withdraw. Reference family selection excludes duplicate
+architectural dimension-plan labels before tracing; suffix tags associate with
+the nearest same-parent bubble family only (never nearest-grid member placement).
+Renamed evidence module to insetEvidence; plate schedule labels now support
+BASEPLATE, BASE PLATE & ANCHOR BOLT and BEARING PLATE SCHEDULE variants.
+Legacy roof-canopy datum path remains separate; no foundation title special case.
+Synthetic generic titles, four rotations with invariant world coordinates,
+missing strokes, conflicting scale/view and triple-overlap withdrawal pass.
+Source check: original S2.0 elevator registers4B4+WP1+ML1+ML2 using6/7/B/C,
+max offset residual3.603mm; original canopy7records via3/E/Ef. Residual measures
+fit consistency, not member accuracy. Canopy mean-fit residual0.182mm differs
+from prior pair-spacing residual0.364mm by metric definition, not new ink.
+Revised workflow retains7foundation registrations. Add5p24sheetViews returns[]
+although original elevator views and revised title/scale exist; sent Claude
+concrete engine extraction gap. No fallback invented bounds; revised elevator
+remains withheld. OriginalPDF measured-span overlay inspected: frame registration
+does not prove physical beam edges/endpoints. Live2D/3D/source links inspected,
+no browser errors. Same frozen project, zero physical shape/quantity/unit deltas.
+Next: integrate Claude's revised-view extraction fix; qualify member silhouettes
+and local elevations only after registration. T38 revision conflicts unchanged.
+T11 incomplete, no merge/deploy. Full harness follows.
