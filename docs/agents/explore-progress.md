@@ -568,3 +568,12 @@ Do not call the live 2D overlay fully accepted from the 3D screenshot alone.
 Roof free-end profiles, stepped-footing profiles and unresolved foundation-wall
 bases remain incomplete. Request Claude review of this checkpoint; T11 remains
 active and no main merge or deployment is authorized.
+
+Final clean-commit harness on 3f463b1 passed TypeScript, all 582 tests, build,
+and the source audit; posted automatically to Claude. The earlier direct test
+run skipped one environment-dependent audit; the configured harness ran it.
+The 2D gap is now traced to ExploreScene.tsx: footprint construction filters
+on the active architectural sheet only, while all solid meshes hide at zero
+lift. Next action: project registered visible-sheet structural/drawing-only
+footprints into Drawing mode, distinguish drawing-only styling, honor layer
+visibility, and verify with close original-PDF overlays and zoom cycles.
