@@ -62,3 +62,13 @@ describe('OCR text layer', () => {
     expect(content.items.map((i) => ('str' in i ? i.str : ''))).toEqual(['A2.1', 'P101']);
   });
 });
+
+describe('Tesseract words as sheet words', () => {
+  it('maps level and quarter-turned readings back onto the sheet', async () => {
+    const { wordsOfRecognized } = await import('../src/ocr');
+    const page = { blocks: [{ paragraphs: [{ lines: [{ words: [{ text: 'P101', confidence: 91, bbox: { x0: 100, y0: 50, x1: 160, y1: 70 } }] }] }] }] };
+    expect(wordsOfRecognized(page, 0.5)[0]).toMatchObject({ x0: 50, y0: 25, x1: 80, y1: 35, rot: 0 });
+    // Turned from a level image 1000 px high: u 100–160 along, v 50–70 across.
+    expect(wordsOfRecognized(page, 0.5, 1000)[0]).toMatchObject({ x0: 25, x1: 35, y0: 420, y1: 450, rot: 90 });
+  });
+});

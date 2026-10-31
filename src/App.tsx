@@ -47,7 +47,8 @@ import { SpecView, type SpecTarget } from './components/SpecView';
 import { FileManager } from './components/FileManager';
 import { addendumNumber, mergeSections, readSpec } from './spec/parse';
 import { isCombined, pageKinds, pagesOf, splitPdf } from './splitPdf';
-import { ocrTitleBlock, tidySetNumbers } from './ocr';
+import { ocrTitleBlock, pageOcr, tidySetNumbers } from './ocr';
+import { withOcrText } from './ocrText';
 import { buildProjectMap } from './spec/links';
 import { buildGraph, definitionsOf, type DrawingGraph, type Link, type Place } from './graph/graph';
 import { entries, norm, type Entry } from './smart/index';
@@ -276,7 +277,8 @@ export function App() {
     const opened = new Map<string, PDFDocumentProxy>();
     for (const doc of p.docs) {
       const data = await loadPdf(doc.id);
-      if (data) opened.set(doc.id, await openPdf(data));
+      // Pages with no text of their own (lettering drawn as linework) are read by OCR when a tool first reads them.
+      if (data) opened.set(doc.id, withOcrText(await openPdf(data), pageOcr));
     }
     const log = p.id ? await loadActivity(p.id) : [];
     past.current = [];
@@ -979,7 +981,7 @@ export function App() {
     // Sheets whose title block has no text (drawn as linework, or scanned): read by OCR.
     sheets = await namedByOcr(pdf, sheets, name);
     ocrTried.current.add(docId);
-    setPdfs((m) => new Map(m).set(docId, pdf));
+    setPdfs((m) => new Map(m).set(docId, withOcrText(pdf, pageOcr)));
     commit((p) => ({ ...p, docs: [...p.docs, { id: docId, name }], sheets: [...p.sheets, ...sheets] }), 'Add drawings');
     setSheetId((cur) => cur ?? sheets[0]?.id ?? null);
     return { sheets, noText };
