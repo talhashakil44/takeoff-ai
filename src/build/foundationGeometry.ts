@@ -51,6 +51,15 @@ export function footingTopDatum(
 ): { z: number; sources: SourceRef[] } | null {
   if (project.units !== 'metric') return null;
   const values: { z: number; source: SourceRef }[] = [];
+  const numberAbove = (ts: DrawingText[], t: DrawingText) => {
+    if (!(t.w && t.w > 0 && t.h && t.h > 0)) return undefined;
+    const candidates = ts.filter(v => /^-?\d{1,5}(?:\.\d+)?$/.test(v.str.trim()) &&
+      v.h && v.h > 0 && t.cy - v.cy >= Math.min(t.h!, v.h) &&
+      t.cy - v.cy <= 3 * Math.max(t.h!, v.h) &&
+      Math.abs(v.cx - t.cx) <= t.w! / 2);
+    // More than one value is an ambiguous annotation, not a closest-number guess.
+    return new Set(candidates.map(v => Number(v.str))).size > 1 ? null : candidates[0];
+  };
   const numberBelow = (ts: DrawingText[], t: DrawingText) => {
     const found = ts
       .filter(
@@ -71,29 +80,33 @@ export function footingTopDatum(
     (s) => !s.superseded && /^S/i.test(s.name),
   )) {
     const ts = texts[sheet.id] ?? [];
-    const zero = ts.some(
-      (t) =>
-        /^(?:FIN\.?|FINISHED)\s+GROUND\s+FLOOR$/i.test(t.str.trim()) &&
-        numberBelow(ts, t)?.str.trim() === '0',
-    );
+    const zero = ts.find(t => {
+      if (!/^(?:(?:FIN\.?|FINISHED)\s+)?GROUND\s+FLOOR$/i.test(t.str.trim())) return false;
+      const above = numberAbove(ts, t);
+      const value = above !== undefined ? above : (/^(?:FIN\.?|FINISHED)\s/i.test(t.str.trim()) ? numberBelow(ts, t) : undefined);
+      return value?.str.trim() === '0';
+    });
     if (!zero) continue;
     for (const label of ts.filter((t) =>
       /^T\s*[/.]?\s*O\.?\s+FOOTING$/i.test(t.str.trim()),
     )) {
-      const n = numberBelow(ts, label);
+      const above = numberAbove(ts, label);
+      const n = above !== undefined ? above : numberBelow(ts, label);
       if (!n) continue;
       const z = Number(n.str) / 1000;
       if (z > -0.05 || z < -10) continue;
+      const groundNumber = numberAbove(ts, zero) ?? numberBelow(ts, zero);
+      const evidence = [label, n, zero, ...(groundNumber ? [groundNumber] : [])];
       values.push({
         z,
         source: reference(
           sheet,
-          `${label.str} ${n.str} mm; FIN. GROUND FLOOR 0`,
+          `${label.str} ${n.str} mm; ${zero.str} 0`,
           [
-            Math.min(label.cx, n.cx) - 30,
-            label.cy - 5,
-            Math.max(label.cx, n.cx) + 30,
-            n.cy + 5,
+            Math.min(...evidence.map(t => t.cx - (t.w ?? 60) / 2)) - 5,
+            Math.min(...evidence.map(t => t.cy - (t.h ?? 10) / 2)) - 5,
+            Math.max(...evidence.map(t => t.cx + (t.w ?? 60) / 2)) + 5,
+            Math.max(...evidence.map(t => t.cy + (t.h ?? 10) / 2)) + 5,
           ],
         ),
       });

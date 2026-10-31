@@ -1407,3 +1407,20 @@ it('recognizes split and full step strokes without borrowing wall pens or outsid
     hasFootingCrossbar({ ...plan, lines: rotated }, 0, 0, 90, 0, 100),
   ).toBe(true);
 });
+it.each([0.5,1,3])('reads explicit above-label footing datums at scale %s without guessing local pad geometry', scale=>{
+ const labels=[{str:'GROUND FLOOR',cx:200,cy:200,w:100,h:10},{str:'0',cx:230,cy:184,w:6,h:8},
+ {str:'T/O FOOTING',cx:210,cy:300,w:80,h:10},{str:'-1400',cx:230,cy:284,w:25,h:8}]
+ .map(t=>({...t,cx:t.cx*scale,cy:t.cy*scale,w:t.w*scale,h:t.h*scale}));
+ const datum=footingTopDatum(project,{section:labels});
+ expect(datum?.z).toBe(-1.4);
+ expect(datum?.sources[0].quote).toContain('GROUND FLOOR 0');
+ expect(datum?.sources[0].box?.[1]).toBeLessThan(284*scale);
+ expect(footingTopDatum(project,{section:labels.filter(t=>t.str!=='0')})).toBeNull();
+ expect(footingTopDatum(project,{section:[...labels,{...labels[3],str:'-1600',cx:220*scale}]})).toBeNull();
+});
+it('does not fall back to a number below an ambiguous above-label footing datum',()=>{
+ const ts=[text('FIN. GROUND FLOOR',200,100),text('0',200,108),
+ {...text('T/O FOOTING',200,300),w:100,h:10},
+ text('-1400',200,284),text('-1600',210,284),text('-1200',200,308)];
+ expect(footingTopDatum(project,{section:ts})).toBeNull();
+});

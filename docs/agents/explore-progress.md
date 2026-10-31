@@ -1469,3 +1469,24 @@ and P-1 now receive symbolic1/A but final physical qualification says no fresh
 source qualification; C-1 needs source-linked dimensions. Inspect schedule code
 normalization and section/footprint applicability before promoting any solid.
 Off-grid6/B and offsetDy remain explicit counterexamples to blind grid placement.
+
+## 2026-10-31 14:38 UTC — above-label footing datum evidence (model50)
+Traced missing physical qualification beyond grids. Original S2-3/S2-4 explicitly
+show GROUND FLOOR0 and T/O FOOTING-1220 with values above labels. Existing parser
+only accepted FIN.GROUND FLOOR plus values below. Added metric-aware above-label
+association inside label width, vertical separation1-3capital heights, unique
+numeric value; ambiguous above values do not fall back to a convenient below
+value. Retained existing below-label route. Evidence crop includes both zero
+reference and footing label/value, quote preserves actual wording. Synthetic
+three-scale, missingzero and conflictingnumber tests; no project-specific numbers
+in parser. OriginalPDF crop dunnville-footing-datum-v50.png inspected:0/-1220
+and both labels visible. Result -1.220m datum, no new physical solids.
+Next blocker sent to Claude (engine ownership): foundationMarks receives explicit
+1800x1800x400 footing row with W x Lg x THK header but drops depth; pier schedule
+has empty parsed headers and loses600x600dimensions. /tmp/datum50-inspect.json
+captures exact schedules/marks. Requested general header-aware repair+synthetic
+tests, commit handoff, no source edits or type-name inference. Off-grid footprint
+and local elevation applicability remain mandatory before physical promotion.
+Full-source Dunnville118records/9solids/109unresolved unchanged, zero read errors.
+Same-input Kelso shapes/quantities and originalproject unchanged. Final harness
+and live check follow. T11 incomplete; no main merge/deploy.
