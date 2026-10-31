@@ -725,6 +725,23 @@
       "by": "claude",
       "updated": "2026-10-30T19:23:39.867Z",
       "notes": "Step 1 done @f42d95c. Step 2 WIP on claude/t36-roof-systems-wip: assembly legend parses (R2 purlins 175x342 GLULAM @1200, R3 joists 2x8 @400, R1 deck), but the dashed-zone flood gives R1 and R2 the same rings (577 and 127 m2) vs gpt-explore's R2 ring of about 774 m2. Not shipped. Needs a zone method that separates systems (outline style per tag) or user-drawn areas."
+    },
+    {
+      "status": "todo",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T37",
+      "owner": "claude",
+      "stream": "claude",
+      "title": "Wall tracer: follow a wall tag leader onto the wall it lands on (Kelso S1.0 FW-4: 2.59 m ICF panel at x 2043, y 827-900 missed; the leader itself was taken as wall until 0a38bfc)",
+      "prompt": "In src/fill/sheetWalls wall-tag association, when a tag has a leader, seed the run at the leader end on the wall it touches and trace that wall, not the leader. Verify on Kelso S1.0 FW-4 and that the Frederick wall takeoffs do not regress.",
+      "added": "2026-10-31T00:12:09.934Z",
+      "by": "claude"
     }
   ]
 }
