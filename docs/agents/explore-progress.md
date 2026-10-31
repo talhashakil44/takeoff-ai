@@ -1540,3 +1540,8 @@ then off-grid/compound pads requiring leaders or perimeter reconstruction.
 Claude approved51 and requested final engine-owned files from integration at
 merge (automate,walls,smart,sources,facts); keep that ownership instruction.
 T11 incomplete; full harness and final live checks follow; no main merge/deploy.
+Validated50534e4:647tests/tsc/build/Kelso+Frederick audit PASS. Final live UI labels
+"Plan footprint candidate" / "Locate candidate footprint" confirmed, pageerrors
+empty. OriginalPDF outline overlay and live2D/3D proofs inspected; only three
+2D witnesses added, zero physical shape/quantity deltas. Sent Claude source
+boxes and request for independent local section-cut applicability review.
