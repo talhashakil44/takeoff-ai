@@ -68,7 +68,7 @@ export function stripsFromTags(tags: WallTag[], segs: Segment[], metersPerPoint:
         u0 = Math.min(u0, on[i].u0);
         start = i;
       }
-      return u0 <= u + gap && u1 >= u - gap && u1 - u0 > 3 * gap ? { pen, v, u0, u1 } : null;
+      return u0 <= u + gap && u1 >= u - gap && u1 - u0 > 1.5 * gap ? { pen, v, u0, u1 } : null;
     };
     // The near edge: the dashed line the arrow ends on.
     let near: Dashed | null = null;
