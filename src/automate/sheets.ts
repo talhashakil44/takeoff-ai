@@ -52,6 +52,8 @@ export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, 
       docId,
       page: n,
       name: named.number ?? info.name ?? `Page ${n}`,
+      // Read by OCR (no text layer of its own): its number may be misread.
+      ...((pg as { ocrRead?: boolean }).ocrRead ? { ocr: true } : {}),
       ...(title ? { title } : {}),
       width: info.width,
       height: info.height,

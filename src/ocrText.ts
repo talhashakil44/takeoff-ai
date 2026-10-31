@@ -194,6 +194,7 @@ export function withOcrText<D extends PDFDocumentProxy>(pdf: D, ocr: PageOcr): D
                 return [x, y - s, x + Math.max(it.width, s), y] as [number, number, number, number];
               });
             const runs = ocrRuns(words).filter((r) => !ownBoxes.some((b) => overlaps(runBox(r), b, 1)));
+            if (runs.length) (page as { ocrRead?: boolean }).ocrRead = true;
             return { ...content, items: [...content.items, ...runsAsItems(runs, vp)] };
           })(),
         );

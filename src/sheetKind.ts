@@ -51,10 +51,11 @@ const partsOf = (t: string) =>
  * sheet number) are not. A title naming several drawings ("Ground floor plan & finishes
  * schedule", "Roof plan and canopy details") is the plan it names. `why` says what decided it.
  */
-export function classifySheet(sheet: Pick<Sheet, 'name' | 'title'>): SheetKind {
+export function classifySheet(sheet: Pick<Sheet, 'name' | 'title'> & { ocr?: boolean }): SheetKind {
   const raw = `${sheet.title ?? ''}`.toUpperCase().replace(/\s+/g, ' ').trim();
   // The sheet number, or one the title starts with (an addendum page listing "S2.01 – Foundation plan").
-  const trade = tradeOfNumber(sheet.name ?? '') ?? (/^[A-Z]{1,3}[-.]?\d+(?:\.\d+)?\b/.test(raw) ? tradeOfNumber(raw) : null);
+  // A number OCR read may be misread (T-3 for A2), so it alone does not make a sheet a trade's.
+  const trade = (sheet.ocr ? null : tradeOfNumber(sheet.name ?? '')) ?? (/^[A-Z]{1,3}[-.]?\d+(?:\.\d+)?\b/.test(raw) ? tradeOfNumber(raw) : null);
   // On an architectural sheet a "layout" with no trade named is a plan ("Proposed washroom layouts").
   const t = !trade && /\bLAYOUTS?\b/.test(raw) && !TRADE.test(raw.replace(/\bLAYOUTS?\b/g, '')) ? raw.replace(/\bLAYOUT(S?)\b/g, 'PLAN$1') : raw;
   const parts = partsOf(t);
@@ -116,7 +117,7 @@ export const hasCeilingPlan = (sheet: Pick<Sheet, 'name' | 'title'>) => {
  * plan of a level (a washroom renovation drawn only as enlarged layouts) takes its part plans as
  * its floor plans.
  */
-export function classifySet(sheets: Pick<Sheet, 'name' | 'title'>[]): SheetKind[] {
+export function classifySet(sheets: (Pick<Sheet, 'name' | 'title'> & { ocr?: boolean })[]): SheetKind[] {
   const kinds = sheets.map(classifySheet);
   if (kinds.some((k) => k.kind === 'floor plan' && k.level === 'level')) return kinds;
   return kinds.map((k) => (k.part ? { kind: 'floor plan', why: 'part plan (the set has no plan of a whole level)', level: 'level' } : k));

@@ -159,7 +159,7 @@ export async function runJob(dir: string, log: (s: string) => void = () => {}, o
   // No title in the title block: the sheet's biggest drawing title instead.
   const views = new Map<string, string | null>();
   for (const s of sheets) views.set(s.id, s.title ? null : viewTitle(await set.texts(s).catch(() => [])));
-  const kinds = classifySet(sheets.map((s) => ({ name: s.name, title: s.title ?? views.get(s.id) ?? undefined })));
+  const kinds = classifySet(sheets.map((s) => ({ name: s.name, title: s.title ?? views.get(s.id) ?? undefined, ocr: s.ocr })));
   for (const [i, s] of sheets.entries()) {
     const view = views.get(s.id);
     const c = kinds[i]!;

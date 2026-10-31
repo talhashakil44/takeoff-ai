@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
+import { segmentsOf } from '../src/fill/sheetWalls';
+import { mosaicLayout, tagBoxes, withTagWords, wordsFromMosaic, type Box } from '../src/ocrTags';
 import type { OcrWord, PageOcr } from '../src/ocrText';
 
 /**
@@ -52,8 +54,7 @@ export async function cliOcr(path: string): Promise<PageOcr | null> {
   if (process.env.OCR === '0' || !(await haveCommands())) return null;
   const st = statSync(path);
   const cache = join(process.env.OCR_CACHE ?? join(tmpdir(), 'takeoff-ocr'), createHash('sha1').update(`${path}|${st.size}|${st.mtimeMs}`).digest('hex').slice(0, 16));
-  return async (page) => {
-    const n = page.pageNumber;
+  const pageWords = async (n: number): Promise<OcrWord[]> => {
     const file = join(cache, `${n}.json`);
     if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8')) as OcrWord[];
     const { stdout: png } = await run('pdftoppm', ['-f', String(n), '-l', String(n), '-r', String(DPI), '-gray', '-png', '-singlefile', path], { encoding: 'buffer', maxBuffer: 256 << 20 });
@@ -72,4 +73,47 @@ export async function cliOcr(path: string): Promise<PageOcr | null> {
     writeFileSync(file, JSON.stringify(words));
     return words;
   };
+  // Tags in their symbols, read off a mosaic of the symbols cut out at high resolution (src/ocrTags.ts).
+  const tagWords = async (n: number, boxes: Box[]): Promise<OcrWord[]> => {
+    const file = join(cache, `${n}.tags.json`);
+    if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8')) as OcrWord[];
+    let out: OcrWord[] = [];
+    if (boxes.length) {
+      const k = TAG_DPI / 72;
+      const { stdout: png } = await run('pdftoppm', ['-f', String(n), '-l', String(n), '-r', String(TAG_DPI), '-gray', '-png', '-singlefile', path], { encoding: 'buffer', maxBuffer: 512 << 20 });
+      const { data: page, info } = await sharp(png, { limitInputPixels: false }).raw().toBuffer({ resolveWithObject: true });
+      const layout = mosaicLayout(boxes, k, Math.round(4 * k), 3000);
+      const mosaic = Buffer.alloc(layout.width * layout.height, 255);
+      const band = Math.round(0.9 * k);
+      for (const t of layout.tiles) {
+        const [sx, sy] = [Math.round(t.box[0] * k), Math.round(t.box[1] * k)];
+        for (let y = band; y < t.h - band; y++)
+          for (let x = band; x < t.w - band; x++) {
+            const [px, py] = [sx + x, sy + y];
+            if (px < 0 || py < 0 || px >= info.width || py >= info.height) continue;
+            mosaic[(t.y + y) * layout.width + t.x + x] = page[py * info.width * info.channels + px * info.channels]!;
+          }
+      }
+      const img = await sharp(mosaic, { raw: { width: layout.width, height: layout.height, channels: 1 } }).png().toBuffer();
+      out = wordsFromMosaic(
+        tsvWords(await tesseract(img)).map((w) => ({ text: w.text, conf: w.conf, x0: w.l, y0: w.t, x1: w.l + w.w, y1: w.t + w.h })),
+        layout.tiles,
+        k,
+      );
+    }
+    mkdirSync(cache, { recursive: true });
+    writeFileSync(file, JSON.stringify(out));
+    return out;
+  };
+  return async (page) => {
+    const n = page.pageNumber;
+    const words = await pageWords(n);
+    if (process.env.OCR_TAGS === '0') return words;
+    const boxes = tagBoxes(await segmentsOf(page)).slice(0, MAX_TAGS);
+    return withTagWords(words, await tagWords(n, boxes), boxes);
+  };
 }
+
+/** Tags are read at this resolution, and at most this many symbols per sheet. */
+const TAG_DPI = 360;
+const MAX_TAGS = 2500;

@@ -23,7 +23,7 @@ import { automateSite } from './site';
 import { automateSheetViews } from './sheets';
 import type { Project, Pt, Sheet } from '../model';
 import type { PDFDocumentProxy } from '../pdf';
-import { classifySheet, tradeOfNumber, type SheetKind } from '../sheetKind';
+import { classifySet, tradeOfNumber, type SheetKind } from '../sheetKind';
 import { viewTitle } from '../sheetScale';
 import { readTitleBlock } from '../titleBlock';
 
@@ -134,6 +134,7 @@ export async function takeOffWholeSet(
   // line, "PLAN" for "LEVEL 1 (LOWER) DEMO PLAN") is put right, since what a sheet is decides
   // which tools run on it.
   const retitled = new Map<string, string>();
+  const titled: { id: string; name: string; title?: string; ocr?: boolean }[] = [];
   for (const s of live) {
     const texts = await access.texts(s).catch(() => []);
     const fresh = texts.length ? (readTitleBlock(texts, s.width, s.height).title ?? viewTitle(texts)) : null;
@@ -142,8 +143,10 @@ export async function takeOffWholeSet(
       title = fresh;
       retitled.set(s.id, fresh);
     }
-    kinds.set(s.id, classifySheet({ name: s.name, title }));
+    titled.push({ id: s.id, name: s.name, ...(title ? { title } : {}), ...(s.ocr ? { ocr: true } : {}) });
   }
+  // Sorted with the set in view (a set drawn only as washroom layouts takes them as its plans).
+  for (const [i, k] of classifySet(titled).entries()) kinds.set(titled[i]!.id, k);
   if (retitled.size) {
     project = { ...project, sheets: project.sheets.map((s) => (retitled.has(s.id) ? { ...s, title: retitled.get(s.id) } : s)) };
     live = project.sheets.filter((s) => !s.superseded);
