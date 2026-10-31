@@ -1610,3 +1610,10 @@ reason visible, BP6 remains unplaced, no browser errors. 140/427 structural
 records have solid geometry; this is not completion. Next: register canopy
 foundation inset using its own3/E/Ef grids and sheet.views, without borrowing
 roof canopy elevation. Full harness follows before pushing this checkpoint.
+Validated d01128f: TypeScript,647tests (4skipped),build and Kelso/Frederick
+audit PASS. Initial harness caught invalid test fixture fields; corrected to
+SheetView schema and reran all gates with BUILD_PROJECTS_ROOT restored.
+Normalized same-input shape comparison confirms zero remaining shape differences
+after accounting for seven withheld axes and global recentering, including
+cornerFills.at. OriginalPDF and live2D/3D evidence reviewed; no browser errors.
+Claude supplied/owns the shared helper b35a203, now cleanly cherry-picked.
