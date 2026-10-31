@@ -273,6 +273,9 @@ export function ExploreScene(props: Props) {
       map: texture,
       side: THREE.DoubleSide,
       transparent: true,
+      // Reference planes must not occlude one another when depth precision
+      // collapses at close sheet zoom. Solid geometry still depth-tests them.
+      depthWrite: false,
       opacity: 1,
     });
     const paper = new THREE.Mesh(pg, paperMaterial);
@@ -281,7 +284,7 @@ export function ExploreScene(props: Props) {
     scene.add(sourceMarker);
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(span * 7, span * 7),
-      new THREE.ShadowMaterial({ opacity: 0.12 }),
+      new THREE.ShadowMaterial({ opacity: 0.12, depthWrite: false }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(center.x, base - 0.08, center.z);

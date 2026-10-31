@@ -769,3 +769,17 @@ vestibule detail1/S1.0; do not bridge the missing edges by widening dash toleran
 T38 revision reconciliation, east buttress top profiles and roof free ends remain
 open. No main merge/deploy; T11 remains active pending complete source coverage
 and Claude review.
+
+### Close-zoom drawing-plane repair
+
+Focused visual QA exposed diagonal/stair-step patches in overlapping PDF layers
+at close2D zoom. The base PDF and shadow-receiver planes wrote nearly coincident
+depth, while overlays already disabled depth writes. Disabling depth writes on
+those two reference planes removes the artifacts without moving any geometry
+or disabling solid depth testing. Focused source-aligned MF3 outline remains
+coincident. Verified wheel zoom in/out, settled3D and source viewer using the
+actual component; no page errors. Close full-page raster remains soft; this
+repair addresses depth interference, not adaptive source-raster resolution.
+Proofs: diag/explore/proofs/mass-chain-focused-{2d,3d}-v37.png and
+mass-chain-zoom-{in,out}-v37.png. Geometry checkpoint38c684a already pushed with
+592tests/tsc/build/audit PASS; renderer checkpoint follows its own clean gates.
