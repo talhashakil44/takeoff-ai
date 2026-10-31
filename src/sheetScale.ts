@@ -139,11 +139,14 @@ export interface DrawingTitle {
 export function drawingTitles(texts: PageText[], lines = textLinesOf(texts)): DrawingTitle[] {
   const out: DrawingTitle[] = [];
   for (const c of lines) {
-    // The title is its biggest run(s): a scale or a note beside it in smaller print is not.
-    const big = c.runs.filter((t) => t.h >= c.h * 0.9);
+    // The title is its biggest run(s) of words: a scale or a note beside it in smaller print is not, nor
+    // the drawing's number in its bubble beside it (often bigger than the title).
+    const worded = c.runs.filter((t) => /[A-Z]{2}/i.test(t.str));
+    const h = worded.length ? Math.max(...worded.map((t) => t.h)) : c.h;
+    const big = (worded.length ? worded : c.runs).filter((t) => t.h >= h * 0.9);
     const str = big.map((t) => t.str).join(' ').trim();
     if (str.length < 4 || str.length > 80 || !VIEW_WORDS.test(str) || NOT_A_TITLE.test(str) || CALLOUT_KEY.test(str) || /[:.]$/.test(str)) continue;
-    out.push({ str, box: boxOf(big), h: c.h });
+    out.push({ str, box: boxOf(big), h });
   }
   return out.sort((a, b) => b.h - a.h);
 }
