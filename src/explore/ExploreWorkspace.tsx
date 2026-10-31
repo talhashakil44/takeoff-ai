@@ -711,6 +711,7 @@ export function ExploreWorkspace({
                     className={`ex-element-row${selected === e.id ? " active" : ""}`}
                     onClick={() => {
                       setSelected(e.id);
+                      if (rooms.some(r=>r.id===e.id)) setRoomId(e.id);
                       if (e.origin === "drawing") setShowDrawingGeometry(true);
                       if (e.sheetId !== sid && !enabled.has(e.sheetId)) {
                         if (enabled.size < 4)
@@ -725,7 +726,7 @@ export function ExploreWorkspace({
                     <span>{e.name}</span>
                     <small>
                       {e.origin === "drawing" ? "No accepted takeoff" : quantityPending(e) ? "Quantity uncalibrated" : `${num(e.quantity)} ${e.unit}`}
-                      {!e.shape ? " · unplaced" : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : ""}
+                      {!e.shape ? (rooms.some(r=>r.id===e.id) ? " · measured space" : " · unplaced") : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : ""}
                     </small>
                   </button>
                 ))
@@ -1122,7 +1123,7 @@ export function ExploreWorkspace({
               <dl className="ex-facts">
                 <div>
                   <dt>Geometry</dt>
-                  <dd>{element.shape?.type === "axis" ? (element.origin === "drawing" ? "Plan outline only · elevation unverified" : "Plan axis · section and height unverified") : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : "Unplaced"}</dd>
+                  <dd>{element.shape?.type === "axis" ? (element.origin === "drawing" ? "Plan outline only · elevation unverified" : "Plan axis · section and height unverified") : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : rooms.some(r=>r.id===element.id) ? "Measured space · no construction solid" : "Unplaced"}</dd>
                 </div>
                 <div>
                   <dt>Source</dt>

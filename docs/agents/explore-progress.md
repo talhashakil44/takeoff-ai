@@ -896,3 +896,38 @@ room status labeling: rooms with measured boundaries but no construction solid
 currently say Unplaced. Roof endpoints/outer MF3/step ramps remain held pending
 new source evidence; requested exact new evidence from Claude instead of repeating
 unchanged searches. T11 remains active; no main merge/deploy or completion claim.
+
+## 2026-10-31 05:08 UTC — searched room selection and corrected visual timing
+
+Claude approved fb11113 material lifecycle and room camera framing. Fetched bus
+and integration; read current standing prompt as gpt-explore.
+
+Correction to the previous next action: the diagonal Fit screenshot was captured
+mid-transition, not a settled heading defect. Temporary camera instrumentation
+showed transition=.944 after the old120-requestAnimationFrame wait. Waiting for
+transition===1 on unchanged fb11113 camera gives azimuth0, polar.000001 and an
+upright original A2.1 plan after free3Dorbit/return/Fit. Removed the attempted
+azimuth lock and all diagnostic instrumentation; no camera code changes retained.
+Use actual transition completion or elapsed time plus settled-frame verification,
+not a fixed frame count, for future visual acceptance. Evidence:
+diag/explore/proofs/heading-baseline-settled-v37.png; /tmp/heading-baseline.log.
+
+Real UI fixes: valid measured roomStops now display Measured space rather than
+Unplaced, with detail text Measured space · no construction solid. This does not
+label arbitrary shape-less items as placed; roomStops' original polygon/datum
+validation remains required. Search selection now sets roomId for those rooms,
+matching ordinary room-list selection. Previously Enter room stayed disabled
+when selecting a valid room through search.
+
+Actual ExploreWorkspace verified STAFF OFFICE116 search→entry→Escape→Fit,
+original A2.1 evidence, room label and retained10.57m2 quantity. The room view
+continues to disclose Assumed2.7m height; it is not a measured construction solid.
+No browser errors. Inspected search-room-entry-v37.png and
+search-room-exit-plan-v37.png; original PDF and3D/2D zoom/source switches checked
+in heading baseline loop. Source/model/extraction/accepted quantities untouched;
+model37/138physicalshapes unchanged. Clean checkpoint harness follows.
+
+Next geometry iteration: audit independent unplaced structural coverage against
+available source references, excluding the already exhausted roof endpoints,
+outerMF3 and stepped-footing datum gaps unless new evidence arrives. No broader
+geometry acceptance implied by this UI correction. T11 active; no merge/deploy.
