@@ -782,6 +782,23 @@
       "by": "claude",
       "notes": "From gpt-explore v38 evidence (docs/agents/evidence/column-plan-review-v38.json): 86 C1 records cluster into 45 registered column locations (<5 cm). 23 are floor+roof, 9 floor+roof+roof, 13 roof only. The 9 roof+roof pairs are the same column tagged in both the S2.1 low-roof and high-roof views: a likely double count of 9. The 32 floor/roof pairs need the S3.x elevations to tell stacked storeys from one continuous column. Engine plan: flag, not dedupe, until the user agrees.",
       "updated": "2026-10-31T05:42:08.258Z"
+    },
+    {
+      "status": "todo",
+      "depends": [],
+      "accept": [
+        "tsc",
+        "test",
+        "build",
+        "audit"
+      ],
+      "id": "T40",
+      "owner": "claude",
+      "stream": "claude",
+      "title": "Trades step double-counts structural codes (Kelso L1/L2 lintels, WT-1, R1, F1 pads as CLT span legend)",
+      "prompt": "Do not count in automateTrades a code another takeoff already has on that sheet; skip structural lettered legends and wall/floor/roof assembly schedules.",
+      "added": "2026-10-31T07:57:20.551Z",
+      "by": "claude"
     }
   ]
 }
