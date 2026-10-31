@@ -60,8 +60,19 @@ export function measurementVars(m: Measurement, type: TakeoffType, sheet: Sheet,
     const L = toLength(m.statedLength, units);
     return { L, H, A: L * H, P: 0, N: 1, I: 0 };
   }
-  // The sheet's scale; with none set, that of the one drawing on it the takeoff lies in.
-  const mpp = sheet.metersPerPoint ?? viewScaleAt(sheet.views, m.points as [number, number][])?.metersPerPoint ?? null;
+  // The sheet's scale; with none set, that of the one drawing on it the takeoff lies in. A takeoff
+  // inside an inset drawn at its own scale (Kelso S1.0's 1:50 canopy foundation plan on a 1:100
+  // sheet) takes the inset's, when the sheet's scale was read off the sheet (detected, or checked by the user), not preset or calibrated by hand, and
+  // the inset is under half the size of the sheet's main drawing (two
+  // drawings side by side, a key plan beside a site plan, are not an inset in either).
+  const view = viewScaleAt(sheet.views, m.points as [number, number][]);
+  const inset =
+    !!view &&
+    sheet.metersPerPoint !== null &&
+    (sheet.scaleSource === 'detected' || sheet.scaleSource === 'verified') &&
+    Math.abs(view.metersPerPoint / sheet.metersPerPoint - 1) > 0.01 &&
+    (sheet.views ?? []).some((v) => (v.box[2] - v.box[0]) * (v.box[3] - v.box[1]) >= 2 * (view.box[2] - view.box[0]) * (view.box[3] - view.box[1]));
+  const mpp = inset ? view!.metersPerPoint : (sheet.metersPerPoint ?? view?.metersPerPoint ?? null);
   if (mpp === null) return null;
   if (type.kind === 'linear') {
     const L = toLength(polylineLength(m.points) * mpp, units);
