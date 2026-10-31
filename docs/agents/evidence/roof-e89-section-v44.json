@@ -1,0 +1,77 @@
+{
+  "modelVersion": 44,
+  "member": "d4471dd9-800c-4602-924c-e9ef5a47a82c",
+  "before": {
+    "type": "run",
+    "points": [
+      [
+        -4.85470381700312,
+        -25.917965086300654
+      ],
+      [
+        -4.85470381700312,
+        -30.155531752967306
+      ]
+    ],
+    "z0": 9.82023280933098,
+    "height": 0.608,
+    "thickness": 0.265,
+    "topPlane": [
+      0.1249993904390538,
+      0,
+      11.035067827218517
+    ],
+    "bottomPlane": [
+      0.1249993904390538,
+      0,
+      10.427067827218517
+    ]
+  },
+  "after": {
+    "type": "run",
+    "points": [
+      [
+        -4.85470381700312,
+        -25.917965086300654
+      ],
+      [
+        -4.85470381700312,
+        -34.37193175296731
+      ]
+    ],
+    "z0": 9.82023280933098,
+    "height": 0.608,
+    "thickness": 0.265,
+    "topPlane": [
+      0,
+      0,
+      10.42823280933098
+    ],
+    "bottomPlane": [
+      0,
+      0,
+      9.82023280933098
+    ]
+  },
+  "source": [
+    {
+      "kind": "spec",
+      "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+      "page": 31,
+      "label": "S4.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+      "box": [
+        1569.1227064914628,
+        1125.68,
+        1609.1227064914628,
+        1168.6
+      ],
+      "quote": "1/S4.0, grid E: plan cut lies inside this bearing bay. Closed 265\u00d7608mm scheduled beam section at SCALE: 1 : 75; high/low beam datums calibrate traced top 10.428m, agreeing with structural beam plane 10.428m within20mm. Beam identity is associated through the plan, not a mark in the section."
+    }
+  ],
+  "shapeDeltaIds": [
+    "d4471dd9-800c-4602-924c-e9ef5a47a82c"
+  ],
+  "projectUnchanged": true,
+  "acceptedQuantitiesUnchanged": true,
+  "drawingGeometryUnchanged": true
+}

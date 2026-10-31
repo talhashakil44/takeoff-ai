@@ -1,3 +1,4 @@
+import { roofSectionEndEvidence } from './roofSectionEndEvidence';
 import type { Project, Pt } from "../model";
 import type { BuildModel, SourceRef } from "./types";
 import { gridAxes, type DrawingTexts } from "./building";
@@ -605,6 +606,10 @@ export function recoverRoofCantilevers(
             });
           }
         }
+      if (!evidence.length && plane) {
+        const tops = supports.map(p => worldPoint(p, r.frame)).map(p => plane.topPlane[0]*p[0]+plane.topPlane[1]*p[1]+plane.topPlane[2]);
+        if (Math.abs(tops[0]-tops[1])<.005) evidence.push(...roofSectionEndEvidence(project,texts,lines,m.sheetId,r.bounds,supports,letter.str,sec.width,sec.depth,tops[0],roofEndSection));
+      }
       if (
         !evidence.length ||
         evidence.some((v) => Math.abs(v.top - evidence[0].top) > 0.001)
@@ -671,7 +676,7 @@ export function recoverRoofCantilevers(
               evidence.flatMap((v) => (v.discrepancy ? [v.discrepancy] : [])),
             ),
           ],
-          `Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. ${evidence.some((v) => v.discrepancy) ? "Frame association is inferred from the explicit plan reference and adjacent named girt; the conflicting elevation title remains unresolved." : "Frame location is corroborated by the elevation title and actual grid bubbles."} Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled.`,
+          `Physical roof cantilever: free end from actual plan member ink; scheduled section and calibrated beam-end/profile elevation corroborate the level. ${evidence.some((v) => v.discrepancy) ? "Frame association is inferred from the explicit plan reference and adjacent named girt; the conflicting elevation title remains unresolved." : "Frame location is corroborated by the elevation grids or an explicit plan cut inside the bearing bay."} Separate roof-purlin assembly and connection fabrication remain outside this beam geometry. Original takeoff quantity retained and unreconciled.`,
         ],
       };
     }),

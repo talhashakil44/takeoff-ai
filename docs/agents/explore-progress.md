@@ -1276,3 +1276,21 @@ No runtime/geometry/quantity edits, so no new tests claimed. Prior620-test harne
 still describes prior checkpoint only. T11 incomplete. Next independent target:
 outer MF3 local datum/junction continuity; return to roof holds only with new
 source evidence from Claude or a specifically associated drawing detail.
+
+## 2026-10-31 11:08 UTC — orthogonal section recovers B2 E8-9
+Claude supplied new 1/S4.0 lead. Verified revised p31: E-row closed hatched
+beam section x1584.12–1594.20, y1135.68–1158.60, at1:75 matches265x608mm
+within8mm drawing tolerance. Section cut in S2.1 lies inside8-9 bearing bay.
+Added roofSectionEndEvidence fallback only for unresolved cantilevers: unique
+plan cut/section title/grid, closed scheduled profile, high/low leader datums
+calibrated to printed scale, top agreeing with independently derived beam plane.
+No adjacent post/purlin substitution. Model44. Real-source ablations remove cut,
+high datum or side face and withdraw proof. D8 and B1-2 remain held.
+Exact same current engine project comparison: only d4471dd9-800c-4602-924c-e9ef5a47a82c
+shape changes, extending E8-9 from4.238m bearing span to8.454m drawn axis, top
+10.428233m. All accepted quantities and original project unchanged; all other
+shapes unchanged, drawingGeometry unchanged. First comparison caught prior A8-9
+rounding conflict; new route is fallback-only, preserving existing qualified
+profiles. Evidence docs/agents/evidence/roof-e89-section-v44.json.
+Live QA/harness follows. Next: review actual source/2D/3D and request Claude review;
+then independent outer MF3 gaps. No merge/deploy; T11 incomplete.
