@@ -1011,3 +1011,36 @@ Next: trace column base/top at grid3/E in the section evidence for the paired
 canopy/main-roof C1 records, before any vertical solid is allowed. Canopy C2 needs
 its own scheduled rectangle/section evidence; current recognition fails closed.
 T39 remains Claude-owned, all counts retained. T11 active/incomplete; no deploy.
+
+## 2026-10-31 06:39 UTC — tiled drawing picking repair; 3/E section audit
+
+Claude approved91433e1 and supplied section candidates. Read original revised
+S4.0/Add5p31 and S5.0/p33 plus canopy plan: 4/S5.0 cut passes through the canopy
+bay beyond Ef, whereas C1 is at3/E. The entry roof detail shows wall/beam assembly,
+not a directly located C1 base/top. No height copied to either pairedC1 record.
+S4.0 sections still require exact cut identity before their E-post endpoints can
+be applied to3/E. Sent this concrete finding to Claude; no repeated new blocker
+or inferred column solid. Original PDF/project/quantities preserved.
+
+Live drawing audit found a regression introduced with base paper tiles: paper
+became a Group but onUp still raycast with recursive=false. Even changing only
+that flag would be wrong because each detail tile's UV covers its own crop.
+New drawingHit helper intersects child meshes and maps the hit's world X/Z back
+through the registered sheet frame. Hidden paper cannot receive a room pick.
+No camera, model, source extraction, geometry or quantity changes.
+
+Two regression tests use actual Three.js ray intersections on disjoint paper
+children with independent0..1UVs and a rotated source frame. They cover both tiles,
+outside hits and hidden drawing rejection. Targeted tests/typecheck pass.
+Live original A2.1: focus STAFF OFFICE116, click detail tile context to select
+112 RECEIVING & GEN.STORAGE, click coarse paper to return to116. Accepted areas
+remain25.91m2/10.57m2. No browser errors. Settled3D→Drawing→Locate source→pick also passes;
+proofs diag/explore/proofs/paper-picking-neighbour-v39.png and
+paper-picking-spatial-v39.png. Model39/138physicalshapes remain unchanged.
+Full clean checkpoint harness follows.
+
+Next geometry work: source-cut identity and explicit vertical endpoints for the
+unresolved main-roofC1 groups; canopy C2 closed outline must match its actual
+scheduled section before any column marker/solid. Do not infer C1 height from
+entry-canopy datum or an unrelated building section. T11 remains incomplete;
+no main merge/deploy.

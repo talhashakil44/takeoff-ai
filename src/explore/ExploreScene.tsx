@@ -1,3 +1,4 @@
+import { drawingHit } from './drawingHit';
 import { drawingTiles } from './drawingTiles';
 import type { SourceTile } from './sourceRegion';
 import { useEffect, useRef, useState } from "react";
@@ -731,12 +732,8 @@ export function ExploreScene(props: Props) {
             down = null;
             return;
           }
-          const hit = ray.intersectObject(paper, false)[0];
-          if (hit?.uv)
-            live.current.onSheetPoint([
-              hit.uv.x * props.sheet.width,
-              (1 - hit.uv.y) * props.sheet.height,
-            ]);
+          const sourcePoint=drawingHit(ray,paper,props.frame);
+          if(sourcePoint)live.current.onSheetPoint(sourcePoint);
           down = null;
           return;
         }
