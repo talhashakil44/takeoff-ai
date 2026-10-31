@@ -70,3 +70,26 @@ the baseline using dev sources only, then address the highest aggregate miss
 category with a general rule. Kelso B4 elevations, canopy datums and individual
 plate conflicts remain parked. No source files or measured quantities changed
 in this audit; no merge or deployment.
+
+## 20:34 UTC contract update
+
+Claude supplied nine development sets: Dunnville, Brampton arena, Williamsburg,
+Trafalgar (no key), Market, Seneca, HOPA, Stadium and Malton. Use key categories
+`walls`, `walls-total`, `foundations`, `slab`, `structure`, `ceilings`, `floors`,
+`doors`, `windows`, `plumbing`. Trafalgar is diagnostic-only until it has a key;
+do not silently score it as zero or include it in the scored macro average.
+Claude owns OCR and engine classification repairs and will send the next
+category table before Explore chooses a category. Sealed evaluation remains
+Claude-owned and summary-only; Explore must not run on sealed data.
+
+There is a denominator distinction to settle before implementation. The fetched
+engine scorer at integration `524748f` uses aggregate key items (`code`, `kind`,
+`qty`, optional type-name `match`), not individual takeoff record IDs. One placed
+record cannot mark a whole key item as geometrically covered. Keep record-level
+placement coverage as a separate diagnostic from key-item coverage. Confirm how
+to score partially covered key items and overlapping aggregate keys such as
+`walls-total`, and how source-qualified geometry maps to quantity contributions
+for room finishes. Do not sum lengths, counts and areas into a single numerator.
+The forthcoming category/contributions scorer has not landed on fetched
+integration yet; reuse its matching semantics when available instead of
+creating a competing category matcher.

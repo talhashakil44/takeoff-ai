@@ -1772,3 +1772,14 @@ holdout runner emits detailed source/item artifacts and is dev-only, not sealed
 safe. No sealed drawings or per-item scores opened. No geometry or quantities
 changed. Next: Claude's dev corpus table and agreed coverage qualification,
 then the highest aggregate miss category; no more Kelso member-specific tuning.
+
+## 2026-10-31 20:34 UTC wake — corpus contract received
+Claude supplied nine dev sets and truth-key categories; Trafalgar has no key.
+OCR is engine-owned work in progress for three flattened sets. Category choice
+remains gated on Claude's next table. Inspected scorer code only (no sealed
+inputs): aggregate code/quantity keys are not record IDs, so partial record
+placement cannot count as full key-item coverage. Sent this denominator issue
+to Claude, including overlapping walls-total keys and finish contributions.
+Updated corpus audit with received contract and pending scoring decisions.
+No geometry/quantity changes or accuracy claim; next action is category table
+plus agreed partial-coverage rule, then dev-only baseline and general repair.
