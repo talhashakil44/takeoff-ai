@@ -245,3 +245,11 @@ it('replaces obsolete locator warnings only while current physical evidence qual
   expect(withdrawn.elements[0].issues).toContain(warning);
   expect(withdrawn.elements[0].shape).toEqual(e.shape);
 });
+it('withdraws cached plan envelopes before a new source pass, even if no resolver runs',()=>{
+ const cached={...model,elements:[{...e,shape:null,planFootprint:{ring:[[0,0],[1,0],[1,1],[0,1]] as [number,number][],domain:'canopy'}}]};
+ const result=endPhysicalGeometry(beginPhysicalGeometry(project,cached));
+ expect(result.elements[0].planFootprint).toBeUndefined();
+ expect(result.elements[0].shape).toBeNull();
+ expect(result.elements[0].quantity).toBe(e.quantity);
+ expect(cached.elements[0].planFootprint).toBeDefined();
+});

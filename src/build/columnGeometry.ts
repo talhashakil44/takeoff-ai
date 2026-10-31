@@ -248,6 +248,7 @@ export function connectSourceColumns(
     if (!rect) continue;
     located.set(e.id, {
       at: worldPoint(rect.at, r.frame),
+      ring: [[rect.box[0],rect.box[1]],[rect.box[2],rect.box[1]],[rect.box[2],rect.box[3]],[rect.box[0],rect.box[3]]].map(p=>worldPoint(p as Pt,r.frame)),
       code: code!,
       schedule: code && hssPlans[code] === sec ? sec.source : undefined,
       domain: r.title === 'CANOPY FRAMING PLAN' ? 'canopy' : r.title === 'FLOOR FRAMING' ? 'floor' : 'roof',

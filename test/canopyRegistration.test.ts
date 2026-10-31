@@ -238,6 +238,7 @@ describe('canopy viewport registration', () => {
       expect(c1.quantity).toBe(data.model.elements.find((e:any)=>e.id===c1.id).quantity);
       const c2s=columns.elements.filter(e=>/^C2\b/.test(e.typeName) && result[e.measurementId]);
       expect(c2s).toHaveLength(4);
+      for(const e of c2s){const ring=e.planFootprint!.ring;expect(ring).toHaveLength(4);expect(Math.hypot(ring[1][0]-ring[0][0],ring[1][1]-ring[0][1])).toBeCloseTo(.127,2);expect(e.planFootprint!.domain).toBe('canopy');}
       const proof=(e:typeof c1)=>e.sources.find(s=>s.quote?.startsWith('Registered column footprint:'));
       for(const e of c2s){expect(proof(e)).toBeTruthy();expect(e.shape).toBeNull();expect(e.quantity).toBe(data.model.elements.find((old:any)=>old.id===e.id).quantity);}
       const source=proof(c2s[0])!,box=source.box!;
@@ -247,6 +248,7 @@ describe('canopy viewport registration', () => {
       expect(corner).toBeGreaterThanOrEqual(0);
       const broken=connectSourceColumns(data.project,columns,data.drawingTexts,{...data.drawingLines,[source.id]:raw.filter((_:any,i:number)=>i!==corner)});
       expect(proof(broken.elements.find(e=>e.id===c2s[0].id)!)).toBeUndefined();
+      expect(broken.elements.find(e=>e.id===c2s[0].id)!.planFootprint).toBeUndefined();
       for(const e of c2s.slice(1))expect(proof(broken.elements.find(x=>x.id===e.id)!)).toBeTruthy();
       // Withdraw the corroborating grid from the actual source; a printed scale
       // and single intersection alone must not retain this registration.

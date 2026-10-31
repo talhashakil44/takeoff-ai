@@ -247,6 +247,18 @@ export function ExploreScene(props: Props) {
       footprints.add(line);
       planItems.push({ e, line, min });
     }
+    // Registered column envelopes have no vertical datum. Display on paper only,
+    // never as meshes or inputs to physical scene bounds/quantities.
+    for (const e of renderElements) {
+      if (!e.planFootprint || (e.shape && e.shape.type !== 'locator') || e.status === 'demolished') continue;
+      const ring=e.planFootprint.ring;
+      if(ring.length<3 || ring.some(p=>!p.every(Number.isFinite)))continue;
+      const points=ring.flatMap((p,i)=>[p,ring[(i+1)%ring.length]]).map(([x,y])=>new THREE.Vector3(x,base+.026,y));
+      const line=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:'#b47620',depthTest:false,transparent:true,opacity:.95}));
+      line.renderOrder=51;
+      footprints.add(line);
+      planItems.push({e,line,min:base});
+    }
     scene.add(footprints);
     const corners: [
       [number, number],
@@ -405,7 +417,10 @@ export function ExploreScene(props: Props) {
       !(e.shape?.type === "surface" && min > base + 1 && p.mode === "lift");
     const board = (sheetMode: boolean) => {
       const p = live.current;
-      const focus = p.focus;
+      const selectedElement=p.model.elements.find(e=>e.id===p.selected);
+      // A plan-only member has no elevation to target in3D. Fit the verified
+      // scene instead of aiming a close camera at an invented ground position.
+      const focus = !sheetMode && selectedElement?.planFootprint && (!selectedElement.shape || selectedElement.shape.type==='locator') ? null : p.focus;
       if (!sheetMode && !focus) {
         const visibleBox = new THREE.Box3();
         const visibleItems = items.filter((item) =>
@@ -611,7 +626,7 @@ export function ExploreScene(props: Props) {
       }
       for (const { e, line } of planItems) {
         (line.material as THREE.LineBasicMaterial).color.set(
-          e.id === live.current.selected ? "#df4b12" : e.origin === "drawing" ? "#a66b22" : e.shape?.type === "axis" ? "#b47620" : "#007a75",
+          e.id === live.current.selected ? "#df4b12" : e.origin === "drawing" ? "#a66b22" : (!e.shape || e.shape.type === "locator" || e.shape.type === "axis") ? "#b47620" : "#007a75",
         );
       }
       for (const { e, mesh, edge } of items) {

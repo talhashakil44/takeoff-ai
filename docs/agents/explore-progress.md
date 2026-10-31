@@ -1073,3 +1073,35 @@ Production comparison and full clean harness follow this checkpoint. T11 remains
 incomplete. Next: exact canopy C2 section-cut identity and base/top endpoints;
 main-roofC1 vertical endpoints, outerMF3 datum and steppedSF2 remain unresolved.
 Do not infer elevations from the entry-canopy datum. No main merge or deploy.
+
+## 2026-10-31 07:39 UTC — registered plan envelopes visible in Explore
+
+Claude approved4f915ae. Fetched bus/integration and reread current workstream
+prompt. Reviewed original revised S2.1/Add5p25, S5.0/p33 and S6.0/p34. Entry-roof
+4/S5.0 shows wood walls and packed beams, not directly identified C2 base/top
+endpoints. No inferred column heights. This is one source-cut audit, not a new
+verified elevation or repeated blocker.
+
+Closed a user-facing integration gap: registered column positions previously
+survived only as evidence prose. Model41 retains world-space plan envelopes from
+actual source outline bounds transformed by the verified viewport frame. These
+are separate from physical shape and have no vertical datum. Explore draws the
+unresolved subset amber on paper only; selection highlights orange. It honours
+source-layer/footprint visibility, excludes demolished elements and does not feed
+mesh bounds,3D solids, quantities or IFC geometry. List/facts state plan verified,
+height/elevation unresolved. Locate verified footprint targets the plan envelope.
+Switching to3D fits the actual scene rather than aiming at an invented column
+height. Cached envelopes are cleared at the start of every physical source pass,
+including when revision gating skips the column resolver; source ablation also
+withdraws the envelope.
+
+Production project, accepted element quantities/units and all physical shapes
+compare exactly equal to prior checkpoint. Evidence: column-plan-display-v41.json.
+Live original-PDF source crop, aligned C2 floor overlay, zoom in/out/Locate,
+footprint visibility off/on and3D transition inspected. Proofs under
+ diag/explore/proofs/canopy-c2-*-v41.png. No new C2 solid. Full clean harness follows.
+
+Next: exact C2 column section-cut/base-top identity, main-roofC1 endpoints, outer
+MF3datum and SF2steps remain open. Plan envelopes are placement evidence only;
+do not upgrade them to solid geometry or reconcile counts automatically. T11
+active/incomplete; no main merge/deploy.

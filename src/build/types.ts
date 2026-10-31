@@ -1,3 +1,4 @@
+import type { Pt } from '../model';
 /**
  * Build It: the project as a proposed building and a plan to build it, from the takeoff and the
  * specification already in the project. One shared structure links every element, activity
@@ -73,6 +74,8 @@ export interface BuildElement {
   level: string | null;
   /** Null when it can't be placed (an enlarged plan, an unscaled sheet): listed, not drawn. */
   shape: ElementShape | null;
+  /** Registered plan envelope only; no base/top elevation or physical solid. */
+  planFootprint?: { ring: Pt[]; domain: string };
   /** Quantity in project units, with its unit (LF, SF, ea, m, m²). */
   quantity: number;
   unit: string;

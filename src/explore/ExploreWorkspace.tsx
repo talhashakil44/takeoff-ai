@@ -227,7 +227,7 @@ export function ExploreWorkspace({
         // Source-built structural solids and accepted member reviews are already
         // in the canonical world frame. A selected-floor overlay is not a new
         // geometry registration and must never move/re-extrude those members.
-        if (e.origin === "building" || e.trade === "structure" || e.measurementSource === "foundations" || e.sheetId === sid || (roofRegistrations[e.measurementId] && e.shape)) return [e];
+        if (e.planFootprint || e.origin === "building" || e.trade === "structure" || e.measurementSource === "foundations" || e.sheetId === sid || (roofRegistrations[e.measurementId] && e.shape)) return [e];
         const l = available.find((l) => l.sheet.id === e.sheetId);
         if (!l?.frame) return [];
         const review = structuralReviews[e.id];
@@ -728,7 +728,7 @@ export function ExploreWorkspace({
                     <span>{e.name}</span>
                     <small>
                       {e.origin === "drawing" ? "No accepted takeoff" : quantityPending(e) ? "Quantity uncalibrated" : `${num(e.quantity)} ${e.unit}`}
-                      {!e.shape ? (rooms.some(r=>r.id===e.id) ? " · measured space" : " · unplaced") : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : ""}
+                      {!e.shape ? (rooms.some(r=>r.id===e.id) ? " · measured space" : e.planFootprint ? " · plan verified · height unresolved" : " · unplaced") : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : ""}
                     </small>
                   </button>
                 ))
@@ -1126,7 +1126,7 @@ export function ExploreWorkspace({
               <dl className="ex-facts">
                 <div>
                   <dt>Geometry</dt>
-                  <dd>{element.shape?.type === "axis" ? (element.origin === "drawing" ? "Plan outline only · elevation unverified" : "Plan axis · section and height unverified") : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : rooms.some(r=>r.id===element.id) ? "Measured space · no construction solid" : "Unplaced"}</dd>
+                  <dd>{element.planFootprint && (!element.shape || element.shape.type === "locator") ? "Plan footprint verified · elevation unresolved" : element.shape?.type === "axis" ? (element.origin === "drawing" ? "Plan outline only · elevation unverified" : "Plan axis · section and height unverified") : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : rooms.some(r=>r.id===element.id) ? "Measured space · no construction solid" : "Unplaced"}</dd>
                 </div>
                 <div>
                   <dt>Source</dt>
@@ -1172,6 +1172,14 @@ export function ExploreWorkspace({
                   aria-label="Structural geometry evidence"
                 >
                   <h3>{element.origin === "drawing" && selectedShape?.type === "axis" ? "DRAWING COVERAGE" : "STRUCTURAL GEOMETRY"}</h3>
+                  {element.planFootprint && (!selectedShape || selectedShape.type === 'locator') && <>
+                    <p>Plan envelope verified against source drawings. Base and top elevations are unresolved.</p>
+                    <button onClick={()=>{
+                      const ring=element.planFootprint!.ring;
+                      setFocus([ring.reduce((v,p)=>v+p[0],0)/ring.length,ring.reduce((v,p)=>v+p[1],0)/ring.length]);
+                      setMode('sheet');setShowFootprints(true);setStructureOnly(true);
+                    }}>Locate verified footprint</button>
+                  </>}
                   {(selectedShape?.type === "run" || selectedShape?.type === "point") && (
                     (["sheet", "lift"] as const).map(view => <button
                       key={view}
@@ -1241,7 +1249,7 @@ export function ExploreWorkspace({
                       : element.shape?.type === "locator" ? "Inferred grid location only — physical dimensions still need evidence"
                       : element.shape
                       ? "Connected to measured takeoff"
-                      : "Placement needs review"}
+                      : element.planFootprint ? "Vertical placement needs review" : "Placement needs review"}
                   </p>
                   {recoveredStructure[element.id]?.section && (
                     <p>
