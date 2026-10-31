@@ -1723,3 +1723,8 @@ architectural finishes.4000-225=3775 would still assume finish-depth/localflush
 support applicability; no exact B4 elevation claimed. Sent Claude this source
 qualification. Next: B4localfloorsection/finish evidence, then remaining
 foundationheight gaps. Fullharness/live review follows; T11incomplete.
+Validated773a6d4:658tests(4skipped),TypeScript,build,Kelso/Frederick audit PASS.
+Live original canopyPDF,2D and3D inspected; B7solids retained, browsererrorsempty.
+Live review caught stale generic "quantity unknown" on valid per-view quantities;
+changed that note to distinguish per-view scaling from absent sheet-wide scale.
+Final checks follow this wording repair; no dimension/quantity logic changed.

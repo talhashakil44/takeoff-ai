@@ -396,7 +396,7 @@ export function extractModel(input: ExtractInput): BuildModel {
       elIssues.push(`Site work is scheduled without a building level. Its plan route is not coordinated to the building model${m.statedLength !== undefined ? '; the length comes from the drawing label' : ''}.`);
       if (!vars) elIssues.push(`${s.name} has no scale or stated length: its quantity is unknown.`);
     } else if (!s.metersPerPoint) {
-      elIssues.push(`${s.name} has no scale: its quantity and place are unknown.`);
+      elIssues.push(vars ? `${s.name} uses per-view scale: placement requires independent drawing registration.` : `${s.name} has no scale: its quantity and place are unknown.`);
       unplaced.set(s.id, 'no scale');
     } else if (viewport && !viewportRegistration.has(m.id)) {
       elIssues.push(`${s.name}: level ${viewport.id} inferred from “${viewport.title}” and the gap between side-by-side plans; this viewport has no verified building XY registration, so its quantity is scheduled on ${viewport.id} but not drawn in 3D.`);
