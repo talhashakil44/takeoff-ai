@@ -227,7 +227,7 @@ export function ExploreWorkspace({
         // Source-built structural solids and accepted member reviews are already
         // in the canonical world frame. A selected-floor overlay is not a new
         // geometry registration and must never move/re-extrude those members.
-        if (e.planFootprint || e.origin === "building" || e.trade === "structure" || e.measurementSource === "foundations" || e.sheetId === sid || (roofRegistrations[e.measurementId] && e.shape)) return [e];
+        if (e.planFootprint || e.planTrace || e.origin === "building" || e.trade === "structure" || e.measurementSource === "foundations" || e.sheetId === sid || (roofRegistrations[e.measurementId] && e.shape)) return [e];
         const l = available.find((l) => l.sheet.id === e.sheetId);
         if (!l?.frame) return [];
         const review = structuralReviews[e.id];
@@ -728,7 +728,7 @@ export function ExploreWorkspace({
                     <span>{e.name}</span>
                     <small>
                       {e.origin === "drawing" ? "No accepted takeoff" : quantityPending(e) ? "Quantity uncalibrated" : `${num(e.quantity)} ${e.unit}`}
-                      {!e.shape ? (rooms.some(r=>r.id===e.id) ? " · measured space" : e.planFootprint ? " · plan verified · height unresolved" : " · unplaced") : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : ""}
+                      {!e.shape ? (rooms.some(r=>r.id===e.id) ? " · measured space" : e.planTrace ? " · source trace candidate" : e.planFootprint ? (e.planFootprint.domain.startsWith("foundation:") ? " · plan candidate · height unresolved" : " · plan verified · height unresolved") : " · unplaced") : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : ""}
                     </small>
                   </button>
                 ))
@@ -1126,7 +1126,7 @@ export function ExploreWorkspace({
               <dl className="ex-facts">
                 <div>
                   <dt>Geometry</dt>
-                  <dd>{element.planFootprint && (!element.shape || element.shape.type === "locator") ? (element.planFootprint.domain.startsWith("foundation:") ? "Plan footprint candidate · elevation unresolved" : "Plan footprint verified · elevation unresolved") : element.shape?.type === "axis" ? (element.origin === "drawing" ? "Plan outline only · elevation unverified" : "Plan axis · section and height unverified") : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : rooms.some(r=>r.id===element.id) ? "Measured space · no construction solid" : "Unplaced"}</dd>
+                  <dd>{element.planTrace && !element.shape ? "Source trace candidate · width and elevation unresolved" : element.planFootprint && (!element.shape || element.shape.type === "locator") ? (element.planFootprint.domain.startsWith("foundation:") ? "Plan footprint candidate · elevation unresolved" : "Plan footprint verified · elevation unresolved") : element.shape?.type === "axis" ? (element.origin === "drawing" ? "Plan outline only · elevation unverified" : "Plan axis · section and height unverified") : element.shape?.type === "locator" ? "Grid locator · not a physical member" : element.shape ? element.placement : rooms.some(r=>r.id===element.id) ? "Measured space · no construction solid" : "Unplaced"}</dd>
                 </div>
                 <div>
                   <dt>Source</dt>
@@ -1172,13 +1172,13 @@ export function ExploreWorkspace({
                   aria-label="Structural geometry evidence"
                 >
                   <h3>{element.origin === "drawing" && selectedShape?.type === "axis" ? "DRAWING COVERAGE" : "STRUCTURAL GEOMETRY"}</h3>
-                  {element.planFootprint && (!selectedShape || selectedShape.type === 'locator') && <>
-                    <p>Plan envelope verified against source drawings. Base and top elevations are unresolved. Click an outline to inspect it; repeated clicks cycle overlapping records.</p>
+                  {(element.planFootprint || element.planTrace) && (!selectedShape || selectedShape.type === 'locator') && <>
+                    <p>{element.planTrace ? "Candidate centreline follows tagged drawing ink. Width and elevation remain unresolved; this is a 2D trace, not a physical beam." : element.planFootprint?.domain.startsWith("foundation:") ? "Plan footprint candidate follows drawing edges. Tag association and elevations still need review." : "Plan envelope verified against source drawings. Base and top elevations are unresolved. Click an outline to inspect it; repeated clicks cycle overlapping records."}</p>
                     <button onClick={()=>{
-                      const ring=element.planFootprint!.ring;
+                      const ring=element.planFootprint?.ring??element.planTrace!.points;
                       setFocus([ring.reduce((v,p)=>v+p[0],0)/ring.length,ring.reduce((v,p)=>v+p[1],0)/ring.length]);
                       setMode('sheet');setShowFootprints(true);setStructureOnly(true);
-                    }}>{element.planFootprint.domain.startsWith("foundation:") ? "Locate candidate footprint" : "Locate verified footprint"}</button>
+                    }}>{element.planTrace ? "Locate source trace" : element.planFootprint!.domain.startsWith("foundation:") ? "Locate candidate footprint" : "Locate verified footprint"}</button>
                   </>}
                   {(selectedShape?.type === "run" || selectedShape?.type === "point") && (
                     (["sheet", "lift"] as const).map(view => <button

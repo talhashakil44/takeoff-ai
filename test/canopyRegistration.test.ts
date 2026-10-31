@@ -251,6 +251,23 @@ describe('canopy viewport registration', () => {
     sheet.title='FOUNDATION PLAN';
     expect(canopyRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
   });
+  it('retains source ink as a plan-only beam trace and withdraws it with ambiguous or missing evidence',()=>{
+    const d=fixture();
+    d.model.elements=d.model.elements.map(e=>({...e,sources:[],issues:[]}));
+    d.model.elements.push({id:'beam',measurementId:'canopy',sheetId:'s',typeName:'B9 – Beam',shape:null,quantity:7,unit:'m',sources:[],issues:[]} as any);
+    d.texts.s.push({...tag('B9',175,160),h:8,w:20});
+    d.lines.s.push({...line(100,168,250,168),width:1.2});
+    const before=JSON.stringify(d.project);
+    const result=retainInsetEvidence(d.project,d.model,d.texts,d.lines);
+    const beam=result.elements.find(e=>e.id==='beam')!;
+    expect(beam.planTrace?.points).toHaveLength(2);expect(beam.shape).toBeNull();expect(beam.quantity).toBe(7);
+    expect(beam.sources.some(s=>s.quote?.includes('Endpoints follow source ink'))).toBe(true);
+    expect(JSON.stringify(d.project)).toBe(before);
+    d.texts.s.push({...tag('B9',176,160),h:8,w:20});
+    expect(retainInsetEvidence(d.project,result,d.texts,d.lines).elements.find(e=>e.id==='beam')!.planTrace).toBeUndefined();
+    d.texts.s.pop();d.lines.s.pop();
+    expect(retainInsetEvidence(d.project,result,d.texts,d.lines).elements.find(e=>e.id==='beam')!.planTrace).toBeUndefined();
+  });
   it('recentres paired beam silhouettes and rejects missing or ambiguous ink', () => {
     const ink = [line(100, 100, 100, 300), line(110, 100, 110, 300)].map(
       (l) => ({ ...l, width: 1.2 }),

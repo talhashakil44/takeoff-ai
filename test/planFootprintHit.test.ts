@@ -20,3 +20,13 @@ it('ignores physical solids, demolished records and withdrawn envelopes',()=>{
  expect(planFootprintHit([{...a,status:'demolished'}],[1,1],null)).toBeNull();
  expect(planFootprintHit([{...a,planFootprint:undefined}],[1,1],null)).toBeNull();
 });
+
+it('picks source traces by segment distance, rejecting off-line, nonfinite and physical geometry',()=>{
+ const trace={id:'t',shape:null,planTrace:{points:[[1,1],[3,3]],domain:'inset:s'}} as BuildElement;
+ expect(planFootprintHit([trace],[2,2],null)).toBe('t');
+ expect(planFootprintHit([trace],[2,2.05],null)).toBe('t');
+ expect(planFootprintHit([trace],[2,2.2],null)).toBeNull();
+ expect(planFootprintHit([trace],[.5,.5],null)).toBeNull();
+ expect(planFootprintHit([{...trace,shape:{type:'axis',points:[[1,1],[3,3]],z:0}}],[2,2],null)).toBeNull();
+ expect(planFootprintHit([{...trace,planTrace:{points:[[NaN,1],[3,3]],domain:'inset:s'}}],[2,2],null)).toBeNull();
+});

@@ -1732,3 +1732,26 @@ Final faed9c4 validation:658tests(4skipped),TypeScript,build,audit PASS.
 Production fixture rerun PASS; livePDF/2D/3D rerun has no browser errors, corrected
 per-view-scale note read back visually. Generic-roof-* proofs retain the four
 B7solids; no height/section/length or accepted-quantity changes. T11notcomplete.
+
+## 2026-10-31 19:43 UTC — source beam traces in the registered drawing (model59)
+Claude approved58. Continued independent XY integration while exact B4 vertical
+applicability remains unresolved after datum/F1assembly/roof-section checks.
+Added planTrace: source-derived 2D line, no invented section width or elevation.
+Generic taggedBeamTrace follows strong black straight ink beside a unique beam
+tag; tag-relative glyph-size reach supports either side, ambiguous/short/white
+ink rejected. Existing roof helper assumed one tag side, so it was not widened
+or reused with project-specific thresholds. Registered source endpoints are
+transformed independently of accepted quantity traces; missing/ambiguous source
+withdraws prior witnesses. Four B4 source traces recovered around elevator.
+Explore draws them only on paper; Locate source trace focuses the registered
+position, segment-distance picking selects traces before underlying rooms.
+Rows and inspector say candidate, width/elevation unresolved. Also corrected
+foundation candidate rows/help text that still claimed verified envelopes.
+Synthetic tag sides/orientations, ambiguity/invalid ink, stale withdrawal,
+quantity preservation and segment-hit boundaries pass. Production frozeninput
+identical;0physicalshape/quantity/unitdeltas,140acceptedstructuralsolids remain.
+Original revisedp24 source and livearchitecturaloverlay inspected: four traces
+surround elevator, candidate selectedorange.3D hides traces; no fabricatedB4
+solid. Proofs inset-trace-*; live browsererrors empty. Click/fullharness follow.
+Next: local B4vertical sourcechain or other structuralelement geometry gaps;
+no automatic adoption of revision conflicts. T11incomplete; no merge/deploy.

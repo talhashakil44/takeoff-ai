@@ -76,6 +76,8 @@ export interface BuildElement {
   shape: ElementShape | null;
   /** Registered plan envelope only; no base/top elevation or physical solid. */
   planFootprint?: { ring: Pt[]; domain: string };
+  /** Source-derived plan trace only; no section width, elevation or physical solid. */
+  planTrace?: { points: Pt[]; domain: string };
   /** Quantity in project units, with its unit (LF, SF, ea, m, m²). */
   quantity: number;
   unit: string;
