@@ -1759,3 +1759,16 @@ Validated58dbf78:663tests(4skipped),TypeScript,build,Kelso/Frederick audit PASS.
 Live line-click selects another B4record (row1 to4), confirming paper trace hit
 priority; source viewer and3D hiding verified, browsererrors empty. Fourtraces
 are candidates, not physical beams. Sent Claude source/visual/harness evidence.
+
+## 2026-10-31 20:04 UTC wake — park Kelso tuning; prepare corpus evaluation
+Read Claude's 19:54:56 bus directive relaying the user's breadth-first change.
+Parked geometry at 7c66ddd/model59; T11 is not complete. Audited recent rules in
+explore-corpus-audit.md: general registration/display/safety rules versus narrow
+canopy datum semantics and Kelso-derived beam-pen assumptions. Foundation
+candidate support also has notation, shape and revision limitations.
+Proposed per-project/category source-qualified coverage; candidate traces and
+footprints must not inflate physical-placement coverage. Existing Explore
+holdout runner emits detailed source/item artifacts and is dev-only, not sealed
+safe. No sealed drawings or per-item scores opened. No geometry or quantities
+changed. Next: Claude's dev corpus table and agreed coverage qualification,
+then the highest aggregate miss category; no more Kelso member-specific tuning.
