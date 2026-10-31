@@ -1495,3 +1495,20 @@ snapshot /tmp/dunnville-v50-final, original source and live2D/3D proofs
 (dunnville-{plan,source,3d}-v50) inspected, pageerrors empty. No new solids or
 acceptedquantity changes; datum extraction is verified, physical integration
 remains pending schedule repair and individual footprint/section evidence.
+
+## 2026-10-31 15:07 UTC — schedule parser integrated (model51)
+Claude approved50 and identified existing integration commits0a9f6d0/9de421f;
+prior wait was stale branch context, not a new engine blocker. Full0a9f6d0
+cherry-pick conflicted in wall-leader dependencies; aborted it cleanly. Ported
+only foundationMarks/schedule parsing and synthetic test as c26a94d; separately
+cherry-picked9de421f as178a9f7. No wall-leader automation changes in this checkpoint.
+Verified original S1-1 schedules now parse F-1/2/3/7 width,length,depth correctly,
+P-1/2 width,length and S/F-5/6 width,depth. Original project untouched.
+Kept schedule and datum references on pads withheld for missing local section/
+footprint applicability; UI can review the actual evidence without a new solid.
+Same-input Kelso zero shape/quantity deltas. Full-source Dunnville still118records,
+9solids,109unresolved; this removes missing dimensions but does not prove pad
+location. Next: associate actual closed pad/pier outlines and explicit local
+section cuts; retain off-grid exceptions (6 belowB and Dy), never promote a
+nearest-grid candidate to a physical centre. Model51 cache invalidation included.
+T11 incomplete; full harness and live source/2D/3D validation follow.

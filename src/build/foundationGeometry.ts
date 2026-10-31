@@ -575,9 +575,11 @@ function recoverBaseFoundationGeometry(
             ...e,
             shape: { type: 'locator' as const, at, z: top.z },
             placement: 'inferred' as const,
+            sources: [...new Map([...e.sources, section.source, ...top.sources].map(s => [JSON.stringify(s), s])).values()],
             issues: [
               ...new Set([
                 ...e.issues,
+                `Scheduled pad section: ${section.width} x ${section.length} x ${section.depth} m from ${section.source.label}. The drawing's footing datum is ${top.z.toFixed(3)} m, but its applicability to this pad and the actual footprint remain unverified.`,
                 'Pad elevation unresolved: no unambiguous local interior-pad or exterior-low-pier detail association. Physical solid withheld.',
               ]),
             ],

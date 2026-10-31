@@ -1424,3 +1424,10 @@ it('does not fall back to a number below an ambiguous above-label footing datum'
  text('-1400',200,284),text('-1600',210,284),text('-1200',200,308)];
  expect(footingTopDatum(project,{section:ts})).toBeNull();
 });
+it('keeps scheduled pad dimensions and datum reviewable without promoting an unverified footprint',()=>{
+ const out=recoverFoundationGeometry(project,model,texts).elements.find(e=>e.id==='pad')!;
+ expect(out.shape?.type).toBe('locator');
+ expect(out.quantity).toBe(pad.quantity);
+ expect(out.sources.map(s=>s.id)).toEqual(expect.arrayContaining(['schedule','section']));
+ expect(out.issues.some(s=>s.includes('actual footprint remain unverified'))).toBe(true);
+});
