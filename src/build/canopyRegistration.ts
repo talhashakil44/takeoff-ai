@@ -5,13 +5,15 @@ import { gridAxes, type DrawingText, type DrawingTexts } from './building';
 import type { DrawingLines } from './roof';
 import { sheetFrame, worldPoint, type SheetFrame } from './sheetCoordinates';
 
-export interface CanopyRegistration {
+export interface CanopyPlanRegistration {
   frame: SheetFrame;
   metersPerPoint: number;
   title: string;
   bounds: [number, number, number, number];
   grids: string[];
   sources: SourceRef[];
+}
+export interface CanopyRegistration extends CanopyPlanRegistration {
   /** Drawing's T/O ENTRY CANOPY datum. Not automatically the top of every beam. */
   topDatum: number;
 }
@@ -142,15 +144,13 @@ function canopyDatum(
  * number intersection fixes translation; a second parallel grid independently
  * corroborates printed scale and rotation using actual strokes on both plans.
  * Does not alter sheet scale, measured quantities, or generate member solids. */
-export function canopyRegistrations(
-  project: Project,
-  model: BuildModel,
-  texts: DrawingTexts,
-  lines: DrawingLines,
-): Record<string, CanopyRegistration> {
-  const output: Record<string, CanopyRegistration> = {},
-    datum = canopyDatum(project, texts);
-  if (!datum) return output;
+/** Plan registration is independent of any framing elevation. Foundation insets
+ * require detected view bounds/scale; roof callers retain their existing policy. */
+export function canopyPlanRegistrations(
+  project: Project, model: BuildModel, texts: DrawingTexts, lines: DrawingLines,
+  kind: 'framing' | 'foundation' = 'framing',
+): Record<string, CanopyPlanRegistration> {
+  const output: Record<string, CanopyPlanRegistration> = {};
   const references = project.sheets
     .filter(
       (s) =>
@@ -173,8 +173,11 @@ export function canopyRegistrations(
     const ts = texts[sheet.id] ?? [],
       ls = lines[sheet.id] ?? [];
     for (const title of ts.filter((t) =>
-      /^CANOPY FRAMING PLAN$/i.test(t.str.trim()),
+      (kind === 'foundation' ? /^CANOPY FOUNDATION PLAN$/i : /^CANOPY FRAMING PLAN$/i).test(t.str.trim()),
     )) {
+      const views = (sheet.views ?? []).filter(v => v.title.trim().toUpperCase() === title.str.trim().toUpperCase());
+      if (kind === 'foundation' && views.length !== 1) continue;
+      const view = kind === 'foundation' ? views[0] : undefined;
       const scales = ts.flatMap((t) => {
         const m = /^1\s*:\s*(\d+)$/.exec(t.str.trim());
         return m &&
@@ -185,9 +188,11 @@ export function canopyRegistrations(
           : [];
       });
       if (scales.length !== 1) continue;
+      if (view && Math.abs(view.metersPerPoint / scales[0] - 1) > .001) continue;
       const scale = scales[0],
         local = ts.filter(
           (t) =>
+            view ? (t.cx >= view.box[0] && t.cx <= view.box[2] && t.cy >= view.box[1] && t.cy <= view.box[3]) :
             t.cx > title.cx - 220 &&
             t.cx < title.cx + 220 &&
             t.cy > title.cy - 450 &&
@@ -195,7 +200,7 @@ export function canopyRegistrations(
         );
       // A suffixed grid corroborates its parent without assuming bubble spacing.
       const parents = local.filter((t) => /^[A-Z]$/.test(t.str.trim()));
-      const candidates: CanopyRegistration[] = [];
+      const candidates: CanopyPlanRegistration[] = [];
       for (const parent of parents) {
         const suffix = local.find(
           (t) =>
@@ -262,7 +267,7 @@ export function canopyRegistrations(
             ty: anchor[1] - b * x - a * y,
             residual: Math.max(ref.frame.residual, residual),
           };
-          const bounds: [number, number, number, number] = [
+          const bounds: [number, number, number, number] = view ? view.box : [
             parent.cx - 20,
             number.cy + 15,
             number.cx + 100,
@@ -274,7 +279,6 @@ export function canopyRegistrations(
             title: title.str,
             bounds,
             grids: [parent.str, suffix.str, number.str],
-            topDatum: datum.value,
             sources: [
               {
                 kind: 'sheet',
@@ -297,7 +301,6 @@ export function canopyRegistrations(
                 ],
                 quote: `Independent ${parent.str}–${suffix.str} spacing ${((rxf - rx) * ref.sheet.metersPerPoint!).toFixed(3)} m; dogleg traced to axis`,
               },
-              ...datum.sources,
             ],
           });
         }
@@ -336,4 +339,10 @@ export function canopyRegistrations(
     }
   }
   return output;
+}
+
+export function canopyRegistrations(project: Project, model: BuildModel, texts: DrawingTexts, lines: DrawingLines): Record<string, CanopyRegistration> {
+  const datum = canopyDatum(project, texts);
+  if (!datum) return {};
+  return Object.fromEntries(Object.entries(canopyPlanRegistrations(project, model, texts, lines)).map(([id, plan]) => [id, {...plan, topDatum: datum.value, sources: [...plan.sources, ...datum.sources]}]));
 }

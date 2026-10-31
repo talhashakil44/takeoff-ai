@@ -31,7 +31,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 54;
+export const MODEL_VERSION = 55;
 
 export interface Trade {
   key: string;
@@ -410,8 +410,8 @@ export function extractModel(input: ExtractInput): BuildModel {
     } else if (!level) {
       elIssues.push(`The level of ${s.name} (${s.title ?? ''}) isn't known: set it in Build setup.`);
       unplaced.set(s.id, 'level unknown');
-    } else if (effectiveScale !== null && Math.abs(effectiveScale / s.metersPerPoint - 1) > 0.01) {
-      elIssues.push('Measurement uses a separately scaled inset. Main-sheet geometry withheld until that inset has its own source-backed registration; quantity retains the effective inset scale.');
+    } else if (s.metersPerPoint !== null && effectiveScale !== null && Math.abs(effectiveScale / s.metersPerPoint - 1) > 0.01) {
+      elIssues.push('Measurement uses a separately scaled inset. Main-sheet geometry withheld; the inset requires independent registration and member evidence. Quantity retains the effective inset scale.');
     } else if (!placeable(s) && !viewportRegistration.has(m.id)) {
       elIssues.push(`${s.name} is at another scale than the main plans: not placed with them.`);
       unplaced.set(s.id, 'other scale');

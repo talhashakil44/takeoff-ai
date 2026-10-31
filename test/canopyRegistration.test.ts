@@ -1,3 +1,4 @@
+import {retainCanopyFoundationEvidence} from '../src/build/canopyFoundationEvidence';
 import { connectSourceColumns } from '../src/build/columnGeometry';
 import { describe, expect, it } from 'vitest';
 import { structuralRevisionContext } from '../src/build/structuralRevisions';
@@ -9,6 +10,7 @@ import {
 } from '../src/build/canopyMemberGeometry';
 import {
   canopyRegistrations,
+  canopyPlanRegistrations,
   traceGridStroke,
 } from '../src/build/canopyRegistration';
 import type { Project, Sheet } from '../src/model';
@@ -168,6 +170,39 @@ describe('canopy viewport registration', () => {
     expect(
       canopyRegistrations(other.project, other.model, other.texts, other.lines),
     ).toEqual({});
+  });
+  it('registers a foundation inset without roof datums and requires its detected view', () => {
+    const d=fixture();
+    d.texts.s[0].str='CANOPY FOUNDATION PLAN';
+    delete d.texts.d1; delete d.texts.d2;
+    const sheet=d.project.sheets.find(s=>s.id==='s')!;
+    expect(canopyPlanRegistrations(d.project,d.model,d.texts,d.lines,'foundation')).toEqual({});
+    sheet.views=[{title:'CANOPY FOUNDATION PLAN',box:[0,30,320,430],scaleLabel:'1:50',metersPerPoint:50*.0254/72}];
+    const result=canopyPlanRegistrations(d.project,d.model,d.texts,d.lines,'foundation');
+    expect(Object.keys(result)).toEqual(['canopy']);
+    expect(result.canopy).not.toHaveProperty('topDatum');
+    expect(result.canopy.sources).toHaveLength(2);
+    expect(canopyRegistrations(d.project,d.model,d.texts,d.lines)).toEqual({});
+    sheet.views[0].metersPerPoint*=2;
+    expect(canopyPlanRegistrations(d.project,d.model,d.texts,d.lines,'foundation')).toEqual({});
+  });
+  it('preserves a saved plate while exposing a source designation conflict, and withdraws stale registration', () => {
+    const d=fixture();d.texts.s[0].str='CANOPY FOUNDATION PLAN';
+    const sh=d.project.sheets.find(s=>s.id==='s')!;
+    sh.views=[{title:'CANOPY FOUNDATION PLAN',box:[0,30,320,430],scaleLabel:'1:50',metersPerPoint:50*.0254/72}];
+    d.project.measurements.find(m=>m.id==='canopy')!.points=[[150,160]];
+    d.texts.s.push({...tag('BP5',150,160),w:20,h:8});
+    d.model.elements=d.model.elements.map(e=>({...e,sources:[],issues:[]}));
+    d.model.elements.push({id:'plate',measurementId:'canopy',sheetId:'s',typeName:'BP6 – Base plate',shape:null,quantity:1,unit:'ea',sources:[],issues:[]} as any);
+    const before=JSON.stringify(d.project);
+    const result=retainCanopyFoundationEvidence(d.project,d.model,d.texts,d.lines);
+    const plate=result.elements.find(e=>e.id==='plate')!;
+    expect(plate.issues.some(s=>s.includes('drawing label BP5 conflicts with saved takeoff BP6'))).toBe(true);
+    expect(plate.shape).toBeNull();expect(plate.quantity).toBe(1);expect(plate.typeName).toBe('BP6 – Base plate');
+    expect(JSON.stringify(d.project)).toBe(before);
+    sh.views=[];
+    const withdrawn=retainCanopyFoundationEvidence(d.project,result,d.texts,d.lines).elements.find(e=>e.id==='plate')!;
+    expect(withdrawn.issues).toEqual([]);expect(withdrawn.sources).toEqual([]);
   });
   it('recentres paired beam silhouettes and rejects missing or ambiguous ink', () => {
     const ink = [line(100, 100, 100, 300), line(110, 100, 110, 300)].map(

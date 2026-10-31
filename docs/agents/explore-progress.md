@@ -1617,3 +1617,27 @@ Normalized same-input shape comparison confirms zero remaining shape differences
 after accounting for seven withheld axes and global recentering, including
 cornerFills.at. OriginalPDF and live2D/3D evidence reviewed; no browser errors.
 Claude supplied/owns the shared helper b35a203, now cleanly cherry-picked.
+
+## 2026-10-31 17:40 UTC — foundation inset registration and revised plate conflict (model55)
+Claude approved54 and requested explicit null guard; added it. Existing earlier
+no-sheet-scale branch already intercepts null. Same-input S2.1 shapes unchanged.
+Separated canopyPlanRegistrations from roof-only datum wrapper. Foundation mode
+requires a unique detected sheet.views title/bounds/scale, printed scale match,
+traced3/E/Ef grid strokes and independently traced architectural spacing. Revised
+views are recomputed from replacement-page vectors/text; original data unchanged.
+Seven inset takeoffs now retain source-backed plan registration evidence (residual
+0.364mm); no roof datum, member outline or physical solid inferred from it.
+Critical source conflict: originalJuly S1.0 BP6 tags become BP5 on Add5 p21S1.0
+at all four saved measurement positions. Add5 p19S0.2 schedule lists BP5
+140x19x280; no BP6. Verified original PDF plan and schedule crops directly.
+Four savedBP6 records now link revised plan, schedule and explicit conflict note;
+accepted takeoffs/quantities are not renamed. Asked Claude to review engine
+revision reconciliation. Source-backed registration alone cannot approve these
+plates or their elevation. Synthetic tests cover missing/mismatched views,
+roof-datum independence, preserved takeoff/conflict and stale evidence withdrawal.
+Production comparison against frozen model54 input: identical source project,
+zero physical shape/quantity/unit deltas. Live2D/3D and revised BP5 source detail
+inspected; no browser errors. Proofs foundation-inset-* under diag/explore/proofs.
+Next: source-backed outlines/local foundation levels for FW-5/SF-1 using the new
+inset registration; reconcile changed plate designation with Claude first.
+T11 remains incomplete; full harness follows, no merge/deploy.
