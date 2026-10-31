@@ -1428,3 +1428,11 @@ widen2.5m or tune held-out counts. Request remaining PDFs from Claude.
 Live BP6 review exposed an off-page evidence crop; ignored preview helper now
 uses production renderSourceTile (explicit error). Whole-page source remains
 reviewable; source coordinate/page association remains a follow-up, not resolved.
+Final294ca47 harness PASS:629tests,tsc,build,Kelso/Frederick audit. Live BP6
+2D reason/original whole page/3D screenshots inspected; no BP6 solid or marker,
+pageerrors empty. Focus evidence crop remains outside page (not an acceptance
+pass for source association). Posted concrete S1-1 tag545.78,193.33 forced to
+2/A5.21m away because detected1 excluded from registration; original foundation
+page confirms grid1 and stacked tags present. Claude asked for independent ARCH
+reference review and remaining PDFs. Next repair requires source correspondence
+and synthetic regression; do not relax distance gate. T11 remains incomplete.
