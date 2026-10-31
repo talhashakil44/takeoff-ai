@@ -7,6 +7,7 @@ import { namesFromList, readDrawingList, type ListedSheet } from '../drawingList
 import { classifySheet } from '../sheetKind';
 import { mainDrawingScale, scaleHintsOf, scaleNotes, viewTitle } from '../sheetScale';
 import { readTitleBlock } from '../titleBlock';
+import { guessSheetNumber } from '../sheetInfo';
 import { parseScale } from '../units';
 import { sheetViews } from '../sheetViews';
 import type { Project } from '../model';
@@ -22,8 +23,16 @@ import type { Automation } from './result';
 export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, units: Units | undefined): Promise<{ sheet: Sheet; noText: boolean; list: ListedSheet[] }> {
   const info = await inspectPage(pg);
   const texts = info.textRuns >= 5 ? await pageTexts(pg) : [];
-  // Named from the title block: its sheet number, with the drawing title beside it.
-  const named = texts.length ? readTitleBlock(texts, info.width, info.height) : { number: null, title: null };
+  // Named from the title block: its sheet number, with the drawing title beside it. A number the
+  // PDF's own text gives beats one OCR read (a mechanical sheet's M1.1, not a misread "8").
+  const ocrRead = !!(pg as { ocrRead?: boolean }).ocrRead;
+  const own = ocrRead ? await pageTexts(pg, { own: true }) : [];
+  const ownNamed = own.length >= 5 ? readTitleBlock(own, info.width, info.height) : null;
+  const read = texts.length ? readTitleBlock(texts, info.width, info.height) : { number: null, title: null };
+  const ownGuess = own.length >= 5 ? guessSheetNumber(own.map((t) => ({ str: t.str, x: t.cx - t.w / 2, y: t.cy + t.h / 2, size: t.h / 0.7 })), info.width, info.height) : null;
+  const ownNumber = ownNamed?.number ?? ownGuess;
+  const named = { number: ownNumber ?? read.number, title: read.title ?? ownNamed?.title ?? null };
+  const numberByOcr = ocrRead && !ownNumber;
   const title = named.title ?? (texts.length ? viewTitle(texts) : null);
   // Every scale noted, "=" or not (some exports draw the sign as linework).
   const hints = texts.length ? scaleHintsOf(texts, scaleNotes(texts)) : info.scaleHints;
@@ -53,7 +62,7 @@ export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, 
       page: n,
       name: named.number ?? info.name ?? `Page ${n}`,
       // Read by OCR (no text layer of its own): its number may be misread.
-      ...((pg as { ocrRead?: boolean }).ocrRead ? { ocr: true } : {}),
+      ...(numberByOcr ? { ocr: true } : {}),
       ...(title ? { title } : {}),
       width: info.width,
       height: info.height,

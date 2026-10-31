@@ -52,13 +52,13 @@ export async function segmentsOnce(page: PDFPageProxy): Promise<Segment[]> {
   return segs;
 }
 
-export async function wallModelFor(page: PDFPageProxy, sheet: Sheet, maxOpening: number): Promise<WallModel> {
-  const key = `${sheet.metersPerPoint ?? 'none'}|${maxOpening}`;
+export async function wallModelFor(page: PDFPageProxy, sheet: Sheet, maxOpening: number, keepGrid = false): Promise<WallModel> {
+  const key = `${sheet.metersPerPoint ?? 'none'}|${maxOpening}|${keepGrid}`;
   let byKey = modelCache.get(page);
   if (!byKey) modelCache.set(page, (byKey = new Map()));
   const hit = byKey.get(key);
   if (hit) return hit;
-  const model = buildWallModel(await segmentsOf(page), sheet.metersPerPoint, { maxOpening });
+  const model = buildWallModel(await segmentsOf(page), sheet.metersPerPoint, { maxOpening, keepGrid });
   byKey.set(key, model);
   return model;
 }

@@ -61,6 +61,8 @@ export async function findRooms(page: PDFPageProxy, sheet: Sheet, maxOpening: nu
   for (const k of [2, 3, 4])
     if (rooms.some((r) => !r.points && r.reason === 'not-closed'))
       rooms = closeWide(rooms, await wallModelFor(page, sheet, k * maxOpening), labels, sheet.width, sheet.height);
+  // Rooms that leak with the grid lines left out (walls drawn on the grid): again with them in.
+  if (rooms.some((r) => !r.points && r.reason === 'not-closed')) rooms = closeWide(rooms, await wallModelFor(page, sheet, maxOpening, true), labels, sheet.width, sheet.height);
   return cutIslands(rooms);
 }
 

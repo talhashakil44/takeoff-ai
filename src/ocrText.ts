@@ -175,6 +175,8 @@ export function withOcrText<D extends PDFDocumentProxy>(pdf: D, ocr: PageOcr): D
     if ((page as { __ocr?: boolean }).__ocr) return page;
     const own = page.getTextContent.bind(page);
     (page as { __ocr?: boolean }).__ocr = true;
+    // The page's own text, without OCR (its title block's sheet number as the PDF has it).
+    (page as { ownTextContent?: typeof own }).ownTextContent = own;
     page.getTextContent = ((params?: Parameters<PDFPageProxy['getTextContent']>[0]) => {
       if (!done.has(n))
         done.set(
