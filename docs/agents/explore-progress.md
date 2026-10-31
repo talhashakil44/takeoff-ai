@@ -1412,3 +1412,19 @@ these are diagnostics, not final solid counts. Full final checks follow.
 Next: Claude run diagnostic runner on unseen set and return overlays; identify
 actual grid/registration/leader failure before modifying placement. T11 incomplete,
 no main merge/deploy, input/accepted quantities preserved.
+Same-input model47/48 production comparison: project identical, element IDs
+identical, zero shape and quantity/unit deltas; drawingGeometry identical.
+629tests/tsc/build PASS. Audit failed only after Claude's installed CL1 data
+update (expected09-01 vs actual09-02); coordinated pins to integration9124929's
+09-02/09-22, rerun follows. No geometry rule changed to satisfy audit.
+Dunnville now staged locally. Diagnostic run /tmp/dunnville-v48 reports118records,
+9solids,109unresolved. S1-1/S1-2/S1-4 register only grids2-6/A/C; S1-3 unregistered.
+Across100point items:58outside limit,21within,21unregistered. The within-limit
+items still require downstream physical qualification. Missing CIVIL/ELEC/MECH
+PDFs produce14read errors; this local subset is not a full source acceptance run.
+Next: inspect original ARCH/STRUCT grid overlays to explain missing1/B/D and
+S1-3 registration, compare extraction vs later physical qualification. Do not
+widen2.5m or tune held-out counts. Request remaining PDFs from Claude.
+Live BP6 review exposed an off-page evidence crop; ignored preview helper now
+uses production renderSourceTile (explicit error). Whole-page source remains
+reviewable; source coordinate/page association remains a follow-up, not resolved.
