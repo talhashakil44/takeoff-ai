@@ -10,6 +10,8 @@ export interface RoofViewportRegistration {
   title: string;
   bounds: [number, number, number, number];
   grids: string[];
+  headerTop?: number;
+  gridPositions?: { x: number[]; y: number[] };
   source: SourceRef;
 }
 /** Recover placement for an uncalibrated multi-scale roof sheet from each named
@@ -66,7 +68,7 @@ export function roofViewportRegistrations(
       if (scales.length !== 1 || scales[0].scale <= 0) continue;
       // Titles beneath stacked viewports bound a conservative analysis strip.
       // Do not extend a frame through another viewport's printed title.
-      const top = index ? titles[index - 1].cy + 35 : 0;
+      const top = index ? titles[index - 1].cy + (titles[index - 1].h ?? 0) / 2 : 0;
       const local = ts.filter((t) => t.cy > top && t.cy < title.cy - 15);
       const axes = gridAxes(local, sheet.width, title.cy - top);
       // Section callout numbers can sit 2-3 points from a grid-bubble row.
@@ -186,6 +188,8 @@ export function roofViewportRegistrations(
         title: title.str,
         bounds,
         grids: best.grids,
+        gridPositions: {x:xx,y:yy},
+        headerTop: top,
         source: {
           kind: 'sheet',
           id: sheet.id,
@@ -212,10 +216,16 @@ export function roofViewportRegistrations(
             y >= c.bounds[1] &&
             y <= c.bounds[3],
         ) || (
-          /^HIGH ROOF/.test(c.title) && measurement.points.length===2 &&
-          Math.abs(measurement.points[0][1]-measurement.points[1][1])<.3 &&
-          measurement.points.every(([,y])=>y>=c.bounds[1]&&y<=c.bounds[3]) &&
-          measurement.points.some(([x])=>x>=c.bounds[0]&&x<=c.bounds[2]) &&
+          measurement.points.length===2 &&
+          ([0,1] as const).some(axis=>{
+            const cross=1-axis,ps=measurement.points;
+            if(Math.abs(ps[0][cross]-ps[1][cross])>.3)return false;
+            const positions=axis===0?c.gridPositions!.y:c.gridPositions!.x;
+            const spacing=Math.min(...positions.slice(1).map((v,i)=>v-positions[i]).filter(v=>v>0));
+            return ps.every(p=>p[cross]>=c.bounds[cross]&&p[cross]<=c.bounds[cross+2])&&
+              ps.some(p=>p[axis]>=c.bounds[axis]&&p[axis]<=c.bounds[axis+2])&&
+              positions.some(v=>Math.abs(v-ps[0][cross])<=spacing*.1);
+          }) &&
           hasLocalRoofCantilever(measurement.points,measurement.label??'',texts[sheet.id]??[])
         ),
       );

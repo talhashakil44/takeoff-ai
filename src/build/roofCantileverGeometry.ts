@@ -608,7 +608,7 @@ export function recoverRoofCantilevers(
         }
       if (!evidence.length && plane) {
         const tops = supports.map(p => worldPoint(p, r.frame)).map(p => plane.topPlane[0]*p[0]+plane.topPlane[1]*p[1]+plane.topPlane[2]);
-        if (Math.abs(tops[0]-tops[1])<.005) evidence.push(...roofSectionEndEvidence(project,texts,lines,m.sheetId,r.bounds,supports,letter.str,sec.width,sec.depth,tops[0],roofEndSection));
+        if (Math.abs(tops[0]-tops[1])<.005) evidence.push(...roofSectionEndEvidence(project,texts,lines,m.sheetId,r.bounds,supports,letter.str,sec.width,sec.depth,tops[0],r.headerTop??0,roofEndSection));
       }
       if (
         !evidence.length ||

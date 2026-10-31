@@ -11,7 +11,7 @@ function fixture() {
     ...letters.map((str, i) => ({ str, cx: 200 + i * 200, cy: 100 })),
     ...nums.map((str, i) => ({ str, cx: 100, cy: 200 + i * 200 })),
   ];
-  const roof = [
+  const roof: {str:string;cx:number;cy:number;h?:number;w?:number}[] = [
     ...letters.map((str, i) => ({ str, cx: 100, cy: 700 - i * 200 })),
     ...nums.map((str, i) => ({ str, cx: 300 + i * 200, cy: 100 })),
     { str: 'HIGH ROOF FRAMING PLAN', cx: 300, cy: 900 },
@@ -151,8 +151,8 @@ it('does not register canopy tags from only a single letter and number grid', ()
   expect(roofViewportRegistrations(f.project, f.model, f.texts)).toEqual({});
 });
 it('registers a locally CANT-noted free end without expanding other viewport bounds',()=>{
- const f=fixture(),m=f.project.measurements[1];m.points=[[0,500],[500,500]];m.label='B2';
- f.texts.s.push({str:'B2',cx:400,cy:490},{str:'(CANT.)',cx:400,cy:510});
+ const f=fixture(),m=f.project.measurements[1];f.texts.s.find(t=>t.str==='HIGH ROOF FRAMING PLAN')!.str='LOW ROOF FRAMING PLAN';m.points=[[0,500],[500,500]];m.label='B2';
+ f.texts.s.push({str:'B2',cx:400,cy:490,h:10,w:15},{str:'(CANT.)',cx:400,cy:510});
  expect(roofViewportRegistrations(f.project,f.model,f.texts)[m.id]).toBeTruthy();
  f.texts.s.pop();expect(roofViewportRegistrations(f.project,f.model,f.texts)[m.id]).toBeUndefined();
  f.texts.s.push({str:'(CANT.)',cx:400,cy:510});m.points=[[-200,500],[0,500]];

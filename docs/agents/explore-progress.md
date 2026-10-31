@@ -1321,3 +1321,22 @@ Live revisedPDF crop, focused2D/3D inspected; E8-9 now shows8.62m engine quantit
 separately from8.45m source geometry. No page errors. Next: Claude review of
 registration/bearing fallback, then independent outerMF3 datum/section association.
 Source holds forD8/B1-2 remain; no completion claim or unqualified solid.
+
+## 2026-10-31 12:08 UTC — drawing-relative registration rules (model46)
+Claude approved model45 and relayed user no-overfit directive. Removed HIGH ROOF
+restriction from CANT fallback; axis-aligned spans now qualify along actual grid
+rows/columns, same viewport envelope, with an inside endpoint. Row tolerance is
+10% of local minimum grid spacing. Local mark/note distances use3.5x text height
+across and2x mark width along; missing text metrics rejects rather than inventing
+PDF dimensions. Supports CANTILEVER and combined mark+CANT, arbitrary mark codes.
+Removed150pt header bounds from column/beam section association: use preceding
+viewport-title bottom (or sheet start for first viewport), preventing cross-view
+header borrowing. Underlying full section grammar still has other legacy fixed
+windows; not claiming the whole extractor is scale-independent yet.
+Rule tests cover0.25x/1x/4x text/geometry, rotated span, X7 combined annotation,
+missing metrics, alternate LOW title; existing source-ablation tests pass.
+Identical current project model45 vs46: zero shape or quantity/unit deltas; input
+project unchanged. Requested read-only third held-out fixture and harness from
+Claude; not supplied yet, so third-set gate explicitly pending (no merge claim).
+Full harness/live checks follow. Next: obtain held-out evaluation without tuning,
+then remaining source geometry; outerMF3 local datums still unresolved.

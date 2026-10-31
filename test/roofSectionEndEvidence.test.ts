@@ -8,7 +8,7 @@ it.skipIf(!process.env.CANOPY_SOURCE_FIXTURE)('requires the actual bay cut, clos
  const doc='spec:bec80a15-e5e2-4cdd-a142-c02af1b8f631:';
  const texts={...d.drawingTexts,[plan.id]:d.drawingTexts[doc+'25'],[section.id]:d.drawingTexts[doc+'31']};
  const lines={...d.drawingLines,[section.id]:d.drawingLines[doc+'31']};
- const run=(ts=texts,ls=lines)=>roofSectionEndEvidence(d.project,ts,ls,plan.id,[850,790,2100,1500],[[1911,1447],[2031,1447]],'E',.265,.608,10.428,roofEndSection);
+ const run=(ts=texts,ls=lines)=>roofSectionEndEvidence(d.project,ts,ls,plan.id,[850,790,2100,1500],[[1911,1447],[2031,1447]],'E',.265,.608,10.428,600,roofEndSection);
  expect(run()).toHaveLength(1);expect(run()[0].source.quote).toContain('1/S4.0, grid E');
  // Removing the actual plan cut must not borrow a neighbouring section.
  expect(run({...texts,[plan.id]:texts[plan.id].filter((t:any)=>!(t.str==='S4.0'&&t.cx>1912&&t.cx<2030&&t.cy<790))})).toHaveLength(0);

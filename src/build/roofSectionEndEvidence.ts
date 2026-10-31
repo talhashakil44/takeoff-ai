@@ -6,14 +6,14 @@ import type {SourceRef} from './types';
 /** A cut inside the measured bay identifies the section; a matching closed beam
  * profile and independently calibrated high/low datums establish its level. */
 export function roofSectionEndEvidence(project:Project,texts:DrawingTexts,lines:DrawingLines,
-  planId:string,bounds:number[],supports:Pt[],letter:string,width:number,depth:number,expectedTop:number,
+  planId:string,bounds:number[],supports:Pt[],letter:string,width:number,depth:number,expectedTop:number,headerTop:number,
   trace:(lines:DrawingLines[string],x:number,scale:number,width:number,depth:number,min:number,max:number)=>{top:number;bottom:number}|null,
 ):{top:number;source:SourceRef;references:SourceRef[]}[] {
   const planSheet=project.sheets.find(s=>s.id===planId);
   if(!planSheet)return [];
   const pt=texts[planId]??[],out:{top:number;source:SourceRef;references:SourceRef[]}[]=[];
   const lo=Math.min(...supports.map(p=>p[0])),hi=Math.max(...supports.map(p=>p[0]));
-  for(const ref of pt.filter(t=>/^S\d+\.\d+$/.test(t.str)&&t.cx>lo+1&&t.cx<hi-1&&t.cy<bounds[1]&&t.cy>bounds[1]-150)){
+  for(const ref of pt.filter(t=>/^S\d+\.\d+$/.test(t.str)&&t.cx>lo+1&&t.cx<hi-1&&t.cy<bounds[1]&&t.cy>headerTop)){
     const ns=pt.filter(t=>/^\d+$/.test(t.str)&&Math.abs(t.cx-ref.cx)<2&&ref.cy-t.cy>8&&ref.cy-t.cy<18);
     if(ns.length!==1)continue;
     const sheet=project.sheets.find(s=>!s.superseded&&s.name===ref.str);

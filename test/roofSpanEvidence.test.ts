@@ -3,7 +3,7 @@ import { recoverRoofBeamSpan } from '../src/build/roofSpanEvidence';
 function fixture() {
   const r: any = { metersPerPoint: 0.025, bounds: [0, 0, 500, 500] };
   const sec: any = [{ code: 'C1', width: 0.25, depth: 0.35 }];
-  const texts: any = [{ str: 'B1', cx: 200, cy: 90 }];
+  const texts: any = [{ str: 'B1', cx: 200, cy: 90,h:10,w:15 }];
   const lines: any = [];
   for (const x of [100, 300]) {
     texts.push({ str: 'C1', cx: x + 15, cy: 90 });
