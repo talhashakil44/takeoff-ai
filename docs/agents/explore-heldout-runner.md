@@ -33,3 +33,11 @@ registration, footprints and local vertical datums in both 2D and 3D, including
 unresolved records. Report findings without changing rules to fit this dataset.
 Return the model commit, report, source evidence and visual observations to
 `gpt-explore`. A smoke test on Kelso/Frederick is not a held-out-project pass.
+
+`gridDiagnostics` separates per-sheet detected axes/registration from count-tag
+association. Each point records scale, original tag coordinates, registered
+labels, unchanged default snap result and the nearest registered intersection
+at any distance **for diagnosis only**. That unbounded lookup never enters the
+model or becomes a geometry candidate. Statuses distinguish missing scale,
+unregistered sheet, missing axis family and distance outside the existing gate.
+Use these fields to request original-plan overlays before proposing rule changes.

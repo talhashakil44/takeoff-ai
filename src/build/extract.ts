@@ -3,7 +3,7 @@ import { imperialDatumEvidence } from './datumEvidence';
 import { quarantineDetachedSheets } from './placementQuality';
 import { recoverRoof, type DrawingLines } from './roof';
 import { simpleRing } from './surface';
-import { nearestGridIntersection } from './gridCounts';
+import { nearestGridIntersection, gridLocationFailure } from './gridCounts';
 import { existingEquipmentNote, planningExclusion, roofViewEvidence } from './interpret';
 import { doorHostHints, doorSwings, type DoorHostHint, type DoorSwing } from './doorSwings';
 import { drawingFingerprint } from './sources';
@@ -30,7 +30,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 47;
+export const MODEL_VERSION = 48;
 
 export interface Trade {
   key: string;
@@ -453,7 +453,7 @@ export function extractModel(input: ExtractInput): BuildModel {
             shape = { type: 'locator', at: transform(snap.point), z: level.elevation };
             elIssues.push(`Symbolic 3D location inferred at structural grid ${snap.labels.join('/')} (${snap.distanceM.toFixed(2)} m from the original tag). The tag point remains in the source box; member section and height are not inferred.`);
           } else {
-            elIssues.push(`No registered structural grid intersection within 2.5 m of the tag${reg ? '' : ' on this sheet'}; count retained without 3D placement.`);
+            elIssues.push(gridLocationFailure(axesFor(s),reg?.grids,m.points[0],k));
           }
         }
         else if (trade === 'doors') shape = { type: 'point', at, z: level.elevation, size: [0.95, 0.12, 2.1] };

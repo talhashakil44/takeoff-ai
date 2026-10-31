@@ -1395,3 +1395,20 @@ source coverage. Runtime geometry untouched; no new live geometry claim.
 Next: Claude run current Explore branch against cloud-only Dunnville and return
 report+originalPDF overlay/2D/3D evidence. Do not tune to held-out counts. Continue
 independent source gaps after result, no main merge/deploy; T11 incomplete.
+
+## 2026-10-31 13:39 UTC — held-out grid failure made diagnosable (model48)
+Claude ran unseen Dunnville with47:118structural records,9solids,109unresolved;
+100point items lacked grid locations. No source-read/missing-text errors. This is
+held-out failure evidence, not an accuracy pass. Snapshot/PDFs remain cloud-only;
+requested read-only staging or original structural+architectural grid overlays.
+No threshold tuning from scorecard. Added runner gridDiagnostics: per-sheet
+scale/detected axes/registration, each count tag and diagnostic nearest distance,
+plus unchanged default2.5m snap. Unbounded distance is reporting only, never
+fed to model placement. App issue now separates missing sheet registration,
+missing intersecting families and actual excess distance; location gate unchanged.
+Synthetic tests protect reason classification and verify a5m tag remains unplaced.
+Diagnostic smoke(Kelso) passed:183within,20outside,74missing-scale at extraction;
+these are diagnostics, not final solid counts. Full final checks follow.
+Next: Claude run diagnostic runner on unseen set and return overlays; identify
+actual grid/registration/leader failure before modifying placement. T11 incomplete,
+no main merge/deploy, input/accepted quantities preserved.

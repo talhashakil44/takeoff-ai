@@ -13,6 +13,8 @@ import {segmentsOf} from '../src/fill/sheetWalls';
 import {loadDrawingSources,needsText} from '../src/build/sources';
 import {titleBlockWords,extractModel} from '../src/build/extract';
 import {buildAll} from '../src/build/run';
+import {gridAxes,registerSheets} from '../src/build/building';
+import {nearestGridIntersection} from '../src/build/gridCounts';
 
 const input=process.env.EXPLORE_HOLDOUT;
 it.skipIf(!input)('reports held-out Explore geometry without tuning or modifying source data',async()=>{
@@ -43,9 +45,24 @@ it.skipIf(!input)('reports held-out Explore geometry without tuning or modifying
  expect(model.elements.filter(e=>e.origin==='takeoff').map(tuple)).toEqual(baseline.elements.filter(e=>e.origin==='takeoff').map(tuple));
  expect(JSON.stringify(project)).toBe(original);expect(readFileSync(file).equals(before)).toBe(true);
  const structural=model.elements.filter(e=>e.origin==='takeoff'&&(e.trade==='structure'||e.measurementSource==='foundations'));
+ const registrations=registerSheets(project,sources.texts);
+ const gridDiagnostics=project.sheets.filter(s=>!s.superseded).map(s=>{
+   const measurements=project.measurements.filter(m=>m.sheetId===s.id),points=measurements.flatMap(m=>m.points);
+   const median=(axis:number)=>points.map(p=>p[axis]).sort((a,b)=>a-b)[Math.floor(points.length/2)];
+   const axes=gridAxes(sources.texts[s.id]??[],s.width,s.height,points.length?[median(0),median(1)]:undefined),registration=registrations[s.id]??null;
+   const pointItems=structural.filter(e=>e.sheetId===s.id).flatMap(e=>{
+     const m=measurements.find(m=>m.id===e.measurementId),type=project.types.find(t=>t.id===e.typeId);
+     if(!m?.points.length||type?.kind!=='count')return [];
+     // Unbounded distance is diagnostic only: never passed to extraction or rendered as geometry.
+     const nearest=registration&&s.metersPerPoint?nearestGridIntersection(axes,registration.grids,m.points[0],s.metersPerPoint,Infinity):null;
+     const qualified=registration&&s.metersPerPoint?nearestGridIntersection(axes,registration.grids,m.points[0],s.metersPerPoint):null;
+     return [{id:e.id,tagPoint:m.points[0],status:!s.metersPerPoint?'missing_scale':!registration?'unregistered_sheet':!nearest?'missing_registered_axis_family':!qualified?'outside_existing_snap_limit':'within_existing_snap_limit',nearestDiagnosticOnly:nearest,existingSnap:qualified,modelShape:e.shape?.type??null}];
+   });
+   return {sheetId:s.id,name:s.name,title:s.title,metersPerPoint:s.metersPerPoint,axes,registration,pointItems};
+ }).filter(s=>s.pointItems.length);
  const records=structural.map(e=>({id:e.id,sheetId:e.sheetId,type:e.typeName,quantity:e.quantity,unit:e.unit,shapeType:e.shape?.type??null,placement:e.placement,planFootprint:!!e.planFootprint,sources:e.sources,issues:e.issues}));
  const solid=(e:typeof records[number])=>e.shapeType!==null&&!['axis','locator'].includes(e.shapeType);
- const report={modelVersion:model.version,inputSha256:createHash('sha256').update(before).digest('hex'),mode:'report-only; no accuracy or visual acceptance inferred from counts',specFacts:'not evaluated',sourceReadErrors:errors,sourceSheetCount:Object.keys(sources.texts).length,missingRequiredTextSheets:project.sheets.filter(s=>!s.superseded&&needsText(s,new Set(project.measurements.map(m=>m.sheetId)))&&!sources.texts[s.id]).map(s=>s.id),structural:{total:records.length,solid:records.filter(solid).length,unresolved:records.filter(e=>!solid(e)).length},records};
+ const report={modelVersion:model.version,inputSha256:createHash('sha256').update(before).digest('hex'),mode:'report-only; no accuracy or visual acceptance inferred from counts',specFacts:'not evaluated',gridDiagnostics,sourceReadErrors:errors,sourceSheetCount:Object.keys(sources.texts).length,missingRequiredTextSheets:project.sheets.filter(s=>!s.superseded&&needsText(s,new Set(project.measurements.map(m=>m.sheetId)))&&!sources.texts[s.id]).map(s=>s.id),structural:{total:records.length,solid:records.filter(solid).length,unresolved:records.filter(e=>!solid(e)).length},records};
  mkdirSync(output,{recursive:true});
  writeFileSync(join(output,'report.json'),JSON.stringify(report,null,2));
  writeFileSync(join(output,'snapshot.json'),JSON.stringify({project,model,drawingTexts:sources.texts,drawingLines:sources.lines}));
