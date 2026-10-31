@@ -159,11 +159,15 @@ export function drawingTitles(texts: PageText[], lines = textLinesOf(texts)): Dr
 export function viewTitle(texts: { str: string; h: number; cx?: number; cy?: number; w?: number; angle?: number }[]): string | null {
   // Any direction: a title block's title often runs up the sheet's edge.
   // A title, not a note: no sentence ("Revise vent location on the roof plan.") or caption ("DETAIL NO.").
-  const c = texts.filter((t) => {
+  let c = texts.filter((t) => {
     const str = t.str.trim();
     return str.length >= 4 && str.length <= 80 && VIEW_WORDS.test(str) && !/^(SEE|REFER|NOTE|ALL|PROVIDE)\b/i.test(str) && !CALLOUT_KEY.test(str) && !/[:.]$/.test(str) && str.split(/\s+/).length <= 10;
   });
   if (!c.length) return null;
+  // A key plan, legend or notes is never what the sheet is of while a drawing title is there (a
+  // key plan's title is often the biggest on a sheet of enlarged plans).
+  const drawings = c.filter((t) => !/\b(KEY PLAN|LEGEND|NOTES|ABBREVIATIONS|SYMBOLS)\b/i.test(t.str));
+  if (drawings.length) c = drawings;
   const top = Math.max(...c.map((t) => t.h));
   // Titles as big as each other (a plan and the legend drawn beside it): the sheet is the plan's.
   const biggest = c.filter((t) => t.h >= top * 0.98);
