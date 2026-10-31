@@ -1728,3 +1728,7 @@ Live original canopyPDF,2D and3D inspected; B7solids retained, browsererrorsempt
 Live review caught stale generic "quantity unknown" on valid per-view quantities;
 changed that note to distinguish per-view scaling from absent sheet-wide scale.
 Final checks follow this wording repair; no dimension/quantity logic changed.
+Final faed9c4 validation:658tests(4skipped),TypeScript,build,audit PASS.
+Production fixture rerun PASS; livePDF/2D/3D rerun has no browser errors, corrected
+per-view-scale note read back visually. Generic-roof-* proofs retain the four
+B7solids; no height/section/length or accepted-quantity changes. T11notcomplete.
