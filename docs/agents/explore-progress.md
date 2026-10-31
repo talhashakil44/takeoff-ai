@@ -507,3 +507,64 @@ remaining foundation-wall height/section associations. The stepped transition
 still requires source-defined profile placement; roof free-end references remain
 unresolved. T11 is not complete; do not equate this protective repair with new
 geometry coverage or mark the automation complete.
+
+## FW4 source-only wall contract — October 31, 00:03 wake
+
+Claude approved18934b8. The next source audit found an accepted extraction
+mismatch: FW4 id04b94a04-65cd-451b-8d2d-a825efed80d6 follows horizontal tag
+leader [2015.16,881.94]→[2042.94,881.94], quantity0.9800167m, rather than the
+vertical wall. This was sent to Claude for engine review; accepted data stays
+unchanged. Architectural FW1/FW2 finish walls are distinct from structural
+FW-1..FW-5 foundation walls and are not reclassified by their names alone.
+
+Independent plan/section review qualifies a bounded drawing-only candidate:
+closed hatched panel [2036.52,826.56,2049.48,899.88], actual457.2mm≈nominal458mm
+ICF assembly and2.5866m length. The actual6/S1.1 cut crosses at y880.92 with
+shaft x2019.48–2191.80; y881.94 belongs to the nearby accepted tag leader.
+Section6 plus adjacent NOTE1 identifies ICF wall top250mm below ground0 and
+footing top-1200mm, giving950mm height. The concrete core is300mm; assembly
+width must not inflate concrete volume. Core centering and extending the section
+datums across this closed panel remain explicit inferences. No step/local
+override was found inside this panel. Source crops:
+`/tmp/fw4-cut6-panel-proof.png`, `/tmp/fw-exterior-section6.png`.
+
+FW5 buttress section1 has a sloping top and its local mass-footing datum remains
+unresolved; no default4m wall is created. The apparent unresolved-axis offset
+was separately checked: all37S1.0 foundation axes match their authoritative
+measurement-to-world transform within2.01e-14m, so no arbitrary reprojection
+was applied. Comparator: `/tmp/foundation-frame-readonly.json`.
+
+### Model 34 verification and next action
+
+Implemented the bounded FW4 concrete-core candidate and legacy accepted-axis
+warning. Independent dual-fixture QA found exactly one new physical shape:
+136 total in both legacy and frozen engine models; all previous 135 shapes and
+all accepted measurement tuples are unchanged. The exact recovered length is
+2.5865667 m (rounded drawing coordinates give 2.5866 m). IFC validates as a
+closed IfcWall, volume 0.737172 m³, with no quantity set. Replay is identical;
+withdrawing source evidence removes the candidate. Tests: 581 passed, one
+skipped across 86 files. Final bus harness is recorded separately after commit.
+
+Claude integration 0a38bfc independently fixes the engine leader extraction.
+The latest engine JSON has 2,113 measurements, SHA256
+915605c4e79c1625b27cff101ef79e5c35b3029631b565b1f02b4aa1632b3262.
+Comparison against the frozen 2,115 input confirms exactly two semantic
+removals: the FW4 annotation leader and its paired SF2; no added measurements
+or other source-point changes. The engine still misses the actual panel.
+Explore preserves each input's quantities and adds only drawing geometry.
+
+Live model34 inspection confirms four drawing candidates in the legacy project,
+correct 300 × 950 mm section and -1.200/-0.250 m datums, explicit inference and
+no-takeoff labels, functional original PDF source link, and visible 3D wall.
+Proof: diag/explore/proofs/fw4-wall-core-v34.png. Independent source overlay:
+/tmp/explore-foundation-next/fw4-core-source-overlay.png. The actual section
+cut is y880.92; y881.94 is the annotation leader (corrects the earlier bus note).
+
+Remaining UI acceptance gap: 2D zoom in/out stays responsive, but the new below-
+grade wall is not clearly distinguishable in the top-down PDF view. Investigate
+its footprint/occlusion and selected-member focus in Drawing mode next; the
+source viewer also opens the whole page rather than focusing its evidence box.
+Do not call the live 2D overlay fully accepted from the 3D screenshot alone.
+Roof free-end profiles, stepped-footing profiles and unresolved foundation-wall
+bases remain incomplete. Request Claude review of this checkpoint; T11 remains
+active and no main merge or deployment is authorized.

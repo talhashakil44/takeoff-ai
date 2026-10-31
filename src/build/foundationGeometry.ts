@@ -1,3 +1,4 @@
+import { recoverFoundationWalls } from './foundationWallGeometry';
 import type { Project, Sheet } from '../model';
 import { foundationMarks, sizesOf } from '../automate/foundations';
 import { readSchedules, type Schedule } from '../smart/schedules';
@@ -976,7 +977,12 @@ export function recoverFoundationGeometry(
   // replace an already source-resolved strip interval in the single-run model.
   const padConnected=recoverRevisedPads(project,model,stripped,texts,lines,revision,true);
   const recovered=recoverRevisedPiers(project,model,recoverRevisedMassFootings(project,model,padConnected,texts,lines,revision),texts,lines,revision);
-  return {...recovered,elements:recovered.elements.map(e=>{
+  const wallPlan=revisedPlan(project,model,texts,lines,revision);
+  const wallWidths=revision.flatMap(r=>foundationMarks(footingTables(detailed(texts[foundationRevisionKey(r.docId,r.page)]??[])),true).flatMap(m=>m.kind==='strip'&&m.width?[m.width]:[]));
+  const wallSheet=wallPlan&&project.sheets.find(s=>s.id===wallPlan.sheetId);
+  const wallAcceptedFrame=wallSheet?sheetFrame(project,{...model,elements:model.elements.filter(e=>!e.issues.some(i=>i.startsWith('Foundation revision applied:')))},wallSheet):null;
+  const withWalls=wallPlan?recoverFoundationWalls(project,recovered,wallPlan,texts,revision,localFootingLeaders(wallPlan),(axis,a,b,lo,hi)=>hasFootingCrossbar(wallPlan,axis,a,b,lo,hi),wallWidths,wallAcceptedFrame):recovered;
+  return {...withWalls,elements:withWalls.elements.map(e=>{
     if(e.measurementSource!=='foundations')return e;
     const resolved=e.issues.some(i=>i.startsWith('Foundation revision applied:'));
     return {...e,sources:e.sources.filter(s=>!oldGeneric(s)&&!(resolved&&s.quote?.startsWith(noticePrefix)))};
