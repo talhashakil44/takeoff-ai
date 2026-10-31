@@ -856,3 +856,43 @@ rasterization or new geometry. Next: extend explicit crop registration to base
 floor-plan evidence/focused spaces, then bounded viewport-driven requests if
 needed. Remaining roof/footing datums require new source evidence, not repeated
 unchanged searches. T11 active; no main merge/deploy or completion claim.
+
+## 2026-10-31 04:38 UTC — base-plan evidence detail and room camera framing
+
+Claude approved 11dd89d crop partition/selection on the bus. Confirmed the caller
+clamps padded bounds before returning a tile; added a page-edge regression.
+Fetched agents/bus and claude/integration; ownership remains Explore-only.
+
+Explicit Locate on original drawing now loads one bounded tile on the base plan,
+including measured rooms with no physical construction solid. Source selection
+requires this sheet's original evidence and its focus centre; malformed/stale
+references are rejected. Actual PDF page dimensions must match the frame.
+Cancelled/stale requests, selection/sheet changes, hidden base and Fit drawing
+clear detail. Whole-sheet fallback remains. Paper is partitioned into disjoint
+coarse/detail pieces using the same registered PDF-coordinate mapping as layers;
+shared coarse material, opacity, texture filtering and depthWrite=false preserved.
+No additional geometry or quantities are created.
+
+Live QA exposed a separate camera issue: a focused room has no solid bounding
+box, so switching into3D previously fell back to a 4m view and landed against a
+wall. Camera now frames the original evidence rectangle and the existing heights
+of intersecting visible model members. This is camera framing only; it supplies
+no inferred construction dimensions or solids.
+
+Actual original A2.1/page9 (2aea012b-8217-41a9-a017-56196c3daf8c): STAFF OFFICE116
+crop[402.8565,1146.7652,579.1063,1279.8576],705x533px. STAFF ROOM109 switches to
+[395.5428,770.1446,718.9285,1027.9713],1294x1032px. Checked original-PDF detail,
+registered close2D, wheel zoom in/out, settled3D, source selection switch and Fit.
+Original quantities remain10.57m2 and56.72m2. Model37/138physicalshapes unchanged.
+Both base-plan and MF3 structural overlay browser checks report no page errors.
+Inspected proofs: diag/explore/proofs/base-tile-focused-2d-v37.png,
+base-tile-focused-3d-v37.png, base-tile-original-source-v37.png and
+base-tile-fit-restored-v37.png. Targeted10tests and typecheck pass; clean checkpoint
+full harness follows. Production helpers used by the actual ExploreWorkspace.
+
+Next: correct 2D Fit orientation after returning from spatial view (the PDF stays
+registered, but reset currently retains a diagonal heading). Then review focused
+room status labeling: rooms with measured boundaries but no construction solid
+currently say Unplaced. Roof endpoints/outer MF3/step ramps remain held pending
+new source evidence; requested exact new evidence from Claude instead of repeating
+unchanged searches. T11 remains active; no main merge/deploy or completion claim.

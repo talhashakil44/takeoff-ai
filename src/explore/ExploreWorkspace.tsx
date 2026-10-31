@@ -1,4 +1,4 @@
-import { focusedTileBox } from './focusedTileBox';
+import { focusedTileBox, focusedPlanBox } from './focusedTileBox';
 import { suppressCoincidentStructure } from "../build/coincidentStructure";
 import { canopyRegistrations } from "../build/canopyRegistration";
 import { useEffect, useMemo, useState } from "react";
@@ -423,6 +423,19 @@ export function ExploreWorkspace({
     }).catch(()=>{ /* Full drawing remains available if a detail cannot render. */ });
     return ()=>{cancelled=true;};
   }, [focus, element, enabled, available, revisedLayers, renderTile]);
+  const [baseDetail, setBaseDetail] = useState<(SourceTile & {sheetId:string; elementId:string}) | null>(null);
+  useEffect(() => {
+    let cancelled=false;
+    setBaseDetail(null);
+    if(!focus || !element || !frame || !renderTile || !showBase)return;
+    const box=focusedPlanBox(element,focus,frame,sheet);
+    if(!box)return;
+    renderTile(sheet,box).then(tile=>{
+      if(!cancelled && Math.abs(tile.pageWidth-sheet.width)<.1 && Math.abs(tile.pageHeight-sheet.height)<.1)
+        setBaseDetail({...tile,sheetId:sheet.id,elementId:element.id});
+    }).catch(()=>{ /* Retain the original whole-sheet image on render failure. */ });
+    return ()=>{cancelled=true;};
+  }, [focus, element, frame, sheet, renderTile, showBase]);
   const measurements = useMemo(
     () => new Map(project.measurements.map((m) => [m.id, m])),
     [project],
@@ -785,6 +798,7 @@ export function ExploreWorkspace({
               sheet={sheet}
               frame={frame}
               page={page}
+              detail={focus && selected===baseDetail?.elementId && sheet.id===baseDetail.sheetId ? baseDetail : undefined}
               mode={mode}
               room={room}
               selected={selected}

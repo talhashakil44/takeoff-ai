@@ -16,3 +16,13 @@ export function focusedTileBox(element: BuildElement, focus: Pt, frame: SheetFra
     s.box[2]>s.box[0]&&s.box[3]>s.box[1]);
   return refs.sort((a,b)=>((a.box![2]-a.box![0])*(a.box![3]-a.box![1]))-((b.box![2]-b.box![0])*(b.box![3]-b.box![1])))[0]?.box ?? null;
 }
+
+/** Base-plan focus is the original evidence-box centre, including rooms whose
+ * measured polygons intentionally have no physical construction solid. */
+export function focusedPlanBox(element: BuildElement, focus: Pt, frame: SheetFrame, source: Sheet) {
+  const ref=element.sources.find(s=>s.kind==='sheet' && s.id===source.id && s.box);
+  const box=ref?.box;
+  if(!box || !box.every(Number.isFinite) || box[2]<=box[0] || box[3]<=box[1])return null;
+  const p=sheetPoint(focus,frame);
+  return Math.hypot(p[0]-(box[0]+box[2])/2,p[1]-(box[1]+box[3])/2)<.001?box:null;
+}

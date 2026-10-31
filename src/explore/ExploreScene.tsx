@@ -26,6 +26,7 @@ interface Props {
   sheet: Sheet;
   frame: SheetFrame;
   page: HTMLCanvasElement;
+  detail?: SourceTile;
   mode: ExploreMode;
   room: RoomStop | null;
   selected: string | null;
@@ -257,32 +258,43 @@ export function ExploreScene(props: Props) {
       [props.sheet.width, props.sheet.height],
       [0, props.sheet.height],
     ];
-    const coords = corners.flatMap((p) => {
-      const w = worldPoint(p, props.frame);
-      return [w[0], base - 0.05, w[1]];
-    });
-    const pg = new THREE.BufferGeometry();
-    pg.setAttribute("position", new THREE.Float32BufferAttribute(coords, 3));
-    pg.setAttribute(
-      "uv",
-      new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2),
-    );
-    pg.setIndex([0, 2, 1, 0, 3, 2]);
-    pg.computeVertexNormals();
     const texture = new THREE.CanvasTexture(props.page);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     const paperMaterial = new THREE.MeshBasicMaterial({
-      map: texture,
-      side: THREE.DoubleSide,
-      transparent: true,
-      // Reference planes must not occlude one another when depth precision
-      // collapses at close sheet zoom. Solid geometry still depth-tests them.
-      depthWrite: false,
-      opacity: 1,
+      map: texture, side: THREE.DoubleSide, transparent: true, depthWrite: false, opacity: 1,
     });
-    const paper = new THREE.Mesh(pg, paperMaterial);
+    const paper = new THREE.Group();
     scene.add(paper);
+    let detailTexture: THREE.CanvasTexture | null = null;
+    let detailMaterial: THREE.MeshBasicMaterial | null = null;
+    const baseDrawing = () => {
+      for(const child of [...paper.children]) {
+        if(child instanceof THREE.Mesh)child.geometry.dispose();
+        paper.remove(child);
+      }
+      detailTexture?.dispose(); detailMaterial?.dispose();
+      detailTexture=null; detailMaterial=null;
+      const tile=live.current.detail;
+      const pieces=tile?drawingTiles(corners,props.sheet.width,props.sheet.height,tile.box):[];
+      const parts=pieces.length?pieces:[{points:corners,detail:false,uvBox:[0,0,props.sheet.width,props.sheet.height]}];
+      if(tile && pieces.some(p=>p.detail)) {
+        detailTexture=new THREE.CanvasTexture(tile.page);
+        detailTexture.colorSpace=THREE.SRGBColorSpace;
+        detailTexture.anisotropy=renderer.capabilities.getMaxAnisotropy();
+        detailMaterial=paperMaterial.clone(); detailMaterial.map=detailTexture;
+      }
+      for(const part of parts) {
+        const g=new THREE.BufferGeometry();
+        g.setAttribute('position',new THREE.Float32BufferAttribute(part.points.flatMap(p=>{
+          const w=worldPoint(p,props.frame);return [w[0],base-.05,w[1]];
+        }),3));
+        const [x0,y0,x1,y1]=part.uvBox;
+        g.setAttribute('uv',new THREE.Float32BufferAttribute(part.points.flatMap(p=>[(p[0]-x0)/(x1-x0),1-(p[1]-y0)/(y1-y0)]),2));
+        g.setIndex(part.points.slice(2).flatMap((_,j)=>[0,j+2,j+1]));
+        paper.add(new THREE.Mesh(g,part.detail?detailMaterial!:paperMaterial));
+      }
+    };
     const sourceMarker = new THREE.Group();
     scene.add(sourceMarker);
     const ground = new THREE.Mesh(
@@ -439,8 +451,31 @@ export function ExploreScene(props: Props) {
         return { target, pos: target.clone().addScaledVector(dir, dist), fov };
       }
       const selectedItem = items.find((item) => item.e.id === p.selected);
-      const selectedBox = selectedItem?.mesh.geometry.boundingBox?.clone();
-      if (selectedBox && p.mode === "assembly")
+      let selectedBox = selectedItem?.mesh.geometry.boundingBox?.clone();
+      // Measured rooms intentionally have no construction solid. Frame their
+      // original evidence and nearby actual heights instead of a 4 m fallback
+      // that can put the spatial camera inside a surrounding wall.
+      if(!sheetMode && focus && !selectedBox) {
+        const element=p.model.elements.find(e=>e.id===p.selected);
+        const evidence=element?.sources.find(s=>s.kind==='sheet' && s.id===p.sheet.id && s.box)?.box;
+        if(evidence && evidence.every(Number.isFinite) && evidence[2]>evidence[0] && evidence[3]>evidence[1]) {
+          selectedBox=new THREE.Box3();
+          for(const x of [evidence[0],evidence[2]])for(const y of [evidence[1],evidence[3]]) {
+            const w=worldPoint([x,y],p.frame);
+            selectedBox.expandByPoint(new THREE.Vector3(w[0],base,w[1]));
+          }
+          for(const item of items) {
+            if(!itemVisible(item.e,item.min,p))continue;
+            const bounds=item.mesh.geometry.boundingBox;
+            if(!bounds || bounds.max.x<selectedBox.min.x || bounds.min.x>selectedBox.max.x ||
+              bounds.max.z<selectedBox.min.z || bounds.min.z>selectedBox.max.z)continue;
+            const offset=p.mode==='assembly'?item.layer*3:0;
+            selectedBox.min.y=Math.min(selectedBox.min.y,bounds.min.y+offset);
+            selectedBox.max.y=Math.max(selectedBox.max.y,bounds.max.y+offset);
+          }
+        }
+      }
+      if (selectedBox && selectedItem && p.mode === "assembly")
         selectedBox.translate(new THREE.Vector3(0, selectedItem!.layer * 3, 0));
       const target = focus
         ? new THREE.Vector3(
@@ -607,6 +642,7 @@ export function ExploreScene(props: Props) {
     };
     const overlays = () => {
       clearOverlays();
+      baseDrawing();
       for (const [i, layer] of (live.current.overlays ?? []).entries()) {
         const points: Pt[] = [
           [box.min.x - 2, box.min.z - 2],
@@ -878,6 +914,7 @@ export function ExploreScene(props: Props) {
         paperMaterial.opacity =
           p.mode === "room" ? 0.13 : 1 - currentLift * 0.55;
       }
+      if(detailMaterial)detailMaterial.opacity=paperMaterial.opacity;
       if (p.mode === "room" && p.room) {
         if (keys.has("q") || keys.has("e")) {
           yaw += (Number(keys.has("q")) - Number(keys.has("e"))) * dt * 1.25;
@@ -990,6 +1027,9 @@ export function ExploreScene(props: Props) {
           child.material.dispose();
         }
       texture.dispose();
+      detailTexture?.dispose();
+      // A full-page tile may leave this shared material outside the scene.
+      if(!materials.has(paperMaterial))paperMaterial.dispose();
       sun.shadow.dispose();
       // Keep the single context alive while model/page/annotations rebuild.
       // Remove render-list references to the disposed scene resources.
@@ -1021,7 +1061,7 @@ export function ExploreScene(props: Props) {
     [props.mode, props.room, props.focus, props.reduced, props.resetView],
   );
   useEffect(() => api.current?.select(), [props.selected]);
-  useEffect(() => api.current?.overlays(), [props.overlays]);
+  useEffect(() => api.current?.overlays(), [props.overlays, props.detail]);
   return (
     <div className="ex-scene" ref={host}>
       {error && (

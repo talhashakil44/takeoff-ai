@@ -12,3 +12,9 @@ it('bounds raster size and rejects invalid or unrelated page regions', () => {
  expect(sourceRegion([3,0,2,10],5000,4000)).toBeNull();
  expect(sourceRegion([0,0,NaN,10],5000,4000)).toBeNull();
 });
+it('clamps padded detail bounds before passing them to the registered scene', () => {
+ const r=sourceRegion([-5,70,110,105],100,100)!;
+ expect([r.left,r.top,r.left+r.width,r.top+r.height]).toEqual([0,40,100,100]);
+ expect(Math.ceil(r.width*r.scale)).toBeLessThanOrEqual(1800);
+ expect(Math.ceil(r.height*r.scale)).toBeLessThanOrEqual(1800);
+});
