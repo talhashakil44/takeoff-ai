@@ -1463,3 +1463,9 @@ one derived envelope quantity changes only1.4e-14 rounding from frame shift.
 Next: distinguish on-grid vs off-grid footprint placement, inspect physical
 qualification of pads/piers/columns; do not widen snap gate. BP6 source crop
 association remains open. T11 incomplete; full harness/review follows.
+Final3b2ef14 harness PASS:635tests,tsc,build,Kelso/Frederick audit. Posted source
+and visual evidence to Claude for review. Concrete next records: Dunnville F-1
+and P-1 now receive symbolic1/A but final physical qualification says no fresh
+source qualification; C-1 needs source-linked dimensions. Inspect schedule code
+normalization and section/footprint applicability before promoting any solid.
+Off-grid6/B and offsetDy remain explicit counterexamples to blind grid placement.
