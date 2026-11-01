@@ -696,7 +696,7 @@ export function ExploreWorkspace({
           </div>
           {scope === "structure" && (
             <p className="ex-coverage">
-              {structuralElements.filter(e => e.shape && e.shape.type !== "axis" && e.shape.type !== "locator").length} of {structuralElements.length} records have solid geometry. Remaining records need placement, section or elevation evidence.
+              {structuralElements.filter(e => e.shape && e.shape.type !== "axis" && e.shape.type !== "locator").length} of {structuralElements.length} records include solid geometry, which may cover only part of a measured run. Remaining records need placement, section or elevation evidence.
             </p>
           )}
           {scope === "drawings" && <p className="ex-coverage">Source-backed shapes without accepted takeoffs. Excluded from quantities and schedule.</p>}
@@ -730,7 +730,7 @@ export function ExploreWorkspace({
                     <span>{e.name}</span>
                     <small>
                       {e.origin === "drawing" ? "No accepted takeoff" : quantityPending(e) ? "Quantity uncalibrated" : `${num(e.quantity)} ${e.unit}`}
-                      {!e.shape ? (rooms.some(r=>r.id===e.id) ? " · measured space" : e.planTrace ? " · source trace candidate" : e.planFootprint ? (e.planFootprint.domain.startsWith("foundation:") ? " · plan candidate · height unresolved" : " · plan verified · height unresolved") : " · unplaced") : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : ""}
+                      {!e.shape ? (rooms.some(r=>r.id===e.id) ? " · measured space" : e.planTrace ? " · source trace candidate" : e.planFootprint ? (e.planFootprint.domain.startsWith("foundation:") ? " · plan candidate · height unresolved" : " · plan verified · height unresolved") : " · unplaced") : e.shape.type === "axis" ? " · plan axis" : e.shape.type === "locator" ? " · grid locator" : e.issues.some(i=>i.includes("Only the contiguous section-qualified portion is represented")) ? " · partial geometry" : ""}
                     </small>
                   </button>
                 ))

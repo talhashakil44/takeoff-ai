@@ -1,3 +1,4 @@
+import {localStripDatum} from './localFootingDatum';
 import { explainFoundationSlabOption } from './foundationSlabOptionEvidence';
 import { connectMassDatums, type MassFootprint } from './massDatumChain';
 import { explainFoundationRevisionLabels } from './foundationRevisionLabels';
@@ -28,7 +29,7 @@ const detailed = (ts: DrawingText[]): PageText[] =>
     h: Number.isFinite((t as PageText).h) ? (t as PageText).h : 0,
   }));
 
-const normalized = (s: string) => s.toUpperCase().replace(/[\s.-]/g, '');
+const normalized = (s: string) => s.toUpperCase().replace(/[\s/.-]/g, '');
 const reference = (
   s: Sheet,
   quote: string,
@@ -499,7 +500,7 @@ function recoverBaseFoundationGeometry(
         !e.shape
       )
         return e;
-      const code = /^([A-Z]{1,3}-?\d{1,2}[A-Z]?)\b/i.exec(e.typeName)?.[1];
+      const code = /^([A-Z]{1,3}(?:\/[A-Z])?-?\d{1,2}[A-Z]?)\b/i.exec(e.typeName)?.[1];
       const candidates = code ? sections.get(normalized(code)) : undefined;
       if (!candidates?.length) return e;
       const section = candidates[0];
@@ -519,11 +520,19 @@ function recoverBaseFoundationGeometry(
       let shape = e.shape;
       let localTop = top.z;
       let localSource: SourceRef | undefined;
-      if (section.kind === 'strip' && shape.type === 'run') {
+      let localSources: SourceRef[] = [];
+      let coverageNote = "";
+      if (section.kind === 'strip' && (shape.type === 'run' || shape.type === 'axis')) {
+        const local=localStripDatum(project,e,section.width,texts,lines);
+        if(!local)return e;
+        localTop=local.z;
+        localSources=local.sources;
+        const total=shape.points.length;
+        if(local.start!==0||local.end!==total-1) coverageNote = " Only the contiguous section-qualified portion is represented; remaining measured segments are unresolved. Accepted quantity includes the full original run.";
         shape = {
           type: 'run',
-          points: shape.points,
-          z0: top.z - section.depth,
+          points: shape.points.slice(local.start,local.end+1),
+          z0: localTop - section.depth,
           height: section.depth,
           thickness: section.width,
         };
@@ -605,6 +614,7 @@ function recoverBaseFoundationGeometry(
             section.source,
             ...top.sources,
             ...(localSource ? [localSource] : []),
+            ...localSources,
           ].map((s) => [JSON.stringify(s), s]),
         ).values(),
       ];
@@ -616,7 +626,7 @@ function recoverBaseFoundationGeometry(
         issues: [
           ...new Set([
             ...e.issues,
-            `Footing section taken from ${section.source.label}; top ${localTop.toFixed(3)} m from explicit structural datum, bottom ${(localTop - section.depth).toFixed(3)} m. Plan placement remains inferred from the measured run or registered grid; check local steps and eccentricity.`,
+            `Footing section taken from ${section.source.label}; top ${localTop.toFixed(3)} m from explicit structural datum, bottom ${(localTop - section.depth).toFixed(3)} m. Plan placement remains inferred from the measured run or registered grid; check local steps and eccentricity.${coverageNote}`,
           ]),
         ],
       };

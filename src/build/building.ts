@@ -89,7 +89,7 @@ export function gridAxes(texts: DrawingText[], width: number, height: number, fo
   const complete = (a: typeof axes) => ['x','y'].every(axis => Object.values(a).filter(v => v.axis === axis).length >= 2);
   if (!complete(axes) && lines.length) {
     const cached=strokeAxesCache.get(lines)?.get(texts);
-    if(cached?.width===width && cached.height===height){
+    if(cached && cached.width===width && cached.height===height){
       if(complete(cached.axes))return structuredClone(cached.axes);
     } else {
     const witnessed: Record<string, {axis:'x'|'y';at:number}[]> = {};

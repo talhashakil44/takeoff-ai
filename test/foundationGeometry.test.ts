@@ -96,9 +96,15 @@ const pad = {
   unit: 'ea',
 } as BuildElement;
 const model = { elements: [strip, pad], levels: [] } as unknown as BuildModel;
+const withLocalSections=(p:Project,ts:DrawingTexts)=>({
+ project:{...p,sheets:[...p.sheets.map(s=>s.id==='plan'?{...s,width:1000,height:1000}:s),{id:'local',name:'S9',page:9,title:'SECTIONS'}]} as Project,
+ texts:{...ts,plan:[text('A',-300,0),text('A',300,0),text('B',-300,100),text('B',300,100),text('1',0,-300),text('1',0,300),text('2',100,-300),text('2',100,300)],
+ local:[...['A','2'].flatMap((g,i)=>{const x=200+i*400;return [text(`SECTION AT G/L ${g}`,x,500),text('GROUND FLOOR',x,100),text('0',x,90),text('T/O FOOTING',x,300),text('-1200',x,290),text('SF-1',x,250)];})]},
+});
 it('extrudes schedule-sized footings DOWN from top datum, preserving source quantities and grid placement', () => {
   const before = JSON.stringify({ project, model });
-  const out = recoverFoundationGeometry(project, model, texts);
+  const local=withLocalSections(project,texts);
+  const out = recoverFoundationGeometry(local.project, model, local.texts);
   expect(out.elements[0].shape).toEqual({
     type: 'run',
     points: [
@@ -181,8 +187,9 @@ it('refuses contradictory footing schedules and ignores superseded tables', () =
     ...p.sheets[p.sheets.length - 1],
     superseded: true,
   };
+  const local=withLocalSections(p,competing);
   expect(
-    recoverFoundationGeometry(p, model, competing).elements[0].shape,
+    recoverFoundationGeometry(local.project, model, local.texts).elements[0].shape,
   ).toMatchObject({ type: 'run', height: 0.3, z0: -1.5 });
 });
 

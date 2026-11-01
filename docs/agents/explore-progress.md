@@ -1881,3 +1881,38 @@ PASS; repeat under system load hit two unrelated5000ms timeouts, retrying with
 section applicability, thirddevPDF, Claude review and complete corpus scoring.
 T11 not complete; no sealed access, source edits, merge or deploy.
 Final reduced-concurrency retry:678tests(4skipped)PASS; final typecheck/buildPASS.
+
+## 2026-10-31 evening local — local foundation sections (model62)
+User explicitly renewed cross-project/no-overfitting direction. Coordinated
+with Claude as gpt-explore. Added generic gridFootingSections/localStripDatum:
+explicit SECTION AT G/L titles, unique signed footing datum referenced to
+GROUND FLOOR0, same-document plan grid and matching normalized strip mark.
+Recognizes S/F and SF spellings; no project names or member-specific constants.
+Rejects min-cover text, nonzero/unresolved datum origin, duplicate mark locations
+in a section, conflicting elevations, stepped plans and disjoint qualified
+fragments. Requires applicable evidence for every rendered segment. A single
+contiguous supported subchain may be rendered; other segments remain unresolved
+and all accepted quantities unchanged. UI explicitly labels partial geometry.
+Dunnville S2-4 has ground0/TOF−1220 and S1-1 scheduleSF5=600x300. Two contiguous
+measured portions now become strips z−1.520 to−1.220:44.129m of44.619m and
+15.969m of24.723m. Only these portions rendered; plan centrelines remain inferred
+from accepted measurement/grid association, not claimed fully verified outlines.
+Repeated SF5 locations in gridD section are ambiguous and excluded, rather than
+assuming its single datum describes all locations. No whole-record coverage
+credit inferred from either partial solid. SourcePDF, live2D/3D inspected in
+proofs/dunnville-*-v62.png; linked local sections visible, browsererrors empty.
+Williamsburg same rule: zero shape changes, appropriately withheld. Structural
+S3.1 gives MIN1200 frost cover and refers to architecture; architectural A4.1
+uses AVG.GRADE0, TOF−1317, USF−1520, while structural SF1 schedule is600x200.
+A5.1 has GROUND FLOOR+1121 relative annotation requiring local applicability;
+not substituted into the model. Project has0specdocs: no spec agreement claimed.
+Original project content and quantity/unit tuples unchanged in both dev runs.
+26focused tests initiallyPASS; full683tests(4skipped)PASS, then one added
+noncontiguous-chain testPASS (684total pending harness). Typecheck/buildPASS.
+Existing positive foundation tests now provide explicit local section evidence
+instead of assuming a global datum applies everywhere. Also fixed a grid-cache
+undefined guard exposed by incomplete synthetic sheet metadata.
+Next: general datum-origin/reference graph and section-to-wall-top association,
+obtain omitted spec sources/thirddevPDF through Claude, review footprint evidence
+and cross-project coverage. This is partial integration, not all-model acceptance;
+no sealed source access, main merge or deploy.
