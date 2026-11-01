@@ -195,7 +195,8 @@ export function codeLists(texts: PageText[], accept: (code: string) => boolean =
       if (used.has(t)) continue;
       const x0 = t.cx - t.w / 2;
       // Lined up on their left edges, or centred in a column's cells.
-      const tol = Math.max(1.5, 0.3 * t.h);
+      // (A schedule of several families: codes of different widths, a little looser.)
+      const tol = Math.max(1.5, (opts.mixed ? 0.8 : 0.3) * t.h);
       const col = group
         .filter((o) => !used.has(o) && (Math.abs(o.cx - o.w / 2 - x0) <= tol || Math.abs(o.cx - t.cx) <= tol) && Math.abs(o.h - t.h) <= 0.25 * t.h)
         .sort((a, b) => a.cy - b.cy);

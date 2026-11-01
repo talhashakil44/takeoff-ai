@@ -16,5 +16,7 @@ it.skipIf(!process.env.DOC)('plumbing fixtures', async () => {
     if (/^M901/.test(s.name)) process.stdout.write(`${s.name} ${s.title}: rows ${codeLists(texts, undefined, { mixed: true }).map((r) => `${r.code}=${r.description.slice(0, 30)}`).join(' | ')}\n`);
   }
   const counts = countPlumbingFixtures(tagSheets);
+  const m901 = tagSheets.find((t) => t.sheet.name === 'M901');
+  if (m901) process.stdout.write(`fixture-ish ${m901.texts.filter((t) => /^(U|TH|CS|BF|DWH|FFD|WC|L)-?\d?$/.test(t.str.trim())).map((t) => `${t.str}@${Math.round(t.cx - t.w / 2)},${Math.round(t.cy)}`).join(' | ')}\n`);
   process.stdout.write(`counts ${counts.map((c) => `${c.code}:${c.total}`).join(' ')}\n`);
 });
