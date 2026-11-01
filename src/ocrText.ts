@@ -167,9 +167,56 @@ const wordCount = (items: { str?: string }[]) => items.reduce((n, it) => n + (it
  * content is the PDF's own items plus the OCR runs that are not already there. Each page is read
  * once. Pages with text of their own are left as they are.
  */
-export function withOcrText<D extends PDFDocumentProxy>(pdf: D, ocr: PageOcr): D {
+export interface OcrTextOptions {
+  /**
+   * Read only flattened documents: a sample of the document's pages is checked first, and a set
+   * whose sheets mostly carry their own text (a vector set with a few sparse elevations) is left
+   * to its own text. The app uses this so a drawing set opens without minutes of OCR.
+   */
+  flattenedOnly?: boolean;
+  /** Give up on a page's OCR after this long and use its own text (the app must never stall on a read). */
+  timeoutMs?: number;
+}
+
+/** Pages sampled to decide whether a document is flattened. */
+const SAMPLE_PAGES = 8;
+
+export function withOcrText<D extends PDFDocumentProxy>(pdf: D, ocr: PageOcr, opts: OcrTextOptions = {}): D {
   const done = new Map<number, Promise<unknown>>();
   const getPage = pdf.getPage.bind(pdf);
+  let flattened: Promise<boolean> | null = null;
+  const isFlattened = () =>
+    (flattened ??= (async () => {
+      const n = pdf.numPages;
+      const picks = [...new Set(Array.from({ length: Math.min(SAMPLE_PAGES, n) }, (_, i) => 1 + Math.floor((i * n) / Math.min(SAMPLE_PAGES, n))))];
+      let sparse = 0;
+      for (const k of picks) {
+        try {
+          const pg = await getPage(k);
+          // Its own text: a page already given OCR text must not wait on this check.
+          const own = (pg as { ownTextContent?: PDFPageProxy['getTextContent'] }).ownTextContent ?? pg.getTextContent.bind(pg);
+          if (wordCount((await own()).items as TextItemLike[]) < OCR_BELOW_WORDS) sparse++;
+        } catch {
+          sparse++;
+        }
+      }
+      return sparse * 2 > picks.length;
+    })());
+  // After one sheet runs out of time the document is left to its own text: the reader is too slow
+  // for this set here, and every further sheet would only queue behind it.
+  let gaveUp = false;
+  const timed = (page: PDFPageProxy): Promise<OcrWord[]> =>
+    opts.timeoutMs
+      ? Promise.race([
+          ocr(page),
+          new Promise<OcrWord[]>((_, no) =>
+            setTimeout(() => {
+              gaveUp = true;
+              no(new Error('OCR timed out'));
+            }, opts.timeoutMs),
+          ),
+        ])
+      : ocr(page);
   const patched = async (n: number) => {
     const page = await getPage(n);
     if ((page as { __ocr?: boolean }).__ocr) return page;
@@ -185,9 +232,11 @@ export function withOcrText<D extends PDFDocumentProxy>(pdf: D, ocr: PageOcr): D
             const content = await own(params);
             const items = content.items as TextItemLike[];
             if (wordCount(items) >= OCR_BELOW_WORDS) return content;
+            if (gaveUp || (opts.flattenedOnly && !(await isFlattened()))) return content;
             let words: OcrWord[] = [];
             try {
-              words = await ocr(page);
+              if (gaveUp) return content;
+              words = await timed(page);
             } catch {
               return content;
             }

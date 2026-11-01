@@ -49,7 +49,7 @@ import { FileManager } from './components/FileManager';
 import { addendumNumber, mergeSections, readSpec } from './spec/parse';
 import { isCombined, pageKinds, pagesOf, splitPdf } from './splitPdf';
 import { ocrTitleBlock, pageOcr, tidySetNumbers } from './ocr';
-import { withOcrText } from './ocrText';
+import { withOcrText, type OcrTextOptions } from './ocrText';
 import { buildProjectMap } from './spec/links';
 import { buildGraph, definitionsOf, type DrawingGraph, type Link, type Place } from './graph/graph';
 import { entries, norm, type Entry } from './smart/index';
@@ -90,6 +90,10 @@ import { doorTakeoff, findDoorTagsIn } from './automate/doors';
 import { automateWindows as windowTakeoff } from './automate/windows';
 import { applyRooms } from './automate/rooms';
 import { applyWalls, wallLegendFor } from './automate/walls';
+
+
+/** OCR in the app: flattened sets only, and a set whose sheet takes over 90 s is left to its own text (opening never stalls). */
+const APP_OCR: OcrTextOptions = { flattenedOnly: true, timeoutMs: 90_000 };
 
 const UNDO_LIMIT = 200;
 
@@ -279,7 +283,7 @@ export function App() {
     for (const doc of p.docs) {
       const data = await loadPdf(doc.id);
       // Pages with no text of their own (lettering drawn as linework) are read by OCR when a tool first reads them.
-      if (data) opened.set(doc.id, withOcrText(await openPdf(data), pageOcr));
+      if (data) opened.set(doc.id, withOcrText(await openPdf(data), pageOcr, APP_OCR));
     }
     const log = p.id ? await loadActivity(p.id) : [];
     past.current = [];
@@ -982,7 +986,7 @@ export function App() {
     // Sheets whose title block has no text (drawn as linework, or scanned): read by OCR.
     sheets = await namedByOcr(pdf, sheets, name);
     ocrTried.current.add(docId);
-    setPdfs((m) => new Map(m).set(docId, withOcrText(pdf, pageOcr)));
+    setPdfs((m) => new Map(m).set(docId, withOcrText(pdf, pageOcr, APP_OCR)));
     commit((p) => ({ ...p, docs: [...p.docs, { id: docId, name }], sheets: [...p.sheets, ...sheets] }), 'Add drawings');
     setSheetId((cur) => cur ?? sheets[0]?.id ?? null);
     return { sheets, noText };

@@ -61,6 +61,25 @@ describe('OCR text layer', () => {
     expect(reads).toBe(1);
     expect(content.items.map((i) => ('str' in i ? i.str : ''))).toEqual(['A2.1', 'P101']);
   });
+  it('in the app, leaves a vector set to its own text and never waits long on one sheet', async () => {
+    const words = (n: number) => Array.from({ length: n }, (_, i) => ({ str: `NOTE${i}`, dir: 'ltr', width: 30, height: 10, transform: [10, 0, 0, 10, 10 * i, 50], fontName: 'f', hasEOL: false }));
+    const pageOf = (k: number, n: number) =>
+      ({ pageNumber: k, getViewport: () => viewport, getTextContent: async () => ({ items: words(n), styles: {} }) }) as unknown as PDFPageProxy;
+    // A vector set: one sparse elevation among sheets full of notes.
+    const vector = [pageOf(1, 400), pageOf(2, 20), pageOf(3, 300), pageOf(4, 500)];
+    let reads = 0;
+    const set = { numPages: 4, getPage: async (k: number) => vector[k - 1]! } as unknown as PDFDocumentProxy;
+    withOcrText(set, async () => (reads++, [word('P101', 400, 300, 430, 310)]), { flattenedOnly: true });
+    expect((await (await set.getPage(2)).getTextContent()).items).toHaveLength(20);
+    expect(reads).toBe(0);
+    // A flattened set is read, but a sheet whose OCR hangs gives its own text after the timeout.
+    const flat = [pageOf(1, 10), pageOf(2, 12)];
+    const scan = { numPages: 2, getPage: async (k: number) => flat[k - 1]! } as unknown as PDFDocumentProxy;
+    withOcrText(scan, () => new Promise<OcrWord[]>(() => {}), { flattenedOnly: true, timeoutMs: 20 });
+    expect((await (await scan.getPage(1)).getTextContent()).items).toHaveLength(10);
+    // ...and the rest of that set is not tried again.
+    expect((await (await scan.getPage(2)).getTextContent()).items).toHaveLength(12);
+  });
 });
 
 describe('Tesseract words as sheet words', () => {
