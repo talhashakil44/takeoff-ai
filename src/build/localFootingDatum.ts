@@ -8,6 +8,10 @@ const norm=(s:string)=>s.toUpperCase().replace(/[\s/.-]/g,'');
  * minimum, scaled section depth, or a project-wide nearest datum. */
 export function gridFootingSections(ts:DrawingText[]){
  const titles=ts.flatMap(t=>{const m=/^SECTION\s+AT\s+G\/?L\s+([A-Z]|\d{1,2})$/i.exec(t.str.trim());return m?[{t,grid:m[1].toUpperCase()}]:[];}).sort((a,b)=>a.t.cx-b.t.cx);
+ // Horizontal midpoint panels are valid only for one aligned title row.
+ // Stacked/staggered sections need actual panel boundaries; otherwise a lower
+ // title can borrow a zero datum and footing mark from an unrelated upper detail.
+ if(titles.some(v=>!v.t.h||!Number.isFinite(v.t.cy))||titles.length>1&&Math.max(...titles.map(v=>v.t.cy))-Math.min(...titles.map(v=>v.t.cy))>2*Math.min(...titles.map(v=>v.t.h!)))return [];
  return titles.flatMap((v,i)=>{
   const lo=i?(titles[i-1].t.cx+v.t.cx)/2:-Infinity,hi=i+1<titles.length?(titles[i+1].t.cx+v.t.cx)/2:Infinity;
   const local=ts.filter(t=>t.cx>lo&&t.cx<hi&&t.cy<v.t.cy);

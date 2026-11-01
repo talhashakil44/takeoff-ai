@@ -38,3 +38,12 @@ it('rejects disjoint supported spans instead of silently choosing one fragment',
  const p=structuredClone(project);p.measurements[0].points=[[100,100],[400,100],[400,200],[100,200],[100,100],[200,100]];
  expect(localStripDatum(p,element,.6,{p:plan,s:section()},{})).toBeNull();
 });
+
+it('does not borrow an upper detail datum for a staggered lower section title',()=>{
+ // Old midpoint partition assigned all upper evidence to the lower title B.
+ const upper=section().map(v=>v.str.startsWith('SECTION')?{...v,cx:500}:v);
+ expect(gridFootingSections([...upper,t('SECTION AT G/L B',200,800)])).toEqual([]);
+ // Slight title baseline variation within one row remains supported.
+ const beside=section('B','SF8','-1800').map(v=>({...v,cx:v.cx+600,cy:v.cy+4}));
+ expect(gridFootingSections([...section(),...beside]).map(v=>[v.grid,v.z])).toEqual([['A',-1.22],['B',-1.8]]);
+});

@@ -1940,3 +1940,21 @@ and verify those relationships against original PDF before enabling solids.
 Engine gridLines helper reviewed at integration9309abc; asked Claude to coordinate
 whole engine integration before reuse (Explore lacks dimensions.ts). No engine
 file partial-port, sealed inspection, original-data edit, main merge or deploy.
+
+## 2026-10-31 evening local — section panel isolation (model63)
+No new Claude reply yet to detail-loader ownership request. Independently found
+an unsafe cross-layout case: horizontal midpoint panels allowed a staggered
+lower SECTION AT G/L title to borrow an upper detail's mark and footing datum.
+Added a regression reproducing that incorrect association. Parser now requires
+one aligned title row before using horizontal panel divisions; stacked/staggered
+layouts remain unresolved until actual panel boundaries are available. Small
+baseline variation within one row remains supported. No project-specific rules.
+Dev-only source-to-model runners PASS on Dunnville, Williamsburg and Brampton;
+zero shape deltas and zero quantity/unit deltas versus model62 in all three.
+Original preservation assertions PASS. Focused28 tests PASS; full suite,
+typecheck and production build PASS. Live Dunnville2D, original S1-1 PDF and3D
+inspected, screenshots proofs/dunnville-{plan,source,3d}-v63.png, browsererrors[].
+Two partial strip solids remain with explicit unresolved-coverage labelling.
+This prevents false height propagation; it does not increase qualified coverage.
+Next remains shared detail-source loading and applicable relative-datum chains,
+then source/visual checks across projects and Claude review. T11 not complete.
