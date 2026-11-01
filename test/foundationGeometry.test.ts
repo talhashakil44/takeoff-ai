@@ -119,7 +119,7 @@ it('extrudes schedule-sized footings DOWN from top datum, preserving source quan
   expect(out.elements[1].shape).toEqual(pad.shape);
   expect(out.elements.map((e) => e.quantity)).toEqual([2, 1]);
   expect(out.elements[0].sources.map((s) => s.id)).toEqual(
-    expect.arrayContaining(['schedule', 'section']),
+    expect.arrayContaining(['schedule', 'local']),
   );
   expect(out.elements[1].placement).toBe('inferred');
   expect(JSON.stringify({ project, model })).toBe(before);
@@ -1437,4 +1437,18 @@ it('keeps scheduled pad dimensions and datum reviewable without promoting an unv
  expect(out.quantity).toBe(pad.quantity);
  expect(out.sources.map(s=>s.id)).toEqual(expect.arrayContaining(['schedule','section']));
  expect(out.issues.some(s=>s.includes('actual footprint remain unverified'))).toBe(true);
+});
+
+it('resolves a locally qualified strip despite unrelated conflicting footing elevations',()=>{
+ const local=withLocalSections(project,texts);
+ const conflicting={...local.texts,section:[...texts.section,text('T/O FOOTING',400,500),text('-1800',420,508)]};
+ expect(footingTopDatum(local.project,conflicting)).toBeNull();
+ const out=recoverFoundationGeometry(local.project,model,conflicting);
+ expect(out.elements[0].shape).toMatchObject({type:'run',z0:-1.5,height:.3,thickness:.6});
+ expect(out.elements[0].sources.some(s=>s.id==='section')).toBe(false);
+ expect(out.elements[0].sources.some(s=>s.id==='local')).toBe(true);
+ expect(out.elements[1].shape).toEqual(pad.shape);
+ expect(out.elements.map(e=>e.quantity)).toEqual(model.elements.map(e=>e.quantity));
+ const bad={...conflicting,local:conflicting.local.map(t=>t.str==='-1200'&&t.cx>500?{...t,str:'-1800'}:t)};
+ expect(recoverFoundationGeometry(local.project,model,bad).elements[0].shape).toEqual(strip.shape);
 });

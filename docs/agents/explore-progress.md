@@ -1981,3 +1981,24 @@ These tests cover signed imperial behavior synthetically; no real imperial-proje
 accuracy claim. No new qualified geometry coverage claimed. Next: shared detail
 loading and local dimension/reference applicability, plus Claude review. T11
 remains incomplete; no main merge or deploy.
+
+## 2026-10-31 evening local — independent local strip datums (model65)
+No new Claude reply; shared FOUNDATION DETAILS loading remains absent. After
+three independent iterations, sent concrete owner-action/delegation request via
+bus02-05-46Z. Continued on an independent geometry integration defect:
+recoverBaseFoundationGeometry required one consistent project-wide footing datum
+before evaluating any local section. Differing unrelated footing levels therefore
+blocked otherwise qualified strips. Local strip sections now resolve independently;
+pads/piers/slabs retain their prior datum gates. A strip's source chain no longer
+includes unrelated project-wide footing annotations. No zero datum fallback added.
+Regression proves local strip recovery despite unrelated conflicts, rejection of
+conflicting elevations along its own segments, unchanged pads/quantities. Focused29
+and full690tests PASS, tsc/build PASS. All three dev source-model runs PASS with
+original preservation, zero shape/quantity/unit changes vs64. This expands valid
+local behavior synthetically; no real-project coverage gain claimed.
+Live Dunnville sourcePDF/2D/3D review rerun after an HMR navigation interrupted the
+first browser capture. Next: inspect section-to-plan dimension applicability and
+receive Claude's detail-loader change; schedule matching also needs review for
+same member marks across multiple documents. T11 remains incomplete.
+Final live rerun PASS: originalPDF/plan/3D inspected in proofs/dunnville-*-v65.png,
+browsererrors[]; source panel now retains only local section datum links.

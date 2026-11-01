@@ -1,4 +1,4 @@
-import {localStripDatum} from './localFootingDatum';
+import {gridFootingSections,localStripDatum} from './localFootingDatum';
 import { explainFoundationSlabOption } from './foundationSlabOptionEvidence';
 import { connectMassDatums, type MassFootprint } from './massDatumChain';
 import { explainFoundationRevisionLabels } from './foundationRevisionLabels';
@@ -414,7 +414,8 @@ function recoverBaseFoundationGeometry(
   lines: DrawingLines = {},
 ): BuildModel {
   const top = footingTopDatum(project, texts);
-  if (!top) return model;
+  // Local strip sections can remain valid when unrelated project datums disagree.
+  if (!top && !Object.values(texts).some(ts=>gridFootingSections(ts).length)) return model;
   const sections = new Map<
     string,
     {
@@ -518,7 +519,7 @@ function recoverBaseFoundationGeometry(
       )
         return e;
       let shape = e.shape;
-      let localTop = top.z;
+      let localTop: number;
       let localSource: SourceRef | undefined;
       let localSources: SourceRef[] = [];
       let coverageNote = "";
@@ -542,6 +543,7 @@ function recoverBaseFoundationGeometry(
         section.length &&
         Math.abs(section.length - section.width) < 0.001
       ) {
+        if (!top) return e; // Pads still require their existing datum/detail chain.
         const at = shape.at;
         const peers = model.elements.filter(
           (v) => v.sheetId === e.sheetId && v.status !== 'demolished',
@@ -612,7 +614,7 @@ function recoverBaseFoundationGeometry(
           [
             ...e.sources,
             section.source,
-            ...top.sources,
+            ...(localSources.length ? [] : top?.sources ?? []),
             ...(localSource ? [localSource] : []),
             ...localSources,
           ].map((s) => [JSON.stringify(s), s]),
@@ -632,6 +634,7 @@ function recoverBaseFoundationGeometry(
       };
     }),
   };
+  if (!top) return corrected; // No project datum may propagate to piers or slabs.
   return recoverInteriorSlabs(
     project,
     recoverPiers(project, corrected, lines, sections, details.exterior, top.z),
