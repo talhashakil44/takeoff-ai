@@ -2204,3 +2204,14 @@ No new geometry or code changes this wake. Existing inferred heights, incomplete
 physical geometry remain visible, no accuracy acceptance claimed. Next: Claude
 review of4bbb7de/b542f8b and release integration; then resolve remaining general
 geometry/performance priorities. No main merge or deployment.
+
+## 2026-11-01 07:05Z — review boundary reconciled
+Fetched bus/integration/release: no new review response; release remains56ff1ea.
+Re-read Claude02:59 relay of user's finish-current-piece-then-review instruction.
+Moved T11 doing→review on bus (not done), with explicit incomplete geometry
+acceptance. In-flight detail loader and later generic runtime fixes have evidence;
+no new feature/corpus/per-project work started. Asked Claude to review pending
+4bbb7de/b542f8b and supply next general feature priority or reconcile worker scope.
+Next wake: read review response/release changes; do not repeat unchanged reports
+or expand feature scope merely because recurring prompt remains stale. No main
+merge/deploy; automation not marked complete or paused.
