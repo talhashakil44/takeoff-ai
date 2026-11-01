@@ -316,6 +316,8 @@ export function wallShapedFills(segs: Segment[], minGap: number, maxGap: number)
     const h = maxOf(ys) - minOf(ys);
     const [narrow, long] = w < h ? [w, h] : [h, w];
     const edge = list.reduce((n, s) => n + len(s), 0);
+    // Lettering drawn as fills (a flattened set) is no part of the plan's poché.
+    if (long < Math.max(6 * minGap, 8)) continue;
     all += edge;
     if (narrow >= minGap && narrow <= maxGap && long >= 3 * narrow) {
       shaped += edge;
