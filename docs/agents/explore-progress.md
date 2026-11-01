@@ -2022,3 +2022,28 @@ claimed; architecture remains inferred. Diagnostic preview files/data are ignore
 Next: consume dimension-line loading, resolve explicit dimension endpoints against
 local levels/detail references; also review same member marks in multiple documents.
 T11 remains incomplete; no original changes, sealed access, main merge or deploy.
+
+## 2026-10-31 late evening — detail linework finished; release UI review
+Claude relayed user's changed direction: stop corpus scoring/per-project tuning,
+finish current foundation-detail piece, then review general 3D feature. No new
+geometry heuristics added. Cherry-picked owner e6c9496 as e405e89: generic
+FOUNDATION/FOOTING DETAIL/SECTION linework now loaded. Ten source tests PASS;
+owner reports full harness/audit PASS. Already present in release953fbaa.
+General feature/remaining-work list sent to Claude03:09Z: original-PDF2D/3D,
+measured rooms/structural quantities/source links, layers, inferred/unresolved
+placement. Still missing general detail-dimension endpoint/reference resolution,
+complete local vertical applicability, cross-document schedule isolation and
+robust unfamiliar-layout registration. No universal reconstruction claim.
+Created detached /tmp/takeoff-release-review at release953fbaa, server5191,
+read-only demo copies seeded into isolated browser storage; originals untouched.
+Actual main-app Explore->Build first-time flow cannot yet pass: Kelso remains
+at Reading39/106 and Model wait times out after180seconds. Frederick independently
+remains36/53. UI responsive, model not generated; therefore cannot verify Explore
+end-to-end on these fresh sessions. Diagnostic-only logs in temporary release
+worktree localize Kelso pending text reads to A6.1,A6.2,A9.2,A94; no pending line
+reads. Browser OCR runs (Tesseract estimating-resolution warnings). Reported to
+Claude03:12Z as cold-start OCR delay, not proven deadlock or successful3D test.
+Evidence /tmp/release-ui-observe.log, /tmp/release-frederick.log,
+/tmp/release-diag.log, /tmp/release-current.png. No changes to release committed,
+no merge/deploy. Next: Claude runtime fix/review and re-test actual release UI;
+do not resume project-specific tuning or corpus scoring from stale heartbeat text.
