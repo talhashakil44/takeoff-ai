@@ -61,11 +61,12 @@ export function linePlans(project: Pick<Project, 'sheets' | 'measurements'> & { 
 /**
  * Sheets whose text the model reads: plans (levels, grids), elevations and sections (datums,
  * roof, façades), window schedules, and every sheet that has a takeoff (its title block names
- * its level), and untitled sheets (their title block may name a level). Cover sheets, notes,
- * assembly types and details are not read: the model and the plan come out the same without them.
+ * its level), untitled sheets (their title block may name a level), and foundation and footing
+ * details (their depths and dimensions place the foundations). Cover sheets, notes, assembly types
+ * and other details are not read: the model and the plan come out the same without them.
  */
 export const needsText = (s: Pick<Sheet, 'id' | 'title'>, measured: Set<string>) =>
-  measured.has(s.id) || needsLines(s) || !(s.title ?? '').trim() || /PLAN|ELEVATION|SECTION|SCHEDULE/i.test(s.title ?? '');
+  measured.has(s.id) || needsLines(s) || !(s.title ?? '').trim() || /PLAN|ELEVATION|SECTION|SCHEDULE|FOUNDATION|FOOTING/i.test(s.title ?? '');
 
 /**
  * Arcs some CAD exports write as runs of short straight chords (Kelso's door swings and tag
