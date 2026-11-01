@@ -291,3 +291,52 @@ export function countWindowTags(sheets: TagSheet[], setTypes: SetTypes = setType
   }
   return sortCounts([...counts.values()]);
 }
+
+/** What a plumbing fixture schedule's rows name. */
+const FIXTURE_WORDS =
+  /\b(WATER\s*CLOSET|W\.?C\.?|TOILET|LAVATOR(Y|IES)|BASIN|URINAL|SINKS?|SHOWERS?|FLOOR\s*DRAINS?|FUNNEL|DRAINS?|FAUCETS?|HOSE\s*(BIBB?|STATION)|HYDRANT|FOUNTAIN|BOTTLE\s*FILL|EYE\s*WASH|EMERGENCY|MOP|SERVICE\s*SINK|LAUNDRY|TUB|WATER\s*HEATER|HEATER|BACKFLOW|PREVENTER|INTERCEPTOR|THERMOSTATIC|MIXING\s*VALVE|TRAP\s*PRIMER|PUMP|TANK|DISHWASHER)\b/i;
+const PLUMBING_TRADES = /^(M|MD|MH|MP|ME|P|PD|PL)$/;
+
+/**
+ * Plumbing fixtures counted as a plumber does: the codes the mechanical or plumbing drawings'
+ * fixture schedule lists (WC-1, L-2, FD-1), wherever the new-work plumbing plans write them. The
+ * architectural lists and plans are `countListedItems`'s; this reads the trade's own.
+ */
+export function countPlumbingFixtures(sheets: TagSheet[]): TagCount[] {
+  const live = sheets.filter((s) => !s.sheet.superseded);
+  const trade = (s: TagSheet) => tradeOfNumber(s.sheet.name ?? '');
+  const plumbing = live.filter((s) => PLUMBING_TRADES.test(trade(s) ?? ''));
+  // The schedule: rows on the trade's sheets whose names are fixtures.
+  const rows: ListedCode[] = [];
+  const listed = new Set<PageText>();
+  for (const s of plumbing)
+    for (const r of codeLists(s.texts, undefined, { mixed: true })) {
+      listed.add(r.text);
+      // (Anywhere in the row: a schedule may give the maker and model before the fixture's name.)
+      if (FIXTURE_WORDS.test(r.description)) rows.push(r);
+    }
+  if (!rows.length) return [];
+  const codes = new Map<string, ListedCode>();
+  for (const r of rows) if (!codes.has(norm(r.code))) codes.set(norm(r.code), r);
+  const counts = new Map<string, TagCount>();
+  for (const s of plumbing) {
+    const t = (s.sheet.title ?? '').toUpperCase();
+    // New-work plumbing plans: not demolition, existing, schedules, details, sections, risers.
+    if (!/\bPLANS?\b/.test(t) || !/PLUMB|DRAIN|PIPING|SANITARY|DOMESTIC|WATER/.test(t) || /DEMO|REMOV|EXISTING|SCHEDULE|DETAIL|SECTION|RISER|SCHEMATIC|ROOF|SITE/.test(t)) continue;
+    const keep = outsideTitleBlock(s);
+    for (const tx of s.texts) {
+      if (listed.has(tx)) continue;
+      for (const { code, at } of codesIn(tx)) {
+        const r = codes.get(norm(code));
+        if (!r || !keep(at)) continue;
+        let c = counts.get(norm(code));
+        if (!c) counts.set(norm(code), (c = { code: r.code, description: firstClause(r.description).replace(/\s+/g, ' ').slice(0, 60), places: [], total: 0 }));
+        let place = c.places.find((p) => p.sheetId === s.sheet.id);
+        if (!place) c.places.push((place = { sheetId: s.sheet.id, at: [] }));
+        place.at.push(at);
+        c.total++;
+      }
+    }
+  }
+  return sortCounts([...counts.values()]);
+}

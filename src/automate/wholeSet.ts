@@ -14,7 +14,7 @@ import { pause, type SetAccess } from './set';
 import { automateSprinklers } from './sprinklers';
 import { defaultSymbolChoices, symbolTakeoff, symbolTallies } from './symbols';
 import { automateWalls, projectSetTypes } from './walls';
-import { automateWindows } from './windows';
+import { automatePlumbingFixtures, automateWindows } from './windows';
 import { planShift as planShiftKnown, repeatedRuns } from './overlap';
 import { findRoomLabels } from '../fill/rooms';
 import { automateFoundations } from './foundations';
@@ -448,6 +448,15 @@ export async function takeOffWholeSet(
     apply('trades', r);
     await hold();
     for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('plumbing fixtures', async () => {
+    say('Whole set: plumbing fixtures…');
+    await pause();
+    const r = await automatePlumbingFixtures(project, access);
+    apply('plumbing', r);
+    await hold();
     return r.message;
   });
 

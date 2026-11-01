@@ -176,14 +176,15 @@ function orderly(run: PageText[]): boolean {
  * codes of one family (EQ-1, EQ-2, …) one under another, left edges in line, each row close to
  * the one before. A plan's tags are scattered, not stacked like this.
  */
-export function codeLists(texts: PageText[], accept: (code: string) => boolean = (c) => ITEM_CODE.test(c)): ListedCode[] {
+export function codeLists(texts: PageText[], accept: (code: string) => boolean = (c) => ITEM_CODE.test(c), opts: { mixed?: boolean } = {}): ListedCode[] {
   const cands = texts.filter((t) => upright(t) && accept(t.str.trim()));
   const out: ListedCode[] = [];
   const used = new Map<PageText, number>();
   let lists = 0;
   const byFamily = new Map<string, PageText[]>();
   for (const t of cands) {
-    const f = familyOf(t.str.trim());
+    // `mixed`: one column may list codes of several families (a fixture schedule's WC-1, L-1, U-1).
+    const f = opts.mixed ? '' : familyOf(t.str.trim());
     const list = byFamily.get(f);
     if (list) list.push(t);
     else byFamily.set(f, [t]);
@@ -201,14 +202,15 @@ export function codeLists(texts: PageText[], accept: (code: string) => boolean =
       // Runs of rows each within a few lines of the one before.
       let run: PageText[] = [];
       const flush = () => {
-        if (run.length >= 3 && orderly(run)) {
+        if (run.length >= 3 && (opts.mixed ? new Set(run.map((r) => r.str.trim().toUpperCase())).size === run.length : orderly(run))) {
           lists++;
           for (const r of run) used.set(r, lists);
         }
         run = [];
       };
       for (const o of col) {
-        if (run.length && o.cy - run[run.length - 1].cy > 12 * Math.max(o.h, 3)) flush();
+        // (A schedule of several families has tall rows: a maker, a model, notes under each code.)
+        if (run.length && o.cy - run[run.length - 1].cy > (opts.mixed ? 40 : 12) * Math.max(o.h, 3)) flush();
         run.push(o);
       }
       flush();
