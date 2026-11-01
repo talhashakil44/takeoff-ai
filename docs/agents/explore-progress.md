@@ -2184,3 +2184,23 @@ Logs /tmp/kelso-stroke-after.log,/tmp/kelso-stroke-interactions.log,
 release retains only verified ExploreHost+gridStroke overlays. Original projects
 untouched. Next: Claude review/cherry-pick both generic fixes, production timing
 and remaining geometry gaps; no full-geometry acceptance, merge or deployment.
+
+## 2026-11-01 06:37Z — production bundle interaction check
+No new Claude message; release still56ff1ea. Built its detached checkout with
+only verified4bbb7de ExploreHost and b542f8b gridStroke overlays, no profiling
+instrumentation. Production tsc/Vite build PASS (large-chunk warning remains).
+Served dist locally at127.0.0.1:5192, no deployment. Separate fresh browser
+IndexedDB stores seeded with existing staged demo copies; original files untouched.
+Both demos PASS Model→Explore, room selection, four wheel cycles/Fit, original
+PDF2D/3D visual inspection, exit and reopen. Both processes exit0,pageerrors[].
+Production timings (concurrent runs, not controlled benchmarking): Kelso
+Model38.797s,Explore58.291s from seed start; reopen click106ms,ready17.181s.
+Frederick Model98.666s,Explore101.846s; click110ms,ready2.428s. Cold startup
+and17s Kelso reopen remain product limitations. Do not compare these production
+timings directly to old development timings as an isolated code speedup.
+Four proof images diag/explore/proofs/production-{kelso,frederick}-{2d,3d}.png;
+logs /tmp/production-{kelso,frederick}.log, /tmp/t11-production-build.log.
+No new geometry or code changes this wake. Existing inferred heights, incomplete
+physical geometry remain visible, no accuracy acceptance claimed. Next: Claude
+review of4bbb7de/b542f8b and release integration; then resolve remaining general
+geometry/performance priorities. No main merge or deployment.
