@@ -2134,3 +2134,25 @@ skipping evidence. Moving reconstruction off UI thread is a separate candidate.
 Next: Claude release review of4bbb7de, then generic reconstruction performance
 work with output-equivalence checks and production measurement. No production
 code changes this wake; no merge/deploy, full geometry acceptance incomplete.
+
+## 2026-11-01 05:43Z — registration reuse experiment rejected
+Implemented request-scoped per-sheet axes reuse for pairwise registrations,
+with fresh-source/calibration and pair-order tests. Frozen harness PASS692tests,
+tsc/build/audit (earlier run incomplete because indentation changed mid-run).
+Live release56ff1ea plus4bbb7de and experiment: Frederick interaction sequence
+passes including reopen4.8s, pageerrors[]. Kelso baseline and experimental
+computed layers/structural model captured for comparison, not corpus scoring.
+Both floor layer outputs exactly equal; structural outputs exactly equal except
+sourceHash (baseline1kgag89 vs experimental1bedsst). No geometry/quantity delta.
+SourceHash difference is not waived as full-input equivalence. Experimental
+Kelso recorded one Failed-to-fetch pageerror; did not count as clean UI PASS.
+Performance did not improve: baseline floor calls6.42–6.46s, structure21.62s;
+experimental floor calls6.52–6.58s, structure22.81s (separate runs, system load
+not controlled). Therefore restored all experimental code/tests: no new cache
+shipped without evidence of benefit. Temporary release instrumentation removed;
+only verified4bbb7de ExploreHost overlay remains there. Logs and JSON captures
+/tmp/kelso-registration-{before,after}.{log,json}; Frederick log
+/tmp/frederick-registration-after.log. No originalPDF/JSON/quantity changes.
+Next: profile roof/canopy registration and physical reconstruction substeps
+before another performance change. Claude notified of negative result and
+restored code.4bbb7de awaits review; geometry acceptance remains incomplete.
