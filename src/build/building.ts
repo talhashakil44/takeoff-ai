@@ -1,3 +1,5 @@
+import { traceGridStroke } from './gridStroke';
+import type { Segment } from '../fill/vectors';
 import { wallFootprint } from './footprint';
 import type { DoorHostHint } from './doorSwings';
 import type { Project, Pt } from '../model';
@@ -21,8 +23,9 @@ export interface Registration {
   rotation?: number;
 }
 
+const strokeAxesCache = new WeakMap<Segment[], WeakMap<DrawingText[], {width:number; height:number; axes:Record<string,{axis:'x'|'y';at:number}>}>>();
 /** Repeated grid labels at opposite ends of an axis. Single room/tag labels are rejected. */
-export function gridAxes(texts: DrawingText[], width: number, height: number, focus?: [number, number]) {
+export function gridAxes(texts: DrawingText[], width: number, height: number, focus?: [number, number], lines: Segment[] = []) {
   // Label centres can shift with glyph alignment. Use the smaller capital height
   // so enlarging a sheet does not split one bubble family into separate columns.
   const alignmentTolerance = (a: DrawingText, b: DrawingText) =>
@@ -80,6 +83,42 @@ export function gridAxes(texts: DrawingText[], width: number, height: number, fo
         if (!corroborated) axes[key] = { axis: best.axis, at: best.axis === 'x' ? t.cx : t.cy };
       }
   }
+  // Only rescue an incomplete text frame. Keep established frames unchanged.
+  // A two-label family is admissible only with actual grid-stroke witnesses;
+  // unrelated keynotes must not supply coordinates merely by forming a row.
+  const complete = (a: typeof axes) => ['x','y'].every(axis => Object.values(a).filter(v => v.axis === axis).length >= 2);
+  if (!complete(axes) && lines.length) {
+    const cached=strokeAxesCache.get(lines)?.get(texts);
+    if(cached?.width===width && cached.height===height){
+      if(complete(cached.axes))return structuredClone(cached.axes);
+    } else {
+    const witnessed: Record<string, {axis:'x'|'y';at:number}[]> = {};
+    const labels=texts.filter(t => /^(?:[A-HJ-NP-Z]|[1-9]|1[0-9])$/.test(t.str.trim()) && t.cx < width*.87);
+    const ink=lines.filter(l=>!l.filled&&!l.curve&&l.width>0&&l.width<=.6);
+    for (const t of labels) {
+      for (const axis of ['x','y'] as const) {
+        const family=labels.some(v=>v.str.trim()!==t.str.trim() && /^[A-Z]$/.test(v.str.trim())===/^[A-Z]$/.test(t.str.trim()) &&
+          Math.abs(axis==='x'?v.cy-t.cy:v.cx-t.cx)<alignmentTolerance(t,v) &&
+          Math.abs(axis==='x'?v.cx-t.cx:v.cy-t.cy)>(axis==='x'?width:height)*.2);
+        if(!family)continue;
+        for (const direction of [-1,1] as const) {
+        const at = traceGridStroke(t,ink,axis,direction);
+        if (at !== null) (witnessed[t.str.trim()] ??= []).push({axis,at});
+        }
+      }
+    }
+    const traced: typeof axes = {};
+    for (const [key, values] of Object.entries(witnessed)) {
+      const first=values[0];
+      if (values.every(v=>v.axis===first.axis && Math.abs(v.at-first.at)<.5))
+        traced[key]={axis:first.axis,at:values.reduce((n,v)=>n+v.at,0)/values.length};
+    }
+    if(!Object.keys(traced).some(k=>/^[A-Z]$/.test(k)))for(const k of Object.keys(traced))delete traced[k];
+    const byText=strokeAxesCache.get(lines)??new WeakMap();
+    byText.set(texts,{width,height,axes:traced});strokeAxesCache.set(lines,byText);
+    if (complete(traced)) return structuredClone(traced);
+    }
+  }
   // Repeated numbered keynotes are not a grid: require lettered axes too.
   if (!Object.keys(axes).some((k) => /^[A-Z]$/.test(k))) return {};
   return axes;
@@ -117,14 +156,14 @@ export function matchGridAxes(axes: ReturnType<typeof gridAxes>, scale: number, 
   const best = candidates[0];
   return best ? { x: best.x, y: best.y, grids: best.grids, ...(best.rotation ? { rotation: best.rotation } : {}) } : null;
 }
-export function registerSheets(project: Project, texts: DrawingTexts): Record<string, Registration> {
+export function registerSheets(project: Project, texts: DrawingTexts, lines: Record<string, Segment[]> = {}): Record<string, Registration> {
   const found = project.sheets
     .filter((s) => s.metersPerPoint && !s.superseded && /PLAN/i.test(s.title ?? '') && !/DETAIL|ENLARG|SITE/i.test(s.title ?? ''))
     .map((s) => {
       const points = project.measurements.filter((m) => m.sheetId === s.id).flatMap((m) => m.points);
       const median = (axis: number) => points.map((p) => p[axis]).sort((a, b) => a - b)[Math.floor(points.length / 2)];
       const focus: [number, number] | undefined = points.length ? [median(0), median(1)] : undefined;
-      return { s, axes: gridAxes(texts[s.id] ?? [], s.width, s.height, focus) };
+      return { s, axes: gridAxes(texts[s.id] ?? [], s.width, s.height, focus, lines[s.id]) };
     });
   found.sort((a, b) => Object.keys(b.axes).length - Object.keys(a.axes).length);
   // A long numbered legend can outscore a plan but has no crossing axes.

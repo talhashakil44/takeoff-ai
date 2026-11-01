@@ -93,3 +93,8 @@ describe('structural wall source gate', () => {
     expect(result.elements[2]).toBe(beam);
   });
 });
+it('applies the source gate to named structural walls without requiring a WT mark',()=>{
+ const item={...wall,typeName:'SW-1 – Structural wall 38 x 140',measurementSource:'structure' as const};
+ const out=connectStructuralWalls(project,{...model,elements:[item]},{},{}).elements[0];
+ expect(out.shape?.type).toBe('axis');expect(out.quantity).toBe(item.quantity);
+});

@@ -304,6 +304,8 @@ export function ExploreWorkspace({
         drawingTexts[sheet.id] ?? [],
         sheet.width,
         sheet.height,
+        undefined,
+        drawingLines[sheet.id],
       ),
       ps = project.measurements
         .filter((m) => m.sheetId === sid)
@@ -331,7 +333,7 @@ export function ExploreWorkspace({
         a: worldPoint(v.axis === "x" ? [v.at, y0] : [x0, v.at], frame),
         b: worldPoint(v.axis === "x" ? [v.at, y1] : [x1, v.at], frame),
       }));
-  }, [drawingTexts, project, sheet, frame, sid]);
+  }, [drawingTexts, drawingLines, project, sheet, frame, sid]);
   const overlays = useMemo(
     () =>
       available.flatMap((l) =>

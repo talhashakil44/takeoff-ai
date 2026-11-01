@@ -26,11 +26,11 @@ function outerGrid(texts: DrawingTexts[string], pattern: RegExp, axis: 'x' | 'y'
 
 /** Derived roof plan area from registered outer x-grids. An R2 well stays within the
  * total until its own perimeter can be located; no fabricated roof-type split. */
-export function recoverRoofPlanArea(model: BuildModel, project: Project, texts: DrawingTexts, registration = registerSheets(project, texts)) {
+export function recoverRoofPlanArea(model: BuildModel, project: Project, texts: DrawingTexts, registration = registerSheets(project, texts), lines: DrawingLines = {}) {
   const plans = project.sheets.filter((s) => !s.superseded && /ROOF PLAN/i.test(s.title ?? '') && s.metersPerPoint && registration[s.id]);
   for (const sheet of plans) {
     const ts = texts[sheet.id] ?? [];
-    const axes = gridAxes(ts, sheet.width, sheet.height);
+    const axes = gridAxes(ts, sheet.width, sheet.height, undefined, lines[sheet.id]);
     if (Object.keys(axes).filter((k) => axes[k].axis === 'x').length < 3 ||
         Object.keys(axes).filter((k) => axes[k].axis === 'y').length < 3) continue;
     const xx = outerGrid(ts, /^[A-Z]x$/i, 'x', sheet.width, sheet.height);
@@ -57,12 +57,12 @@ export function recoverRoofPlanArea(model: BuildModel, project: Project, texts: 
 /** Recover a single-pitch roof only when elevation linework, datums and plan grids agree.
  * No project names, assumed slope directions or fixed elevations are used. */
 export function recoverRoof(model: BuildModel, project: Project, texts: DrawingTexts, lines: DrawingLines, origin: [number, number]) {
-  const registration = registerSheets(project, texts);
-  recoverRoofPlanArea(model, project, texts, registration);
+  const registration = registerSheets(project, texts, lines);
+  recoverRoofPlanArea(model, project, texts, registration, lines);
   const plans = project.sheets.filter((s) => registration[s.id]);
   const plan = plans.sort((a, b) => registration[b.id].grids.length - registration[a.id].grids.length)[0];
   if (!plan?.metersPerPoint) return;
-  const axes = gridAxes(texts[plan.id] ?? [], plan.width, plan.height);
+  const axes = gridAxes(texts[plan.id] ?? [], plan.width, plan.height, undefined, lines[plan.id]);
   const candidates: { gx: number; gy: number; z: number; source: SourceRef }[] = [];
   for (const sheet of project.sheets.filter(
     (s) => /ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? ''),

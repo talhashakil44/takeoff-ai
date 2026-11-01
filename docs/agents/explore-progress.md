@@ -1852,3 +1852,32 @@ thresholds changed. docs/agents/foundation-grid-diagnosis.md records evidence
 and required shared-registration propagation/tests. Next: generic stroke-backed
 grid arbitration across all registration consumers, source/live review, then
 local vertical evidence. No coverage gain claimed; original data unchanged.
+
+## 2026-11-01 00:04 UTC wake — vector-backed grid registration (model61)
+Implemented fallback only when text axes cannot form a complete crossing frame.
+Two-label families require actual traced leaders/continuations; conflicting
+witnesses are excluded. Complete existing text frames remain unchanged. Tracing
+reuses results for the same source arrays and restricts candidates to collinear
+families; no project coordinate constants or text-only threshold relaxation.
+Passed source lines through extraction, structural connection, columns, facade,
+roof and Explore layer registration; live review exposed the layer path still
+using text-only frames, now corrected. Grid overlay uses the same evidence.
+Williamsburg production run2 now locates fourFW1/fourSF1 measured runs as axes;
+SW1 also becomes a plan axis. Newly reachable slab/structural-wall seeds exposed
+notation-specific evidence gates (exact slab name, WT-only walls); generalized
+these gates to thickness-suffixed slab names and explicitly named structural
+walls. No new structural solids receive credit. Remaining local vertical and
+section evidence is unresolved. All accepted quantity/unit values and project
+content unchanged. Dunnville comparison had zero shape deltas. Williamsburg
+facade opening placement/cuts also respond to its now-valid registration; still
+inferred, not a source-qualified coverage gain. A legend window false positive
+remains visible and is not declared resolved.
+Original S1.1PDF, live architectural/structural overlay and3D inspected in
+proofs/williamsburg-{plan,source,3d}-v61.png; review button enabled, browsererrors
+empty. Synthetic two-label, keynote contamination, conflicts, quarter-turn,
+existing-frame stability and broader evidence-gate cases added. Initial678tests
+PASS; repeat under system load hit two unrelated5000ms timeouts, retrying with
+2workers before final verification. Build/typecheck PASS. Next: local foundation
+section applicability, thirddevPDF, Claude review and complete corpus scoring.
+T11 not complete; no sealed access, source edits, merge or deploy.
+Final reduced-concurrency retry:678tests(4skipped)PASS; final typecheck/buildPASS.

@@ -43,7 +43,7 @@ const solid = (shape: ElementShape | null) =>
 const footingSeed = (e: BuildElement) =>
   e.measurementSource === 'foundations' &&
   (/\b(?:footing|pier|foundation wall)\b/i.test(e.typeName) ||
-    /^Slab on grade$/i.test(e.typeName));
+    /^Slab on grade\b/i.test(e.typeName));
 const legacyPhysical = (e: BuildElement) =>
   e.issues.some(derivedIssue) || (e.shape?.type === 'run' && !!e.shape.profile);
 

@@ -75,6 +75,7 @@ export function drawingLayers(
             ),
           },
           texts,
+          lines,
         ),
         anchor = registrations[base.id];
       const baseReg =
@@ -120,7 +121,7 @@ export function drawingLayers(
         };
       }
       if (!frame && baseFrame && level && sheet.id !== base.id)
-        frame = matchGridFrame(base, baseFrame, sheet, texts);
+        frame = matchGridFrame(base, baseFrame, sheet, texts, lines);
       const roof = elements.map(e=>roofRegs[e.measurementId]).find(Boolean);
       const geometryOnly = !frame && !!roof;
       if (geometryOnly) frame = roof.frame;
@@ -193,9 +194,10 @@ export function matchGridFrame(
   baseFrame: SheetFrame,
   sheet: Sheet,
   texts: DrawingTexts,
+  lines: DrawingLines = {},
 ): SheetFrame | null {
   if (!base.metersPerPoint || !sheet.metersPerPoint) return null;
-  const axes = gridAxes(texts[base.id] ?? [], base.width, base.height);
+  const axes = gridAxes(texts[base.id] ?? [], base.width, base.height, undefined, lines[base.id]);
   const labels = Object.keys(axes);
   const candidates: { frame: SheetFrame; score: number }[] = [];
   for (const quarter of [0, 1, 2, 3]) {

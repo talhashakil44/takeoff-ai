@@ -4,6 +4,7 @@ import type { DrawingTexts } from './building';
 import type { DrawingLines } from './roof';
 import { structuralRevisionContext } from './structuralRevisions';
 
+const isStructuralWall = (e: BuildModel['elements'][number]) => /^WT-?\d+\b/i.test(e.typeName) || (e.measurementSource === 'structure' && /\bstructural wall\b/i.test(e.typeName));
 const issuePrefix = 'Structural wall geometry withheld:';
 /** A framing-plan WT mark establishes an assembly, not a complete wall solid.
  * The accepted measurement can be a fragment or cross several window/lintel
@@ -20,7 +21,7 @@ export function connectStructuralWalls(
       (e) =>
         e.origin === 'takeoff' &&
         e.trade === 'structure' &&
-        /^WT-?\d+\b/i.test(e.typeName),
+        isStructuralWall(e),
     )
   )
     return model;
@@ -31,7 +32,7 @@ export function connectStructuralWalls(
       if (
         e.origin !== 'takeoff' ||
         e.trade !== 'structure' ||
-        !/^WT-?\d+\b/i.test(e.typeName) ||
+        !isStructuralWall(e) ||
         (e.shape?.type !== 'run' && e.shape?.type !== 'axis')
       )
         return e;
@@ -39,7 +40,7 @@ export function connectStructuralWalls(
         (m) => m.id === e.measurementId,
       );
       const sheet = project.sheets.find((s) => s.id === e.sheetId);
-      const code = e.typeName.match(/^WT-?\d+\b/i)![0];
+      const code = e.typeName.match(/^[A-Z]+-?\d+\b/i)?.[0] ?? e.typeName;
       const sources: SourceRef[] = [...e.sources];
       if (
         measurement?.points.length &&

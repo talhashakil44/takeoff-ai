@@ -272,3 +272,8 @@ it('withholds foundation wall extrusion without fresh local vertical evidence, r
  const again=endPhysicalGeometry(beginPhysicalGeometry(project,{...model,elements:[result]})).elements[0];
  expect(again.shape?.type).toBe('axis');
 });
+it('requires evidence for slab-on-grade names carrying thickness suffixes',()=>{
+ const slab={...e,typeName:'Slab on grade 102 thick',measurementSource:'foundations' as const,shape:{type:'surface' as const,ring:[[0,0],[5,0],[5,5],[0,5]] as [number,number][],holes:[],z:0,thickness:.102}};
+ const out=endPhysicalGeometry(beginPhysicalGeometry(project,{...model,elements:[slab]})).elements[0];
+ expect(out.shape).toBeNull();expect(out.quantity).toBe(slab.quantity);
+});

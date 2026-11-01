@@ -90,11 +90,11 @@ export function traceSectionPost(
 }
 /** Reuse architectural grid registration: structural locators may already be
  * snapped, and corrected beam endpoints no longer match raw takeoff points. */
-function floorColumnFrame(project:Project,model:BuildModel,sheet:Sheet,texts:DrawingTexts):SheetFrame|null {
+function floorColumnFrame(project:Project,model:BuildModel,sheet:Sheet,texts:DrawingTexts,lines:DrawingLines):SheetFrame|null {
  const candidates:SheetFrame[]=[];
  for(const base of project.sheets.filter(s=>!s.superseded && /^A/.test(s.name) && /FLOOR PLAN/i.test(s.title??'') && !/CEILING|FIRE|ENLARG|DETAIL/i.test(s.title??'') && s.metersPerPoint)){
   const bf=sheetFrame(project,model,base);if(!bf)continue;
-  const regs=registerSheets({...project,sheets:[base,sheet]},texts),br=regs[base.id],sr=regs[sheet.id];if(!br||!sr)continue;
+  const regs=registerSheets({...project,sheets:[base,sheet]},texts,lines),br=regs[base.id],sr=regs[sheet.id];if(!br||!sr)continue;
   const ba=Math.cos(br.rotation??0)*base.metersPerPoint!,bb=Math.sin(br.rotation??0)*base.metersPerPoint!,den=ba*ba+bb*bb,ca=(bf.a*ba+bf.b*bb)/den,cb=(bf.b*ba-bf.a*bb)/den;
   const sa=Math.cos(sr.rotation??0)*sheet.metersPerPoint!,sb=Math.sin(sr.rotation??0)*sheet.metersPerPoint!;
   candidates.push({a:ca*sa-cb*sb,b:cb*sa+ca*sb,tx:bf.tx+ca*(-sr.x+br.x)-cb*(-sr.y+br.y),ty:bf.ty+cb*(-sr.x+br.x)+ca*(-sr.y+br.y),residual:bf.residual});
@@ -202,10 +202,10 @@ export function connectSourceColumns(
   // Calibrated single floor plans can share the same source-section tracer.
   // Their frame must already be established by model/source correspondences.
   for (const sheet of project.sheets.filter(s => !s.superseded && /FRAMING/.test(s.title ?? '') && !/ROOF/.test(s.title ?? '') && s.metersPerPoint)) {
-    const ts = texts[sheet.id] ?? [], axes = gridAxes(ts, sheet.width, sheet.height);
+    const ts = texts[sheet.id] ?? [], axes = gridAxes(ts, sheet.width, sheet.height, undefined, lines[sheet.id]);
     const xs = Object.entries(axes).filter(([k,v]) => /^\d+$/.test(k) && v.axis === 'x').map(([,v])=>v.at);
     const ys = Object.entries(axes).filter(([k,v]) => /^[A-Z]$/.test(k) && v.axis === 'y').map(([,v])=>v.at);
-    const frame = registeredFrames[sheet.id] ?? floorColumnFrame(project, model, sheet, texts);
+    const frame = registeredFrames[sheet.id] ?? floorColumnFrame(project, model, sheet, texts, lines);
     if (!frame || xs.length < 3 || ys.length < 3) continue;
     for (const m of project.measurements.filter(m=>m.sheetId===sheet.id && m.points.length===1)) regs[m.id] = {
       frame, metersPerPoint:sheet.metersPerPoint!, title:'FLOOR FRAMING', bounds:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)], grids:Object.keys(axes),

@@ -31,7 +31,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 60;
+export const MODEL_VERSION = 61;
 
 export interface Trade {
   key: string;
@@ -320,7 +320,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     if (s?.metersPerPoint && isPlan(s) && !isEnlarged(s)) scales.set(Math.round(s.metersPerPoint * 1e5), (scales.get(Math.round(s.metersPerPoint * 1e5)) ?? 0) + ms.length);
   }
   const mainScale = [...scales].sort((a, b) => b[1] - a[1])[0]?.[0];
-  const registration = registerSheets(project, input.drawingTexts ?? {});
+  const registration = registerSheets(project, input.drawingTexts ?? {}, input.drawingLines);
   const gridAxesBySheet = new Map<string, ReturnType<typeof gridAxes>>();
   const axesFor = (s: Sheet) => {
     const cached = gridAxesBySheet.get(s.id);
@@ -328,7 +328,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     const points = project.measurements.filter((m) => m.sheetId === s.id).flatMap((m) => m.points);
     const median = (axis: number) => points.map((p) => p[axis]).sort((a, b) => a - b)[Math.floor(points.length / 2)];
     const focus: [number, number] | undefined = points.length ? [median(0), median(1)] : undefined;
-    const axes = gridAxes(input.drawingTexts?.[s.id] ?? [], s.width, s.height, focus);
+    const axes = gridAxes(input.drawingTexts?.[s.id] ?? [], s.width, s.height, focus, input.drawingLines?.[s.id]);
     gridAxesBySheet.set(s.id, axes);
     return axes;
   };

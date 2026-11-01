@@ -47,6 +47,7 @@ export function connectStructure(
       const regs = registerSheets(
           { ...project, sheets: [base, source] },
           texts,
+          lines,
         ),
         br = regs[base.id],
         sr = regs[source.id];
