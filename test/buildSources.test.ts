@@ -20,6 +20,9 @@ describe('Build It drawing evidence', () => {
     // Foundation details: their depths place the footings and walls, measured on them or not.
     expect(needsText({ id: 'g', title: 'FOUNDATION DETAILS' }, measured)).toBe(true);
     expect(needsText({ id: 'h', title: 'TYPICAL FOOTING DETAILS' }, measured)).toBe(true);
+    // And their linework (dimension lines, detail panels); other details' is not read.
+    expect(needsLines({ title: 'FOUNDATION DETAILS' })).toBe(true);
+    expect(needsLines({ title: 'MILLWORK DETAILS' })).toBe(false);
     expect(needsLines({ title: 'BUILDING SECTIONS' })).toBe(true);
     expect(needsLines({ title: 'INTERIOR ELEVATIONS' })).toBe(false);
     // Structural sections and framing elevations: beam tops against the level heads.

@@ -27,6 +27,8 @@ const CACHE_VERSION = 4;
 export const needsLines = (s: Pick<Sheet, 'title'> & { id?: string; name?: string }, plans?: Set<string>) =>
   (/ELEVATION|BUILDING SECTION/i.test(s.title ?? '') && !/INTERIOR|DETAIL/i.test(s.title ?? '')) ||
   structuralSection(s) ||
+  // Foundation and footing details and sections: their dimensions and panel outlines give depths.
+  (/FOUNDATION|FOOTING/i.test(s.title ?? '') && /DETAIL|SECTION/i.test(s.title ?? '')) ||
   (!!s.id && !!plans?.has(s.id));
 
 /** Structural sections and framing elevations (S-sheets titled SECTIONS or ELEVATIONS): beam tops and floor build-ups against the level heads. */
