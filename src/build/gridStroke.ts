@@ -20,18 +20,27 @@ export function traceGridStroke(
     [l.x1, l.y1],
     [l.x2, l.y2],
   ];
-  const starts = valid.flatMap((l) => {
-    const [a, b] = endpoints(l).sort((a, b) => inward * (along(a) - along(b)));
-    const offset = Math.abs(at(a) - at(centre)),
-      distance = inward * (along(a) - along(centre));
-    return Math.abs(at(a) - at(b)) < 0.3 &&
-      offset < 1 &&
-      distance > 8 &&
-      distance < 24 &&
-      inward * (along(b) - along(a)) > 8
-      ? [{ a, b }]
-      : [];
-  });
+  // Most source segments cannot be leaders. Test scalar coordinates before
+  // allocating/sorting endpoint arrays for every segment and every grid label.
+  const starts: {a: Pt; b: Pt}[] = [];
+  for (const l of valid) {
+    const aAt = axis === 'x' ? l.x1 : l.y1;
+    const bAt = axis === 'x' ? l.x2 : l.y2;
+    const aAlong = axis === 'x' ? l.y1 : l.x1;
+    const bAlong = axis === 'x' ? l.y2 : l.x2;
+    const reversed = inward * (aAlong - bAlong) > 0;
+    const startAt = reversed ? bAt : aAt;
+    const startAlong = reversed ? bAlong : aAlong;
+    const endAlong = reversed ? aAlong : bAlong;
+    const distance = inward * (startAlong - along(centre));
+    if (Math.abs(aAt - bAt) < 0.3 &&
+        Math.abs(startAt - at(centre)) < 1 &&
+        distance > 8 && distance < 24 &&
+        inward * (endAlong - startAlong) > 8) {
+      const [a, b] = endpoints(l);
+      starts.push(reversed ? {a:b, b:a} : {a, b});
+    }
+  }
   const unique = starts.filter(
     (v, i) =>
       !starts
@@ -44,19 +53,16 @@ export function traceGridStroke(
   );
   if (unique.length !== 1) return null;
   let endpoint = unique[0].b;
-  const diagonal = valid.flatMap((l) => {
-    const ps = endpoints(l),
-      near = ps.findIndex(
-        (p) => Math.hypot(p[0] - endpoint[0], p[1] - endpoint[1]) < 0.5,
-      );
-    if (near < 0) return [];
-    const other = ps[1 - near];
-    return Math.abs(at(other) - at(endpoint)) > 2 &&
-      inward * (along(other) - along(endpoint)) > 2 &&
-      Math.hypot(other[0] - endpoint[0], other[1] - endpoint[1]) < 80
-      ? [other]
-      : [];
-  });
+  const diagonal: Pt[] = [];
+  for (const l of valid) {
+    const firstNear = Math.hypot(l.x1 - endpoint[0], l.y1 - endpoint[1]) < 0.5;
+    if (!firstNear && Math.hypot(l.x2 - endpoint[0], l.y2 - endpoint[1]) >= 0.5) continue;
+    const x = firstNear ? l.x2 : l.x1, y = firstNear ? l.y2 : l.y1;
+    const otherAt = axis === 'x' ? x : y, otherAlong = axis === 'x' ? y : x;
+    if (Math.abs(otherAt - at(endpoint)) > 2 &&
+        inward * (otherAlong - along(endpoint)) > 2 &&
+        Math.hypot(x - endpoint[0], y - endpoint[1]) < 80) diagonal.push([x,y]);
+  }
   const turns = diagonal.filter(
     (v, i) =>
       !diagonal
@@ -65,19 +71,15 @@ export function traceGridStroke(
   );
   if (turns.length > 1) return null;
   if (turns[0]) endpoint = turns[0];
-  const support = valid
-    .filter((l) => {
-      const [a, b] = endpoints(l);
-      return (
-        Math.abs(at(a) - at(endpoint)) < 0.3 &&
-        Math.abs(at(b) - at(endpoint)) < 0.3 &&
-        Math.max(
-          inward * (along(a) - along(endpoint)),
-          inward * (along(b) - along(endpoint)),
-        ) > 15
-      );
-    })
-    .reduce((sum, l) => sum + Math.hypot(l.x2 - l.x1, l.y2 - l.y1), 0);
+  let support = 0;
+  for (const l of valid) {
+    const aAt = axis === 'x' ? l.x1 : l.y1, bAt = axis === 'x' ? l.x2 : l.y2;
+    const aAlong = axis === 'x' ? l.y1 : l.x1, bAlong = axis === 'x' ? l.y2 : l.x2;
+    if (Math.abs(aAt - at(endpoint)) < 0.3 &&
+        Math.abs(bAt - at(endpoint)) < 0.3 &&
+        Math.max(inward * (aAlong - along(endpoint)), inward * (bAlong - along(endpoint))) > 15)
+      support += Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
+  }
   return support > 60 ? at(endpoint) : null;
 }
 

@@ -2156,3 +2156,31 @@ only verified4bbb7de ExploreHost overlay remains there. Logs and JSON captures
 Next: profile roof/canopy registration and physical reconstruction substeps
 before another performance change. Claude notified of negative result and
 restored code.4bbb7de awaits review; geometry acceptance remains incomplete.
+
+## 2026-11-01 06:13Z — grid tracing allocation reduction verified
+Detailed main-app profiling identified insetRegistrations5–6.8s per invocation;
+roofViewportRegistrations2–4ms. traceGridStroke allocated/sorted endpoint arrays
+for every segment per candidate label/direction. It now rejects segments with
+scalar tests before constructing endpoints; diagonal and support scans also
+avoid unnecessary arrays. All acceptance thresholds, ordering and ambiguity
+rules unchanged. No caching, source skipping or project-specific conditions.
+Temporary differential test against original passed120 deterministic noisy,
+reversed, duplicate, offset and branch cases. Persistent regression checks those
+behaviors; canopy tests pass. Full frozen harness PASS691tests,tsc/build/audit.
+Live release56ff1ea plus4bbb7de and this fix: inset calls~1.46s, layer calls
+~1.5s (first2.27s), structural reconstruction6.8–7.1s vs21–23s before.
+Kelso full interaction sequence PASS: selected room,4wheelcycles/Fit, original
+PDF2D/3D,exit/reopen; click96ms,ready29.553s vs95–96s before; pageerrors[].
+Frederick same sequence PASS,ready4.519s,pageerrors[]. These are development
+StrictMode timings, not production claims; remaining29.6s is still slow.
+Real output capture compared to baseline: both floor layers exactly equal;
+structural object exactly equal after removing only sourceHash (1kgag89 vs
+fxb8xb). No geometry/quantity changes; sourceHash difference disclosed, not
+claimed full input equivalence. All four PDF2D/3D screenshots visually reviewed.
+Proofs diag/explore/proofs/stroke-fast-{kelso,frederick}-{2d,3d}.png.
+Logs /tmp/kelso-stroke-after.log,/tmp/kelso-stroke-interactions.log,
+/tmp/frederick-stroke-after.log; captures /tmp/kelso-stroke-after.json and
+/tmp/kelso-registration-before.json. Temporary instrumentation restored; detached
+release retains only verified ExploreHost+gridStroke overlays. Original projects
+untouched. Next: Claude review/cherry-pick both generic fixes, production timing
+and remaining geometry gaps; no full-geometry acceptance, merge or deployment.
