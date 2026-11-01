@@ -1,6 +1,26 @@
 import type { ElementShape } from './types';
+import type { Pt } from '../model';
+/** Drawing interruptions can introduce redundant vertices along one member.
+ * Remove only forward collinear joins so one solid has no internal end caps. */
+export function continuousRunPoints(points: Pt[]): Pt[] {
+  const out: Pt[] = [];
+  for (const p of points) {
+    if (out.length && Math.hypot(p[0] - out.at(-1)![0], p[1] - out.at(-1)![1]) < 1e-8) continue;
+    while (out.length >= 2) {
+      const a = out.at(-2)!, b = out.at(-1)!;
+      const ux = b[0] - a[0], uy = b[1] - a[1], vx = p[0] - b[0], vy = p[1] - b[1];
+      if (ux * vx + uy * vy <= 0 || Math.abs(ux * vy - uy * vx) > 1e-8 * Math.hypot(ux, uy) * Math.hypot(vx, vy)) break;
+      out.pop();
+    }
+    out.push(p);
+  }
+  return out;
+}
 /** Shared wall solids keep the viewer and IFC geometry identical, including rectangular voids. */
 export function runSolids(run: Extract<ElementShape, { type: 'run' }>) {
+  // Opening offsets and explicit corner fills are tied to original segments.
+  if (!run.openings?.length && !run.cornerFills?.length)
+    run = { ...run, points: continuousRunPoints(run.points) };
   const parts: {
     x: number;
     y: number;
@@ -10,8 +30,21 @@ export function runSolids(run: Extract<ElementShape, { type: 'run' }>) {
     z: number;
     height: number;
     endHeight: number;
+    endZ?: number;
     thickness: number;
   }[] = [];
+  // A sloping member has parallel top and bottom planes; never taper it down
+  // to a flat storey datum as a roof-following wall would.
+  if (run.bottomPlane && run.topPlane && !run.openings?.length) {
+    const at = (plane: [number,number,number], p: [number,number]) => plane[0]*p[0]+plane[1]*p[1]+plane[2];
+    for(let i=1;i<run.points.length;i++) {
+      const a=run.points[i-1],b=run.points[i],length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      const z=at(run.bottomPlane,a),endZ=at(run.bottomPlane,b),height=at(run.topPlane,a)-z,endHeight=at(run.topPlane,b)-endZ;
+      if(length<.02||Math.min(height,endHeight)<=0)continue;
+      parts.push({x:a[0],y:a[1],dx:(b[0]-a[0])/length,dy:(b[1]-a[1])/length,length,z,endZ,height,endHeight,thickness:run.thickness});
+    }
+    return parts;
+  }
   const addCornerFill = (at: [number, number], dx: number, dy: number, turn: number, size: number) => {
     const outwardX = Math.sign(turn) * dy;
     const outwardY = -Math.sign(turn) * dx;

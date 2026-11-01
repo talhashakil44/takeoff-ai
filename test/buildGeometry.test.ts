@@ -231,3 +231,41 @@ it('retains curtain-wall quantity without inventing assembly dimensions', () => 
   expect(e.quantity).toBe(2);
   expect(model.issues[0].refs).toEqual(['cw']);
 });
+
+it('keeps both ends of a sloped beam at constant section depth, without wall-like taper',()=>{
+  const shape={type:'run' as const,points:[[0,0],[8,0]] as [number,number][],z0:8,height:.6,thickness:.265,topPlane:[.125,0,8.6] as [number,number,number],bottomPlane:[.125,0,8] as [number,number,number]};
+  const solids=runSolids(shape);expect(solids).toHaveLength(1);expect(solids[0]).toMatchObject({z:8,endZ:9});expect(solids[0].height).toBeCloseTo(.6);expect(solids[0].endHeight).toBeCloseTo(.6);
+  const geo=geometryOf(element(shape))!;const pos=geo.getAttribute('position');
+  for(let i=0;i<pos.count;i++){const y=pos.getY(i)-.125*pos.getX(i);expect(Math.min(Math.abs(y-8),Math.abs(y-8.6))).toBeLessThan(1e-5);}
+  geo.dispose();
+});
+
+it('extrudes the source I-profile rather than filling its web voids with a bounding box',()=>{
+  const profile:[number,number][]=[[-.1,0],[.1,0],[.1,.02],[.01,.02],[.01,.28],[.1,.28],[.1,.3],[-.1,.3],[-.1,.28],[-.01,.28],[-.01,.02],[-.1,.02]];
+  const shape={type:'run' as const,points:[[2,3],[2,7]] as [number,number][],z0:6,height:.3,thickness:.2,profile};
+  const g=geometryOf(element(shape))!;g.computeBoundingBox();
+  expect(g.boundingBox!.min.toArray()).toEqual(expect.arrayContaining([expect.closeTo(1.9,5),expect.closeTo(6,5),expect.closeTo(3,5)]));
+  const p=g.getAttribute('position');let volume=0;
+  for(let i=0;i<p.count;i+=3){const a=[p.getX(i),p.getY(i),p.getZ(i)],b=[p.getX(i+1),p.getY(i+1),p.getZ(i+1)],c=[p.getX(i+2),p.getY(i+2),p.getZ(i+2)];volume+=(a[0]*(b[1]*c[2]-b[2]*c[1])+a[1]*(b[2]*c[0]-b[0]*c[2])+a[2]*(b[0]*c[1]-b[1]*c[0]))/6;}
+  expect(Math.abs(volume)).toBeCloseTo((2*.2*.02+.02*.26)*4,5);g.dispose();
+});
+
+it('exports a continuous sloping beam without coincident internal caps at source trace breaks', () => {
+  const shape: Extract<BuildElement['shape'], {type:'run'}> = {
+    type:'run',points:[[0,0],[2,0],[5,0]],z0:3,height:.6,thickness:.2,
+    bottomPlane:[.125,0,3],topPlane:[.125,0,3.6],
+  };
+  const before=JSON.stringify(shape);
+  expect(runSolids(shape)).toHaveLength(1);
+  const indexed=geometryOf(element(shape))!;
+  const g=indexed.index?indexed.toNonIndexed():indexed;
+  const p=g.getAttribute('position'),edges=new Map<string,number>();
+  const key=(i:number)=>[p.getX(i),p.getY(i),p.getZ(i)].map(v=>v.toFixed(5)).join(',');
+  for(let i=0;i<p.count;i+=3)for(const [a,b] of [[i,i+1],[i+1,i+2],[i+2,i]]){
+    const edge=[key(a),key(b)].sort().join('|');edges.set(edge,(edges.get(edge)??0)+1);
+  }
+  expect(p.count/3).toBe(12);
+  expect([...edges.values()].every(n=>n===2)).toBe(true);
+  expect(JSON.stringify(shape)).toBe(before);
+  g.dispose();if(g!==indexed)indexed.dispose();
+});

@@ -14,12 +14,12 @@ export function recoverFacadeOpenings(
   origin: [number, number],
 ) {
   const details = readOpeningDetails(project, texts, lines);
-  const regs = registerSheets(project, texts);
+  const regs = registerSheets(project, texts, lines);
   const reference = project.sheets
     .filter((s) => regs[s.id] && !regs[s.id].rotation)
     .sort((a, b) => regs[b.id].grids.length - regs[a.id].grids.length)[0];
   if (!reference?.metersPerPoint) return;
-  const axes = gridAxes(texts[reference.id] ?? [], reference.width, reference.height);
+  const axes = gridAxes(texts[reference.id] ?? [], reference.width, reference.height, undefined, lines[reference.id]);
   const measurements = new Map(project.measurements.map((m) => [m.id, m]));
   for (const e of model.elements.filter((e) => e.trade === 'doors' && /window|glaz|curtain/i.test(e.name))) {
     const m = measurements.get(e.measurementId),

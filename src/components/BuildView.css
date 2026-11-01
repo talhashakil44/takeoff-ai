@@ -198,6 +198,13 @@
     width: 100%;
     border-radius: 5px;
   }
+  .bld-workspace .bld-sub {
+    max-width: 130px;
+  }
+}
+/* Keep the inspector in layout on tablet/desktop widths so camera fitting uses
+   the visible canvas, rather than aiming geometry behind an overlay panel. */
+@media (max-width: 760px) {
   .bld-workspace .bld-inspect {
     position: absolute;
     top: 0;
@@ -206,11 +213,7 @@
     z-index: 5;
     box-shadow: -12px 0 30px #0005;
   }
-  .bld-workspace .bld-sub {
-    max-width: 130px;
-  }
-}
-@media (max-width: 760px) {
+
   .bld-workspace .bld-bar {
     padding: 8px;
   }

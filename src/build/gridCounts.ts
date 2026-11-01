@@ -26,3 +26,15 @@ export function nearestGridIntersection(
   }
   return best;
 }
+
+/** Explain a withheld symbolic location without relaxing its placement gate. */
+export function gridLocationFailure(
+ axes: Record<string,{axis:'x'|'y';at:number}>,labels:string[]|undefined,
+ tag:[number,number],metresPerPoint:number,
+):string {
+ if(!(metresPerPoint>0)||!Number.isFinite(metresPerPoint))return 'Structural grid location unresolved: drawing scale is unavailable; count retained without 3D placement.';
+ if(!labels)return 'Structural grid location unresolved: this sheet has no verified grid registration; count retained without 3D placement.';
+ const nearest=nearestGridIntersection(axes,labels,tag,metresPerPoint,Infinity);
+ if(!nearest)return 'Structural grid location unresolved: registered labels do not provide both intersecting axis families; count retained without 3D placement.';
+ return `No registered structural grid intersection within 2.5 m of the tag; nearest registered intersection ${nearest.labels.join('/')} is ${nearest.distanceM.toFixed(2)} m away. Count retained without 3D placement; tag association requires source review.`;
+}

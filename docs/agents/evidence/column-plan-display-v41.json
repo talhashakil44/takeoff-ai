@@ -1,0 +1,121 @@
+{
+  "version": 41,
+  "registeredPlanEnvelopes": 91,
+  "unresolvedPlanOnlyEnvelopes": 75,
+  "originalProjectEqual": true,
+  "physicalShapesAndQuantitiesEqual": true,
+  "c2": [
+    {
+      "id": "3b6d7e09-b78e-419d-8c7f-e8ea563eec59",
+      "planFootprint": {
+        "ring": [
+          [
+            -4.42700536193848,
+            3.579078463398771
+          ],
+          [
+            -4.42700536193848,
+            3.4520784633987702
+          ],
+          [
+            -4.3000053619384815,
+            3.4520784633987702
+          ],
+          [
+            -4.3000053619384815,
+            3.579078463398771
+          ]
+        ],
+        "domain": "canopy"
+      },
+      "shape": null,
+      "quantity": 1
+    },
+    {
+      "id": "08d965cb-2fc1-4693-a35c-129423069d34",
+      "planFootprint": {
+        "ring": [
+          [
+            -2.58762202860515,
+            3.579078463398771
+          ],
+          [
+            -2.58762202860515,
+            3.4520784633987702
+          ],
+          [
+            -2.4606220286051474,
+            3.4520784633987702
+          ],
+          [
+            -2.4606220286051474,
+            3.579078463398771
+          ]
+        ],
+        "domain": "canopy"
+      },
+      "shape": null,
+      "quantity": 1
+    },
+    {
+      "id": "21a62c88-d4f8-4d1f-b6c5-e3c39e522684",
+      "planFootprint": {
+        "ring": [
+          [
+            -2.58762202860515,
+            0.8612784633987705
+          ],
+          [
+            -2.58762202860515,
+            0.7342784633987698
+          ],
+          [
+            -2.4606220286051474,
+            0.7342784633987698
+          ],
+          [
+            -2.4606220286051474,
+            0.8612784633987705
+          ]
+        ],
+        "domain": "canopy"
+      },
+      "shape": null,
+      "quantity": 1
+    },
+    {
+      "id": "326cbb95-e296-4a0c-9066-07393d259fbd",
+      "planFootprint": {
+        "ring": [
+          [
+            -4.42700536193848,
+            0.8612784633987705
+          ],
+          [
+            -4.42700536193848,
+            0.7342784633987698
+          ],
+          [
+            -4.3000053619384815,
+            0.7342784633987698
+          ],
+          [
+            -4.3000053619384815,
+            0.8612784633987705
+          ]
+        ],
+        "domain": "canopy"
+      },
+      "shape": null,
+      "quantity": 1
+    }
+  ],
+  "visualChecks": [
+    "C2 locate on architectural floor PDF",
+    "source crop on revised S2.1/Add5p25",
+    "zoom in/out and return same aligned position",
+    "footprint layer off removes all outlines",
+    "3D withholds plan-only envelopes"
+  ],
+  "sourceLimit": "4/S5.0 shows wood walls and packed beams, not C2 endpoint identity. No C2 base/top elevation established."
+}

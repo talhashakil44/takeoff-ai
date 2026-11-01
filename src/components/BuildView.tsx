@@ -219,7 +219,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const acts = schedule?.activities ?? [];
   const times = schedule?.times ?? {};
   const actById = useMemo(() => new Map(acts.map((a) => [a.id, a])), [acts]);
-  const elById = useMemo(() => new Map((model?.elements ?? []).map((e) => [e.id, e])), [model]);
+  const elById = useMemo(() => new Map([...(model?.elements ?? []), ...(model?.drawingGeometry ?? [])].map((e) => [e.id, e])), [model]);
   const actOfElement = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of acts) for (const id of a.elements) m.set(id, a.id);
@@ -429,6 +429,15 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         )}
         {setupOpen && out && left === 'model' && model && (
           <aside className="bld-left">
+            {(model.drawingGeometry?.length ?? 0) > 0 && <section className="bld-tree" aria-label="Drawing-derived geometry">
+              <strong>From drawings · {model.drawingGeometry!.length}</strong>
+              <p className="dim small">No accepted takeoff · excluded from quantities and schedule</p>
+              {model.drawingGeometry!.map(e => <button key={e.id} className="bld-spec-title" onClick={() => {
+                setInspectorOpen(true);
+                setTreeSel(null);
+                setSel({ kind: 'element', id: e.id });
+              }}>{e.name}</button>)}
+            </section>}
             <ModelTree
               model={model}
               hidden={hidden}
@@ -603,8 +612,8 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                 e={selEl}
                 project={project}
                 sections={sections}
-                act={actById.get(actOfElement.get(selEl.id) ?? '')}
-                t={times[actOfElement.get(selEl.id) ?? '']}
+                act={selEl.origin === 'drawing' ? undefined : actById.get(actOfElement.get(selEl.id) ?? '')}
+                t={selEl.origin === 'drawing' ? undefined : times[actOfElement.get(selEl.id) ?? '']}
                 state={stateOf(selEl)}
                 render={renderSheet}
                 onPickAct={(id) => setSel({ kind: 'activity', id })}

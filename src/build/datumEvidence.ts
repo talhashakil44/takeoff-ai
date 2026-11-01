@@ -11,7 +11,12 @@ export interface DatumEvidence {
 export function imperialFeet(text: string): number | null {
   const m = /^(-?\d+)\s*['′]\s*-?\s*(\d+)?(?:\s+(\d+)\/(\d+))?\s*["″]$/.exec(text.trim());
   if (!m) return null;
-  return Number(m[1]) + (Number(m[2] ?? 0) + (m[3] ? Number(m[3]) / Number(m[4]) : 0)) / 12;
+  const fraction = m[3] ? Number(m[3]) / Number(m[4]) : 0;
+  const inches = Number(m[2] ?? 0) + fraction;
+  if (!Number.isFinite(inches) || inches >= 12 || fraction >= 1) return null;
+  // The leading sign applies to the entire dimension, including negative zero feet.
+  const feet = Math.abs(Number(m[1])) + inches / 12;
+  return Number.isFinite(feet) ? (m[1].startsWith('-') ? -feet : feet) : null;
 }
 /** Separate wing datums remain separate evidence; never average split-level elevations. */
 export function imperialDatumEvidence(project: Project, texts: DrawingTexts): DatumEvidence[] {
@@ -58,6 +63,9 @@ export function imperialDatumEvidence(project: Project, texts: DrawingTexts): Da
     }
   }
   if (!evidence.length) return [];
-  const base = Math.min(...evidence.filter((e) => e.level !== 'roof').map((e) => e.elevation));
+  const floors = evidence.filter((e) => e.level !== 'roof');
+  // A roof elevation alone cannot establish the model's floor datum origin.
+  if (!floors.length) return [];
+  const base = Math.min(...floors.map((e) => e.elevation));
   return evidence.map((e) => ({ ...e, elevation: e.elevation - base }));
 }

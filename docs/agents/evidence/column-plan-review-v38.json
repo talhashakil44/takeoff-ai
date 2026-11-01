@@ -1,0 +1,2763 @@
+{
+  "modelVersion": 38,
+  "meaning": "Plan registration and scheduled closed-rectangle evidence only. Pairings are review candidates, not duplicate determinations. Heights and accepted quantities are unchanged.",
+  "sourcePdfs": {
+    "5a072e8f-1126-4129-b9e9-53470bfb267a": "f9e242e7f1c7730006eddb270e7351482546f28b2ba8bdf27dde73a78d5ab326",
+    "bec80a15-e5e2-4cdd-a142-c02af1b8f631": "af228b6eb3a2da211a5dd3d2a8cd842f42d525771f43cf8afc0f3af4acd350e7"
+  },
+  "records": [
+    {
+      "id": "471bae16-022e-448a-b480-58e756308c99",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669781,
+        5.859551580366023
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1006.68,
+          1131.48,
+          1014.24,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "afdab716-9990-4aa2-91fc-8c4e6b5067c9"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "a7caef0d-7264-4f09-ad00-4bd11dfc150d",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669781,
+        0.5636515803660274
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          1131.48,
+          1164.36,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "a3788ce4-4fac-4b73-bad6-1a1d8315e98f"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "e78ec3b7-0e94-4834-b00d-50286521ae33",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669781,
+        -4.732248419633969
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1306.9199999999998,
+          1131.48,
+          1314.48,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "a8f15324-8239-414b-8e5b-986c5c6bad29"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "62b55c73-45e9-43b1-bfe8-e0dcc20862c2",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669781,
+        -10.028148419633972
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1457.04,
+          1131.48,
+          1464.6,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "0c6f1bf4-6d56-4759-a959-70039b639566"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "931c407c-5b95-49a1-875a-0c65038d0fb0",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669781,
+        -15.326165086300641
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1607.28,
+          1131.48,
+          1614.72,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "925e6480-9b0d-4c62-a98c-e4e50bd8ef44"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "f99d0075-29eb-4546-8576-022716d5483d",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669788,
+        -20.622065086300637
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          1131.48,
+          1764.84,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "284cc73f-94f0-4b6c-ac33-ca8cab1d517f"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "84fe31d4-dfac-4a50-b247-4b4a20de2633",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669788,
+        -25.917965086300654
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1907.52,
+          1131.48,
+          1914.96,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "bece08c5-acc9-4b38-9cc9-b93ecb0391a7"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "c947dcfc-0903-4f49-b5a6-6ede2b3588c6",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        5.859551580366023
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1006.68,
+          1026.12,
+          1014.24,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "b353ea1c-bd80-40a7-b942-e7f4e7e775de"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "2b3554e8-fdc9-4eb2-8f9a-52c1813b1ed5",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        0.5636515803660274
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          1026.12,
+          1164.36,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "61866b45-8e7d-4cba-980b-0735edfafb2f",
+        "6c2e60de-f460-4abe-bd0f-698facdc7b2b"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "6de69f58-ae0e-498a-813d-eb0148491e25",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        -4.732248419633969
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1306.9199999999998,
+          1026.12,
+          1314.48,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "4c2d0770-80ee-420d-a69b-8a6e198e65f1",
+        "8debd2c2-89f7-4d99-811e-5d3d32c8cb48"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "1c695bdc-4f63-47ad-b8c4-ddbcf7b2262f",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        -10.028148419633972
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1457.04,
+          1026.12,
+          1464.6,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "5cc96fec-76c7-44f1-8203-7d6c42c46252",
+        "90d95ac1-297c-4bdf-b4c5-ac789f2bf1a3"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "121dc46a-01e8-4b47-bf9f-b6c1f1c375e2",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        -15.326165086300641
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1607.28,
+          1026.12,
+          1614.72,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "6e95ad3f-659c-4835-879d-52fa1bdb9def",
+        "df65a9ef-d1c4-4af0-a108-4c3453fcc379"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "b594575e-a1eb-4eba-9bca-d9b8ba447995",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003122,
+        -20.622065086300637
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          1026.12,
+          1764.84,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "48ee50f0-e3ee-4434-b379-e143cd5e8d5c",
+        "8cd8b561-7077-4c04-91f0-2dd2ad19336a"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "3ef27657-5fcf-42b2-88b4-7d3127c6636b",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003122,
+        -25.91796508630064
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1907.52,
+          1026.12,
+          1914.96,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "fe2b1d3d-4d25-46da-9547-e3d59ddc2328"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "4f8dc56e-a421-4bb1-b018-b84bace1ac48",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.007420483669783,
+        5.859551580366023
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1006.68,
+          920.76,
+          1014.24,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "0f2a6bd1-d113-41a3-a90e-92cbb5883709"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "9970074e-aff5-4491-b03c-fca955358fff",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.007420483669783,
+        0.5636515803660274
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          920.76,
+          1164.36,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "289d3c71-22b8-4d17-88a1-db56e68d9b48",
+        "bb8c4af0-fe32-4ef6-845a-037c34d355e9"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "c06274ca-5b6d-4c6f-846e-f60bc92484c5",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.007420483669783,
+        -4.732248419633969
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1306.9199999999998,
+          920.76,
+          1314.48,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "91e3f5d5-fa65-4119-8bc4-905d4f3d2087"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "cbb8c3a2-ec1a-4493-b35e-af0bd510989c",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.007420483669783,
+        -10.028148419633972
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1457.04,
+          920.76,
+          1464.6,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "c8502fcf-72c2-4396-b5d9-457dad515ffc"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "8495eda0-d603-4f55-a642-4e10d3018692",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.007420483669783,
+        -15.326165086300641
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1607.28,
+          920.76,
+          1614.72,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "8cb9d20f-fa52-4191-8238-039ae7e7bcc6"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "1f1b5a0d-11f0-4936-90b4-86195887a215",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.00742048366979,
+        -20.622065086300637
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          920.76,
+          1764.84,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "7b67f82d-441f-46fa-b253-f55c76482aa6",
+        "b5a564a5-b1da-49bc-85a3-9d9a400fd539"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "bfbb4d91-52ae-4bb2-a2d7-e5d9752bcf8e",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.00742048366979,
+        -25.91796508630064
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1907.52,
+          920.76,
+          1914.96,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "d0c71ab5-3a08-4807-937e-b861c04f72ce"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "8971f9d8-01ad-4e60-b791-fc3b22f067d4",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003114,
+        5.859551580366023
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1006.68,
+          815.2800000000001,
+          1014.24,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "3df1b752-06a0-4bd9-9f99-2b7b261b78e6"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "f3e5cb39-a2fc-4d9a-9fe4-f17ffc631dff",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003114,
+        0.5636515803660274
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          815.2800000000001,
+          1164.36,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "2e8144f4-bf4e-4764-bb10-e95e398ba587",
+        "9d2ba8f4-61e4-4eac-b104-c135b587279f"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "c1be54da-5319-4868-908f-008289122bc3",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003114,
+        -4.732248419633969
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1306.9199999999998,
+          815.2800000000001,
+          1314.48,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "5eefc734-18e6-4fd9-9982-55aaad1a8cc9"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "6de2dd4e-1414-47c9-9bdd-b62242fb623e",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003117,
+        -10.028148419633972
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1457.04,
+          815.2800000000001,
+          1464.6,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "05e5bf2b-37c0-4f44-b394-f12b6b604b53"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "42e56fbb-6312-4b1d-93c6-18f2f580bd8b",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003117,
+        -15.326165086300641
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1607.28,
+          815.2800000000001,
+          1614.72,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "279d5806-8b42-406a-a06c-b7a84924ac71"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "ba3e29db-564b-47fc-a6b8-8b61b7a47356",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003117,
+        -20.622065086300637
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          815.2800000000001,
+          1764.84,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "9f3d3f07-4867-402e-97b8-160bbe9bc6f1",
+        "e0029c10-313b-42ef-979b-95133ad11b79"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "30f62f8a-f5ca-40e2-89aa-19676ab18c12",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003117,
+        -25.91796508630064
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1907.52,
+          815.2800000000001,
+          1914.96,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "078a4088-1586-455d-8f48-4d27cd42f337"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "679d223d-3cdc-4ee8-942b-ca1c22c4a805",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.007420483669783,
+        10.097118247032693
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          885.48,
+          921.84,
+          895.1999999999999,
+          929.28
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "4a7ae663-78c2-43ad-b694-ba234fbe0193"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "0324748f-10d8-462d-885d-9e35e9779cc9",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003114,
+        10.097118247032697
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          885.48,
+          816.36,
+          895.1999999999999,
+          823.9200000000001
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "8d55cd39-26bd-489b-bf5a-bb5e7fba6bf6"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "cae73790-3694-4837-bfa4-cbdc0beab597",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.72640381700312,
+        -30.155531752967292
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          2026.56,
+          816.36,
+          2036.1599999999999,
+          823.9200000000001
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "634b7183-fe96-4fab-b5c5-bcf76de4b8a8"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "0faec3f9-ec9e-4d7d-beda-3ec5965d5096",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        10.097118247032693
+      ],
+      "domain": "floor",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 24,
+        "label": "S2.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          885.48,
+          1027.2,
+          895.1999999999999,
+          1034.6399999999999
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "b9c544dc-a4a7-4d31-b504-0b785754ee1a"
+      ],
+      "shapeType": "locator",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "afdab716-9990-4aa2-91fc-8c4e6b5067c9",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669781,
+        5.859551580366023
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1006.68,
+          1131.48,
+          1014.24,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "471bae16-022e-448a-b480-58e756308c99"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "a3788ce4-4fac-4b73-bad6-1a1d8315e98f",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669781,
+        0.5636515803660274
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          1131.48,
+          1164.36,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "a7caef0d-7264-4f09-ad00-4bd11dfc150d"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "a8f15324-8239-414b-8e5b-986c5c6bad29",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669781,
+        -4.732248419633969
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1306.9199999999998,
+          1131.48,
+          1314.48,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "e78ec3b7-0e94-4834-b00d-50286521ae33"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "0c6f1bf4-6d56-4759-a959-70039b639566",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669781,
+        -10.028148419633972
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1457.04,
+          1131.48,
+          1464.6,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "62b55c73-45e9-43b1-bfe8-e0dcc20862c2"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "925e6480-9b0d-4c62-a98c-e4e50bd8ef44",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669781,
+        -15.326165086300641
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1607.28,
+          1131.48,
+          1614.72,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "931c407c-5b95-49a1-875a-0c65038d0fb0"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "284cc73f-94f0-4b6c-ac33-ca8cab1d517f",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669788,
+        -20.622065086300637
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          1131.48,
+          1764.84,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "f99d0075-29eb-4546-8576-022716d5483d"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "bece08c5-acc9-4b38-9cc9-b93ecb0391a7",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669788,
+        -25.917965086300654
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1907.52,
+          1131.48,
+          1914.96,
+          1141.2
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "84fe31d4-dfac-4a50-b247-4b4a20de2633"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "b353ea1c-bd80-40a7-b942-e7f4e7e775de",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        5.859551580366023
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1006.68,
+          1026.12,
+          1014.24,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "c947dcfc-0903-4f49-b5a6-6ede2b3588c6"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "6c2e60de-f460-4abe-bd0f-698facdc7b2b",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        0.5636515803660274
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          1026.12,
+          1164.36,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "2b3554e8-fdc9-4eb2-8f9a-52c1813b1ed5",
+        "61866b45-8e7d-4cba-980b-0735edfafb2f"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "8debd2c2-89f7-4d99-811e-5d3d32c8cb48",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        -4.732248419633969
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1306.9199999999998,
+          1026.12,
+          1314.48,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "4c2d0770-80ee-420d-a69b-8a6e198e65f1",
+        "6de69f58-ae0e-498a-813d-eb0148491e25"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "5cc96fec-76c7-44f1-8203-7d6c42c46252",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        -10.028148419633972
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1457.04,
+          1026.12,
+          1464.6,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "1c695bdc-4f63-47ad-b8c4-ddbcf7b2262f",
+        "90d95ac1-297c-4bdf-b4c5-ac789f2bf1a3"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "6e95ad3f-659c-4835-879d-52fa1bdb9def",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        -15.326165086300641
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1607.28,
+          1026.12,
+          1614.72,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "121dc46a-01e8-4b47-bf9f-b6c1f1c375e2",
+        "df65a9ef-d1c4-4af0-a108-4c3453fcc379"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "48ee50f0-e3ee-4434-b379-e143cd5e8d5c",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003122,
+        -20.622065086300637
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          1026.12,
+          1764.84,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "8cd8b561-7077-4c04-91f0-2dd2ad19336a",
+        "b594575e-a1eb-4eba-9bca-d9b8ba447995"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "fe2b1d3d-4d25-46da-9547-e3d59ddc2328",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003122,
+        -25.91796508630064
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1907.52,
+          1026.12,
+          1914.96,
+          1035.72
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "3ef27657-5fcf-42b2-88b4-7d3127c6636b"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "0f2a6bd1-d113-41a3-a90e-92cbb5883709",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.007420483669783,
+        5.859551580366023
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1006.68,
+          920.76,
+          1014.24,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "4f8dc56e-a421-4bb1-b018-b84bace1ac48"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "bb8c4af0-fe32-4ef6-845a-037c34d355e9",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.007420483669783,
+        0.5636515803660274
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          920.76,
+          1164.36,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "289d3c71-22b8-4d17-88a1-db56e68d9b48",
+        "9970074e-aff5-4491-b03c-fca955358fff"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "b5a564a5-b1da-49bc-85a3-9d9a400fd539",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.00742048366979,
+        -20.622065086300637
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          920.76,
+          1764.84,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "1f1b5a0d-11f0-4936-90b4-86195887a215",
+        "7b67f82d-441f-46fa-b253-f55c76482aa6"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "d0c71ab5-3a08-4807-937e-b861c04f72ce",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.00742048366979,
+        -25.91796508630064
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1907.52,
+          920.76,
+          1914.96,
+          930.36
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "bfbb4d91-52ae-4bb2-a2d7-e5d9752bcf8e"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "3df1b752-06a0-4bd9-9f99-2b7b261b78e6",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003114,
+        5.859551580366023
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1006.68,
+          815.2800000000001,
+          1014.24,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "8971f9d8-01ad-4e60-b791-fc3b22f067d4"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "9d2ba8f4-61e4-4eac-b104-c135b587279f",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003114,
+        0.5636515803660274
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          815.2800000000001,
+          1164.36,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "2e8144f4-bf4e-4764-bb10-e95e398ba587",
+        "f3e5cb39-a2fc-4d9a-9fe4-f17ffc631dff"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "e0029c10-313b-42ef-979b-95133ad11b79",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003117,
+        -20.622065086300637
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          815.2800000000001,
+          1764.84,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "9f3d3f07-4867-402e-97b8-160bbe9bc6f1",
+        "ba3e29db-564b-47fc-a6b8-8b61b7a47356"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "078a4088-1586-455d-8f48-4d27cd42f337",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003117,
+        -25.91796508630064
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1907.52,
+          815.2800000000001,
+          1914.96,
+          825
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "30f62f8a-f5ca-40e2-89aa-19676ab18c12"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "b9c544dc-a4a7-4d31-b504-0b785754ee1a",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003115,
+        10.097118247032693
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          885.48,
+          1027.2,
+          895.1999999999999,
+          1034.6399999999999
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "0faec3f9-ec9e-4d7d-beda-3ec5965d5096"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "4a7ae663-78c2-43ad-b694-ba234fbe0193",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.007420483669783,
+        10.097118247032693
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          885.48,
+          921.84,
+          895.1999999999999,
+          929.28
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "679d223d-3cdc-4ee8-942b-ca1c22c4a805"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "8d55cd39-26bd-489b-bf5a-bb5e7fba6bf6",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.726403817003114,
+        10.097118247032697
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          885.48,
+          816.36,
+          895.1999999999999,
+          823.9200000000001
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "0324748f-10d8-462d-885d-9e35e9779cc9"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "755830e1-c0f5-4878-973b-88b894ac05f0",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.290553817003122,
+        -30.155531752967292
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          2026.56,
+          1027.2,
+          2036.1599999999999,
+          1034.6399999999999
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "342ce1d0-1dd2-42ee-9aca-8949db7f0cb1",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.00742048366979,
+        -30.155531752967292
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          2026.56,
+          921.84,
+          2036.1599999999999,
+          929.28
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "634b7183-fe96-4fab-b5c5-bcf76de4b8a8",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.72640381700312,
+        -30.155531752967292
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          2026.56,
+          816.36,
+          2036.1599999999999,
+          823.9200000000001
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "cae73790-3694-4837-bfa4-cbdc0beab597"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "83d7d976-395e-4f86-9094-6f80cf038efa",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669788,
+        10.097118247032693
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          885.48,
+          1132.56,
+          895.1999999999999,
+          1140.12
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "962d4ccf-ad0d-4478-b0fb-397960e15575",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -8.571570483669795,
+        -30.155531752967306
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          2026.56,
+          1132.56,
+          2036.1599999999999,
+          1140.12
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "eac71f77-b421-409f-907a-fc4db0d47329",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -4.854703817003113,
+        5.859551580366023
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1006.68,
+          1236.8400000000001,
+          1014.24,
+          1246.56
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "667bb35d-bac2-448a-8523-c1a395be61c8",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -4.854703817003113,
+        0.5636515803660274
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          1236.8400000000001,
+          1164.36,
+          1246.56
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "f6c8f9ae-b11a-4c70-8315-87bb1a69b563",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -4.854703817003113,
+        -4.732248419633969
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1306.9199999999998,
+          1236.8400000000001,
+          1314.48,
+          1246.56
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "e80a0926-6bfc-4fc9-9e25-d57d83201170",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -4.854703817003113,
+        -10.028148419633972
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1457.04,
+          1236.8400000000001,
+          1464.6,
+          1246.56
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "9a12f43d-9c57-47b2-89b9-87c3c2fe2e1e",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -4.854703817003113,
+        -15.326165086300641
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1607.28,
+          1236.8400000000001,
+          1614.72,
+          1246.56
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "20f44131-ecaa-420d-8ecb-f9b9b69cdcf2",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -4.85470381700312,
+        -20.622065086300637
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          1236.8400000000001,
+          1764.84,
+          1246.56
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "4a6aa4f2-37b4-4cd3-a079-ad9ac33fdcca",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -4.85470381700312,
+        -25.917965086300654
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1907.52,
+          1236.8400000000001,
+          1914.96,
+          1246.56
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "c3ececd5-fdff-4075-bd46-a7b6534b4386",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -4.854703817003113,
+        10.097118247032693
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          885.48,
+          1237.92,
+          895.1999999999999,
+          1245.48
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "3b332df9-dfc4-41be-a5f8-2c67bdc7ba37",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -4.85470381700312,
+        -30.155531752967306
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.342,
+        0.265
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          2026.56,
+          1237.92,
+          2036.1599999999999,
+          1245.48
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.342 x 0.265m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "61866b45-8e7d-4cba-980b-0735edfafb2f",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.294865280924597,
+        0.5642158050785397
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          429.24,
+          1164.36,
+          438.96000000000004
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "2b3554e8-fdc9-4eb2-8f9a-52c1813b1ed5",
+        "6c2e60de-f460-4abe-bd0f-698facdc7b2b"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "4c2d0770-80ee-420d-a69b-8a6e198e65f1",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.294865280924599,
+        -4.731684194921456
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1306.9199999999998,
+          429.24,
+          1314.48,
+          438.96000000000004
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "6de69f58-ae0e-498a-813d-eb0148491e25",
+        "8debd2c2-89f7-4d99-811e-5d3d32c8cb48"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "90d95ac1-297c-4bdf-b4c5-ac789f2bf1a3",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.294865280924599,
+        -10.02758419492146
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1457.04,
+          429.24,
+          1464.6,
+          438.96000000000004
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "1c695bdc-4f63-47ad-b8c4-ddbcf7b2262f",
+        "5cc96fec-76c7-44f1-8203-7d6c42c46252"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "df65a9ef-d1c4-4af0-a108-4c3453fcc379",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.2948652809246,
+        -15.325600861588129
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1607.28,
+          429.24,
+          1614.72,
+          438.96000000000004
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "121dc46a-01e8-4b47-bf9f-b6c1f1c375e2",
+        "6e95ad3f-659c-4835-879d-52fa1bdb9def"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "8cd8b561-7077-4c04-91f0-2dd2ad19336a",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -12.2948652809246,
+        -20.621500861588125
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          429.24,
+          1764.84,
+          438.96000000000004
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "48ee50f0-e3ee-4434-b379-e143cd5e8d5c",
+        "b594575e-a1eb-4eba-9bca-d9b8ba447995"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "289d3c71-22b8-4d17-88a1-db56e68d9b48",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.011731947591258,
+        0.5642158050785397
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          323.8800000000001,
+          1164.36,
+          333.60000000000014
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "9970074e-aff5-4491-b03c-fca955358fff",
+        "bb8c4af0-fe32-4ef6-845a-037c34d355e9"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "91e3f5d5-fa65-4119-8bc4-905d4f3d2087",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.01173194759126,
+        -4.731684194921456
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1306.9199999999998,
+          323.8800000000001,
+          1314.48,
+          333.60000000000014
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "c06274ca-5b6d-4c6f-846e-f60bc92484c5"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "c8502fcf-72c2-4396-b5d9-457dad515ffc",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.01173194759126,
+        -10.02758419492146
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1457.04,
+          323.8800000000001,
+          1464.6,
+          333.60000000000014
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "cbb8c3a2-ec1a-4493-b35e-af0bd510989c"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "8cb9d20f-fa52-4191-8238-039ae7e7bcc6",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.011731947591265,
+        -15.325600861588129
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1607.28,
+          323.8800000000001,
+          1614.72,
+          333.60000000000014
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "8495eda0-d603-4f55-a642-4e10d3018692"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "7b67f82d-441f-46fa-b253-f55c76482aa6",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -16.011731947591265,
+        -20.621500861588125
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          323.8800000000001,
+          1764.84,
+          333.60000000000014
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "1f1b5a0d-11f0-4936-90b4-86195887a215",
+        "b5a564a5-b1da-49bc-85a3-9d9a400fd539"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "2e8144f4-bf4e-4764-bb10-e95e398ba587",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.72859861425793,
+        0.5642158050785397
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1156.8,
+          218.51999999999998,
+          1164.36,
+          228.24
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "9d2ba8f4-61e4-4eac-b104-c135b587279f",
+        "f3e5cb39-a2fc-4d9a-9fe4-f17ffc631dff"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "5eefc734-18e6-4fd9-9982-55aaad1a8cc9",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.728598614257933,
+        -4.731684194921456
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1306.9199999999998,
+          218.51999999999998,
+          1314.48,
+          228.24
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "c1be54da-5319-4868-908f-008289122bc3"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "05e5bf2b-37c0-4f44-b394-f12b6b604b53",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.728598614257933,
+        -10.02758419492146
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1457.04,
+          218.51999999999998,
+          1464.6,
+          228.24
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "6de2dd4e-1414-47c9-9bdd-b62242fb623e"
+      ],
+      "shapeType": "point",
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "279d5806-8b42-406a-a06c-b7a84924ac71",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.728598614257933,
+        -15.325600861588129
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1607.28,
+          218.51999999999998,
+          1614.72,
+          228.24
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "42e56fbb-6312-4b1d-93c6-18f2f580bd8b"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    },
+    {
+      "id": "9f3d3f07-4867-402e-97b8-160bbe9bc6f1",
+      "name": "C1 \u2013 Column 265 x 342 \u00b7 C1",
+      "registeredCentreM": [
+        -19.728598614257933,
+        -20.621500861588125
+      ],
+      "domain": "roof",
+      "sectionM": [
+        0.265,
+        0.342
+      ],
+      "source": {
+        "kind": "spec",
+        "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+        "page": 25,
+        "label": "S2.1 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+        "box": [
+          1757.3999999999999,
+          218.51999999999998,
+          1764.84,
+          228.24
+        ],
+        "quote": "Registered column footprint: C1 closed plan rectangle matches scheduled 0.265 x 0.342m section; viewport registered to architectural grids. Plan centre is from the rectangle, not the tag. Height is not established by this footprint."
+      },
+      "possibleSameColumnLine": [
+        "ba3e29db-564b-47fc-a6b8-8b61b7a47356",
+        "e0029c10-313b-42ef-979b-95133ad11b79"
+      ],
+      "shapeType": null,
+      "quantity": 1,
+      "unit": "ea"
+    }
+  ]
+}

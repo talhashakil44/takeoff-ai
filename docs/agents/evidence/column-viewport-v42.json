@@ -1,0 +1,151 @@
+{
+  "modelVersion": 42,
+  "rootCause": "Repeated grid5 in low/high viewport made unscoped header lookup ambiguous. Scope to current viewport header band.",
+  "projectUnchanged": true,
+  "quantitiesUnchanged": true,
+  "physicalBefore": 138,
+  "physicalAfter": 140,
+  "changes": [
+    {
+      "id": "0c6f1bf4-6d56-4759-a959-70039b639566",
+      "before": null,
+      "after": {
+        "type": "point",
+        "at": [
+          -8.571570483669781,
+          -10.028148419633972
+        ],
+        "z": 4.149225000000003,
+        "size": [
+          0.265,
+          0.342,
+          5.810249999999997
+        ],
+        "rotation": -1.570796326794897
+      },
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 31,
+          "label": "S4.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            735.114050491859,
+            1143.2,
+            775.114050491859,
+            1382.8
+          ],
+          "quote": "2/S4.0, grids 5/D: column faces and closed top/base traced at SCALE: 1 : 75; section scale checked against floor datums 4m/0m. Base 4.149m, top 9.959m. Section quantisation tolerance 20mm; height inferred from calibrated section linework, not fabrication dimensions."
+        }
+      ]
+    },
+    {
+      "id": "5cc96fec-76c7-44f1-8203-7d6c42c46252",
+      "before": null,
+      "after": {
+        "type": "point",
+        "at": [
+          -12.290553817003115,
+          -10.028148419633972
+        ],
+        "z": 4.149225000000003,
+        "size": [
+          0.265,
+          0.342,
+          5.3466999999999985
+        ],
+        "rotation": -1.570796326794897
+      },
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 31,
+          "label": "S4.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            875.633994283859,
+            1160.72,
+            915.633994283859,
+            1382.8
+          ],
+          "quote": "2/S4.0, grids 5/C: column faces and closed top/base traced at SCALE: 1 : 75; section scale checked against floor datums 4m/0m. Base 4.149m, top 9.496m. Section quantisation tolerance 20mm; height inferred from calibrated section linework, not fabrication dimensions."
+        }
+      ]
+    },
+    {
+      "id": "e80a0926-6bfc-4fc9-9e25-d57d83201170",
+      "before": null,
+      "after": {
+        "type": "point",
+        "at": [
+          -4.854703817003113,
+          -10.028148419633972
+        ],
+        "z": 4.149225000000003,
+        "size": [
+          0.265,
+          0.342,
+          6.273799999999997
+        ],
+        "rotation": -1.570796326794897
+      },
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 31,
+          "label": "S4.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            594.6030962994632,
+            1125.68,
+            634.6030962994632,
+            1382.8
+          ],
+          "quote": "2/S4.0, grids 5/E: column faces and closed top/base traced at SCALE: 1 : 75; section scale checked against floor datums 4m/0m. Base 4.149m, top 10.423m. Section quantisation tolerance 20mm; height inferred from calibrated section linework, not fabrication dimensions."
+        }
+      ]
+    },
+    {
+      "id": "90d95ac1-297c-4bdf-b4c5-ac789f2bf1a3",
+      "before": {
+        "type": "point",
+        "at": [
+          -12.294865280924599,
+          -10.02758419492146
+        ],
+        "z": 4.149225000000003,
+        "size": [
+          0.265,
+          0.342,
+          5.3466999999999985
+        ],
+        "rotation": -1.570796326794897
+      },
+      "after": null,
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 31,
+          "label": "S4.0 \u00b7 Addendum 5 - RFP 082026 - Kelso - GE West Beginner Lodge Construction - CH.pdf",
+          "box": [
+            875.633994283859,
+            1160.72,
+            915.633994283859,
+            1382.8
+          ],
+          "quote": "2/S4.0, grids 5/C: column faces and closed top/base traced at SCALE: 1 : 75; section scale checked against floor datums 4m/0m. Base 4.149m, top 9.496m. Section quantisation tolerance 20mm; height inferred from calibrated section linework, not fabrication dimensions."
+        }
+      ]
+    }
+  ],
+  "ablation": "Removing own high-viewport grid5 withdraws grid5/D solid but retains plan footprint; removing other viewport grid5 preserves exact shape.",
+  "visualProofs": [
+    "grid5-d-column-plan-review-v42.png",
+    "grid5-d-column-original-footprint-v42.png",
+    "grid5-d-column-withheld-3d-v42.png",
+    "grid5-e-column-original-footprint-v42.png",
+    "grid5-e-column-withheld-3d-v42.png"
+  ],
+  "physicalCountScope": "Accepted takeoff elements with trade=structure plus separate unaccepted drawing-derived solids; excludes building allowances. Count quantities unchanged."
+}

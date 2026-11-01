@@ -1,3 +1,4 @@
+import type { Pt } from '../model';
 /**
  * Build It: the project as a proposed building and a plan to build it, from the takeoff and the
  * specification already in the project. One shared structure links every element, activity
@@ -43,7 +44,9 @@ export type ElementShape =
   /** Grid-located counted item. Scene marker and IFC placement only; no invented physical section. */
   | { type: 'locator'; at: [number, number]; z: number }
   /** A run (wall, duct, pipe): a polyline extruded to a height. */
-  | { type: 'run'; points: [number, number][]; z0: number; height: number; thickness: number; topPlane?: [number, number, number];
+  | { type: 'run'; points: [number, number][]; z0: number; height: number; thickness: number; topPlane?: [number, number, number]; bottomPlane?: [number, number, number];
+      /** Source-traced cross section: lateral offset and height above z0, in metres. */
+      profile?: [number, number][];
       /** Inferred square-turn fills shared by viewer and IFC for separate measured wall runs. */
       cornerFills?: { at: [number, number]; incoming: [number, number]; turn: number; size: number }[];
       openings?: {
@@ -61,7 +64,9 @@ export type ElementShape =
   | { type: 'point'; at: [number, number]; z: number; size: [number, number, number]; rotation?: number };
 
 export interface BuildElement {
-  /** Stable: the measurement's id. */
+  /** Original plan seed; restored before rechecking derived physical geometry. */
+  physicalGeometryBaseline?: import("./physicalGeometryLifecycle").PhysicalGeometryBaseline;
+  /** Stable measurement id, or drawing:<source-key> for unaccepted source geometry. */
   id: string;
   name: string;
   /** Work package (trade) it belongs to: 'partitions', 'mech-rough', … */
@@ -69,6 +74,10 @@ export interface BuildElement {
   level: string | null;
   /** Null when it can't be placed (an enlarged plan, an unscaled sheet): listed, not drawn. */
   shape: ElementShape | null;
+  /** Registered plan envelope only; no base/top elevation or physical solid. */
+  planFootprint?: { ring: Pt[]; domain: string };
+  /** Source-derived plan trace only; no section width, elevation or physical solid. */
+  planTrace?: { points: Pt[]; domain: string };
   /** Quantity in project units, with its unit (LF, SF, ea, m, m²). */
   quantity: number;
   unit: string;
@@ -81,7 +90,7 @@ export interface BuildElement {
   /** Original takeoff source, so tag-derived planning does not mistake other counts for circuit tags. */
   measurementSource?: string;
   opening?: { width:number; height:number; sill:number };
-  origin?: "takeoff" | "building";
+  origin?: "takeoff" | "building" | "drawing";
   status?: "existing" | "new" | "demolished";
   /** Source takeoff is retained for review, but has no verified new-work quantity in the plan. */
   planningExcluded?: string;
@@ -104,6 +113,11 @@ export interface BuildModel {
   units: 'metric' | 'imperial';
   levels: Level[];
   elements: BuildElement[];
+  /** Source-backed geometry without an accepted takeoff. Kept OUT of elements,
+   * quantities and scheduling. Entries use origin:'drawing', stable drawing: IDs,
+   * quantity:0, no production, no project type/measurement, and source evidence.
+   * Rebuilt from current evidence; never retain stale candidates after withdrawal. */
+  drawingGeometry?: BuildElement[];
   /** Model-wide issues: unplaced sheets, levels not found, … */
   issues: Issue[];
   /** Extent of what is drawn, in metres: [minX, minY, maxX, maxY]. */

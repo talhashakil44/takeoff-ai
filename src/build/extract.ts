@@ -1,9 +1,10 @@
+import { measurementScale } from '../quantities';
 import { recoverFacadeOpenings, rejectUnsupportedCurtainWalls } from './facades';
 import { imperialDatumEvidence } from './datumEvidence';
 import { quarantineDetachedSheets } from './placementQuality';
 import { recoverRoof, type DrawingLines } from './roof';
 import { simpleRing } from './surface';
-import { nearestGridIntersection } from './gridCounts';
+import { nearestGridIntersection, gridLocationFailure } from './gridCounts';
 import { existingEquipmentNote, planningExclusion, roofViewEvidence } from './interpret';
 import { doorHostHints, doorSwings, type DoorHostHint, type DoorSwing } from './doorSwings';
 import { drawingFingerprint } from './sources';
@@ -30,7 +31,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 25;
+export const MODEL_VERSION = 65;
 
 export interface Trade {
   key: string;
@@ -319,7 +320,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     if (s?.metersPerPoint && isPlan(s) && !isEnlarged(s)) scales.set(Math.round(s.metersPerPoint * 1e5), (scales.get(Math.round(s.metersPerPoint * 1e5)) ?? 0) + ms.length);
   }
   const mainScale = [...scales].sort((a, b) => b[1] - a[1])[0]?.[0];
-  const registration = registerSheets(project, input.drawingTexts ?? {});
+  const registration = registerSheets(project, input.drawingTexts ?? {}, input.drawingLines);
   const gridAxesBySheet = new Map<string, ReturnType<typeof gridAxes>>();
   const axesFor = (s: Sheet) => {
     const cached = gridAxesBySheet.get(s.id);
@@ -327,7 +328,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     const points = project.measurements.filter((m) => m.sheetId === s.id).flatMap((m) => m.points);
     const median = (axis: number) => points.map((p) => p[axis]).sort((a, b) => a - b)[Math.floor(points.length / 2)];
     const focus: [number, number] | undefined = points.length ? [median(0), median(1)] : undefined;
-    const axes = gridAxes(input.drawingTexts?.[s.id] ?? [], s.width, s.height, focus);
+    const axes = gridAxes(input.drawingTexts?.[s.id] ?? [], s.width, s.height, focus, input.drawingLines?.[s.id]);
     gridAxesBySheet.set(s.id, axes);
     return axes;
   };
@@ -377,6 +378,7 @@ export function extractModel(input: ExtractInput): BuildModel {
       elIssues.push('Saved demolition keynote labels on A201–A204 may be shifted by one note; the measured marker remains, but its removal type and production basis need drawing review.');
     if (inferredRoofView) elIssues.push('Roof level inferred from multiple coincident equipment marks on a separately titled roof plan; confirm the unpaired marks on this sheet.');
     const gridCount = trade === 'structure' && type.kind === 'count' && /\b(?:footing|pier|base\s*plate|column)\b/i.test(type.name);
+    const effectiveScale = measurementScale(m, s);
     let shape: ElementShape | null = null;
     let placement: Basis = 'unknown';
     if (exclusion) {
@@ -394,7 +396,7 @@ export function extractModel(input: ExtractInput): BuildModel {
       elIssues.push(`Site work is scheduled without a building level. Its plan route is not coordinated to the building model${m.statedLength !== undefined ? '; the length comes from the drawing label' : ''}.`);
       if (!vars) elIssues.push(`${s.name} has no scale or stated length: its quantity is unknown.`);
     } else if (!s.metersPerPoint) {
-      elIssues.push(`${s.name} has no scale: its quantity and place are unknown.`);
+      elIssues.push(vars ? `${s.name} uses per-view scale: placement requires independent drawing registration.` : `${s.name} has no scale: its quantity and place are unknown.`);
       unplaced.set(s.id, 'no scale');
     } else if (viewport && !viewportRegistration.has(m.id)) {
       elIssues.push(`${s.name}: level ${viewport.id} inferred from “${viewport.title}” and the gap between side-by-side plans; this viewport has no verified building XY registration, so its quantity is scheduled on ${viewport.id} but not drawn in 3D.`);
@@ -408,6 +410,8 @@ export function extractModel(input: ExtractInput): BuildModel {
     } else if (!level) {
       elIssues.push(`The level of ${s.name} (${s.title ?? ''}) isn't known: set it in Build setup.`);
       unplaced.set(s.id, 'level unknown');
+    } else if (s.metersPerPoint !== null && effectiveScale !== null && Math.abs(effectiveScale / s.metersPerPoint - 1) > 0.01) {
+      elIssues.push('Measurement uses a separately scaled inset. Main-sheet geometry withheld; the inset requires independent registration and member evidence. Quantity retains the effective inset scale.');
     } else if (!placeable(s) && !viewportRegistration.has(m.id)) {
       elIssues.push(`${s.name} is at another scale than the main plans: not placed with them.`);
       unplaced.set(s.id, 'other scale');
@@ -453,7 +457,7 @@ export function extractModel(input: ExtractInput): BuildModel {
             shape = { type: 'locator', at: transform(snap.point), z: level.elevation };
             elIssues.push(`Symbolic 3D location inferred at structural grid ${snap.labels.join('/')} (${snap.distanceM.toFixed(2)} m from the original tag). The tag point remains in the source box; member section and height are not inferred.`);
           } else {
-            elIssues.push(`No registered structural grid intersection within 2.5 m of the tag${reg ? '' : ' on this sheet'}; count retained without 3D placement.`);
+            elIssues.push(gridLocationFailure(axesFor(s),reg?.grids,m.points[0],k));
           }
         }
         else if (trade === 'doors') shape = { type: 'point', at, z: level.elevation, size: [0.95, 0.12, 2.1] };
