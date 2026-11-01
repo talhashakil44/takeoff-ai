@@ -2090,3 +2090,25 @@ Claude notified via gpt-explore T11 bus with exact reproduction and evidence.
 No implementation changes, per-project tuning, corpus scoring, merge or deploy.
 Next: Claude release review of Kelso exit/reopen responsiveness; then re-test
 that exact sequence against owner-approved fix. Geometry acceptance incomplete.
+
+## 2026-11-01 04:40Z — generic reopen lifecycle fix verified
+ExploreHost launcher now clears previous session data in the same React batch
+as opening. Previously setOpen(true) remounted the retained Workspace before
+the loading effect could clear it, recomputing stale geometry with old PDF
+readers. No project names, geometry rules or quantity changes in this fix.
+Tested release56ff1ea with only ExploreHost overlaid in detached local worktree.
+Fresh main-app Kelso/Frederick: Model, Explore, selected measured room, four
+wheel-in/out cycles, Fit, original-PDF2D and3D screenshots, exit/reopen PASS;
+no uncaught pageerrors. Both complete script processes exit0. Kelso reopen
+click112ms versus previous30s timeout; ready96.0s. Frederick click59ms and
+ready5.27s. Kelso expensive reconstruction remains a performance limitation,
+not resolved by this lifecycle fix. First model/Explore times58.3s/157.3s
+Kelso and102.1s/110.4s Frederick (concurrent validation). All four screenshots
+visually inspected: original plan/overlays and source-backed selected quantities
+remain visible; inferred heights and incomplete geometry unchanged.
+Proofs diag/explore/proofs/reopen-fixed-{kelso,frederick}-{2d,3d}.png; logs
+/tmp/release-interaction-{kelso,frederick}-fixed.log. Code harness PASS690tests,
+tsc/build/audit on this change. Originals unchanged; no corpus scoring or
+project-specific tuning. Next: Claude review/cherry-pick generic fix into release;
+prioritize remaining reconstruction latency separately. Full geometric acceptance
+remains incomplete; no main merge or deploy.

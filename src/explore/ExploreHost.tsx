@@ -200,7 +200,13 @@ export function ExploreHost({
   }, [open, liveProject]);
   if (!open)
     return (
-      <button className="ex-launch" onClick={() => setOpen(true)}>
+      <button className="ex-launch" onClick={() => {
+        // Clear the previous session before mounting Workspace. Waiting for the
+        // loading effect briefly remounts stale geometry (and destroyed PDF
+        // readers), blocking the reopen click with an unnecessary reconstruction.
+        setData(null);
+        setOpen(true);
+      }}>
         ⌗ Explore drawing <span aria-hidden="true">↗</span>
       </button>
     );
