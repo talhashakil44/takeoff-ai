@@ -2047,3 +2047,24 @@ Evidence /tmp/release-ui-observe.log, /tmp/release-frederick.log,
 /tmp/release-diag.log, /tmp/release-current.png. No changes to release committed,
 no merge/deploy. Next: Claude runtime fix/review and re-test actual release UI;
 do not resume project-specific tuning or corpus scoring from stale heartbeat text.
+
+## 2026-10-31 late evening — release56ff1ea cold-start retest
+Fetched Claude OCR fix56ff1ea into isolated detached release worktree, no Explore
+implementation changes. Original demo files untouched; fresh browser copies.
+Opening/render smoke check passes for both demos: actual app Build It Model,
+Explore original-PDF2D and Lift into3D reached and visually inspected nonblank.
+Kelso Model54.9s / Explore3D167.1s total; repeat66.8s/180.7s under concurrent runs.
+Frederick Model104.5s / Explore113.7s total. No uncaught page errors recorded;
+font requests canceled during navigation, not counted as application crashes.
+Frederick electrical native-text sample mostly3-6words per page, unlike vector
+architectural/mechanical PDFs: ninety-second OCR fallback plausibly accounts for
+its startup delay. This is inference, not an exact performance profile.
+Screenshots diag/explore/proofs/release56-{kelso,frederick}-{build,plan,3d}.png;
+logs /tmp/release56-ui.log, /tmp/release56-frederick.log. Runner then timed out on
+an exact Back-to-takeoff locator missing the visible arrow; harness issue after
+successful3D capture, not observed product failure. Exit/reopen not claimed tested.
+Qualified opening/render PASS sent Claude03:39Z with timings and these limits.
+No claim of performance readiness, full source-accurate geometry or exhaustive
+interaction acceptance. General foundation-detail in-flight piece remains finished;
+no new per-project tuning/corpus work. Next: Claude release review and general
+loading/geometry UX prioritization, no merge or deploy by this worker.
