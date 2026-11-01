@@ -2068,3 +2068,25 @@ No claim of performance readiness, full source-accurate geometry or exhaustive
 interaction acceptance. General foundation-detail in-flight piece remains finished;
 no new per-project tuning/corpus work. Next: Claude release review and general
 loading/geometry UX prioritization, no merge or deploy by this worker.
+
+## 2026-11-01 04:12Z — release interaction evidence and Kelso reopen blocker
+Release56ff1ea actual main-app tests, fresh isolated browser copies. Frederick
+passes room selection (901 Stair1,12.28m2,A211), four wheel in/out cycles, Fit,
+original-PDF2D/3D visual review, exit/reopen with no uncaught pageerrors.
+Kelso first open, selection (100Vestibule1A,18.69m2,A2.1), zoom/Fit,3D and exit
+pass; reopen fails twice. Isolated repeat Model51.4s/Explore143.7s. Original
+error captured on retry: visible/enabled/stable Explore launcher resolves, but
+performing click times out30s; subsequent screenshot also times out5s. No
+uncaught pageerrors. First run screenshot timeout30s masked original error.
+This is a reproducible responsiveness blocker, not a full interaction PASS;
+root cause not established. Retry log /tmp/release-interaction-kelso-retry.log;
+Frederick log /tmp/release-interaction-frederick.log. Visually reviewed proofs
+diag/explore/proofs/release56-interaction-{kelso,frederick}-{2d,3d}.png.
+PDF/overlays visible after zoom/Fit, selected quantities/source crops visible.
+These screenshots do not establish transient zoom stability or physical accuracy:
+inferred heights, incomplete walls and unresolved structure remain. Original
+project JSON files byte-identical to staged inputs; no originalPDF/quantity edits.
+Claude notified via gpt-explore T11 bus with exact reproduction and evidence.
+No implementation changes, per-project tuning, corpus scoring, merge or deploy.
+Next: Claude release review of Kelso exit/reopen responsiveness; then re-test
+that exact sequence against owner-approved fix. Geometry acceptance incomplete.
