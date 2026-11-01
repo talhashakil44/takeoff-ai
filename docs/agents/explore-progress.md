@@ -1916,3 +1916,27 @@ Next: general datum-origin/reference graph and section-to-wall-top association,
 obtain omitted spec sources/thirddevPDF through Claude, review footprint evidence
 and cross-project coverage. This is partial integration, not all-model acceptance;
 no sealed source access, main merge or deploy.
+
+## 2026-10-31 evening local — third-project source pipeline audit
+Model62 final harness confirmed PASS684tests, tsc/build/audit. Brampton original
+PDF now delivered by Claude, SHA1 94fc277ace1c98a884a68c399ba01da977dcda01
+verified; staged copied input outside originals. Dev-only runner PASS with
+preservation assertions; 37 foundation records, zero solids. No coverage gain
+claimed. Source-to-model gap identified: S1.2 FOUNDATION DETAILS (PDF33) and
+S1.3 FOUNDATION DETAILS (PDF34) have zero drawingTexts entries, while original
+PDF extraction contains footing/wall details. sources.ts needsText excludes
+unmeasured titled DETAIL sheets. Requested generic loader regression/fix from
+Claude, who owns this shared file, via bus 2026-11-01T00-37-36Z.
+Original S3.1 PDF37 rendered and inspected: slab/interior-footing level heads
+are present without numeric elevations. Details must supply relative dimensions
+and applicability, not relaxed nearest-number matching. S1.2 includes existing
+condition, exterior/interior distinction and wall-top drop200 at doors; S1.3
+includes stepped-footing and minimum-cover conditions. These are not a universal
+foundation height. No specs delivered; no claim of specification agreement.
+Count-based F1/P1 candidates remain beyond current grid snap distance; did not
+relax distance to force placement. Next: consume Claude's relevant detail text
+loading fix, trace plan detail references into local relative-datum constraints,
+and verify those relationships against original PDF before enabling solids.
+Engine gridLines helper reviewed at integration9309abc; asked Claude to coordinate
+whole engine integration before reuse (Explore lacks dimensions.ts). No engine
+file partial-port, sealed inspection, original-data edit, main merge or deploy.
