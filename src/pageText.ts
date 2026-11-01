@@ -13,9 +13,11 @@ export interface PageText {
 }
 
 /** Every text run on the page, trimmed, positioned by its centre. */
-export async function pageTexts(page: PDFPageProxy): Promise<PageText[]> {
+export async function pageTexts(page: PDFPageProxy, opts: { own?: boolean } = {}): Promise<PageText[]> {
   const vp = page.getViewport({ scale: 1 });
-  const content = await page.getTextContent();
+  // `own`: only the text the PDF carries, not what OCR added (src/ocrText.ts).
+  const ownText = (page as { ownTextContent?: PDFPageProxy['getTextContent'] }).ownTextContent;
+  const content = await (opts.own && ownText ? ownText() : page.getTextContent());
   const out: PageText[] = [];
   // Some files carry their text twice in the same place (an OCR layer over the original): once is enough.
   const seen = new Set<string>();

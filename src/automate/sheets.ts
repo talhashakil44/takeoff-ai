@@ -7,7 +7,12 @@ import { namesFromList, readDrawingList, type ListedSheet } from '../drawingList
 import { classifySheet } from '../sheetKind';
 import { mainDrawingScale, scaleHintsOf, scaleNotes, viewTitle } from '../sheetScale';
 import { readTitleBlock } from '../titleBlock';
+import { guessSheetNumber } from '../sheetInfo';
 import { parseScale } from '../units';
+import { sheetViews } from '../sheetViews';
+import type { Project } from '../model';
+import { perSheet, type SetAccess } from './set';
+import type { Automation } from './result';
 
 /**
  * A page of a newly added drawing as a sheet: named from its title block (its sheet number,
@@ -18,8 +23,16 @@ import { parseScale } from '../units';
 export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, units: Units | undefined): Promise<{ sheet: Sheet; noText: boolean; list: ListedSheet[] }> {
   const info = await inspectPage(pg);
   const texts = info.textRuns >= 5 ? await pageTexts(pg) : [];
-  // Named from the title block: its sheet number, with the drawing title beside it.
-  const named = texts.length ? readTitleBlock(texts, info.width, info.height) : { number: null, title: null };
+  // Named from the title block: its sheet number, with the drawing title beside it. A number the
+  // PDF's own text gives beats one OCR read (a mechanical sheet's M1.1, not a misread "8").
+  const ocrRead = !!(pg as { ocrRead?: boolean }).ocrRead;
+  const own = ocrRead ? await pageTexts(pg, { own: true }) : [];
+  const ownNamed = own.length >= 5 ? readTitleBlock(own, info.width, info.height) : null;
+  const read = texts.length ? readTitleBlock(texts, info.width, info.height) : { number: null, title: null };
+  const ownGuess = own.length >= 5 ? guessSheetNumber(own.map((t) => ({ str: t.str, x: t.cx - t.w / 2, y: t.cy + t.h / 2, size: t.h / 0.7 })), info.width, info.height) : null;
+  const ownNumber = ownNamed?.number ?? ownGuess;
+  const named = { number: ownNumber ?? read.number, title: read.title ?? ownNamed?.title ?? null };
+  const numberByOcr = ocrRead && !ownNumber;
   const title = named.title ?? (texts.length ? viewTitle(texts) : null);
   // Every scale noted, "=" or not (some exports draw the sign as linework).
   const hints = texts.length ? scaleHintsOf(texts, scaleNotes(texts)) : info.scaleHints;
@@ -30,6 +43,9 @@ export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, 
   // Several noted (a plan with its details): the main drawing's.
   const several = inUnits.length > 1 ? inUnits : hints;
   if (!detected && several.length > 1) detected = mainDrawingScale(several, texts, await segmentsOnce(pg), units ?? 'metric', title ?? undefined)?.label ?? null;
+  // Each drawing on the sheet at the scale under its title: the sheet's scale where none is, an
+  // inset's own where one differs (a 1:50 canopy plan beside a 1:100 plan).
+  const views = several.length > 1 && texts.length ? sheetViews(texts, (await segmentsOnce(pg)) ?? [], info.width, info.height) : [];
   // No scale printed (a plan whose title gives none): the one its dimensions agree on.
   if (!detected && !hints.length && info.textRuns >= 20) {
     const read = checkScale(texts, await segmentsOnce(pg), units ?? 'metric');
@@ -45,6 +61,8 @@ export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, 
       docId,
       page: n,
       name: named.number ?? info.name ?? `Page ${n}`,
+      // Read by OCR (no text layer of its own): its number may be misread.
+      ...(numberByOcr ? { ocr: true } : {}),
       ...(title ? { title } : {}),
       width: info.width,
       height: info.height,
@@ -52,7 +70,32 @@ export async function sheetFromPage(pg: PDFPageProxy, n: number, docId: string, 
       scaleLabel: detected,
       scaleSource: detected ? 'detected' : null,
       scaleHints: hints,
+      ...(views.length ? { views } : {}),
     },
+  };
+}
+
+/**
+ * Sheets holding drawings at different scales (Kelso S2.1: two roof framing plans at 1:100, the
+ * canopy's at 1:50; S1.0: the 1:50 canopy foundation plan beside the 1:100 plan): each drawing's
+ * extent and scale, so takeoffs in them are measured at their own. Sheets with views read are left.
+ */
+export async function automateSheetViews(p: Project, access: SetAccess): Promise<Automation> {
+  const found = new Map<string, NonNullable<Sheet['views']>>();
+  for (const s of p.sheets) {
+    if (s.superseded || s.views || s.scaleHints.length < 2) continue;
+    await perSheet(access, s, async () => {
+      const texts = await access.texts(s);
+      const segs = texts.length ? await access.segments(s) : null;
+      const views = segs ? sheetViews(texts, segs, s.width, s.height) : [];
+      if (views.length) found.set(s.id, views);
+    });
+  }
+  if (!found.size) return { message: 'No sheets with drawings at their own scales.' };
+  const names = p.sheets.filter((s) => found.has(s.id)).map((s) => `${s.name} (${found.get(s.id)!.map((v) => v.scaleLabel).join(', ')})`);
+  return {
+    message: `Drawings at their own scales read on ${names.join('; ')}`,
+    apply: (q) => ({ ...q, sheets: q.sheets.map((s) => (found.has(s.id) && !s.views ? { ...s, views: found.get(s.id) } : s)) }),
   };
 }
 

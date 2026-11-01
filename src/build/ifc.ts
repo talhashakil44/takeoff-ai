@@ -1,3 +1,5 @@
+import { geometryOf } from './sceneGeometry';
+import { runSolids } from "./solids";
 import { evaluate } from '../formula';
 import type { Project } from '../model';
 import { formulaVars, measurementVars } from '../quantities';
@@ -57,7 +59,7 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
   const org = add(`IFCORGANIZATION($,${str('Takeoff AI')},$,$,$)`);
   const po = add(`IFCPERSONANDORGANIZATION(${person},${org},$)`);
   const app = add(`IFCAPPLICATION(${org},'1.0',${str('Takeoff AI — Build It')},'TakeoffAI')`);
-  const owner = add(`IFCOWNERHISTORY(${po},${app},$,.ADDED.,$,$,$,${Math.floor(now.getTime() / 1000)})`);
+  const owner = add(`IFCOWNERHISTORY(${po},${app},$,.ADDED.,${Math.floor(now.getTime() / 1000)},$,$,${Math.floor(now.getTime() / 1000)})`);
   const origin = add(pt3(0, 0, 0));
   const zAxis = add(`IFCDIRECTION((0.,0.,1.))`);
   const xAxis = add(`IFCDIRECTION((1.,0.,0.))`);
@@ -96,27 +98,39 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
   };
   const shapeOf = (e: BuildElement, zBase: number): string | null => {
     const s = e.shape;
-    if (!s) return null;
+    if (!s || s.type === 'axis' || s.type === 'locator') return null;
     const items: string[] = [];
-    if (s.type === 'run') {
-      for (let i = 1; i < s.points.length; i++) {
-        const [x1, y1] = s.points[i - 1];
-        const [x2, y2] = s.points[i];
-        const len = Math.hypot(x2 - x1, y2 - y1);
-        if (len < 0.02) continue;
-        const dx = (x2 - x1) / len;
-        const dy = -(y2 - y1) / len;
-        items.push(solid(rect(len / 2, 0, len, s.thickness), x1, -y1, s.z0 - zBase, dx, dy, s.height));
+    if ((s.type==='surface' && s.slope) || (s.type==='run' && (s.topPlane || s.profile))) {
+        const sourceGeometry = geometryOf(e)!;
+        const geometry = sourceGeometry.index ? sourceGeometry.toNonIndexed() : sourceGeometry;
+        if (geometry !== sourceGeometry) sourceGeometry.dispose();
+        const position = geometry.getAttribute('position');
+        const vertices: number[][] = [], indices: number[] = [], unique = new Map<string,number>();
+        for (let i=0;i<position.count;i++) {
+          const v=[position.getX(i),-position.getZ(i),position.getY(i)-zBase];
+          const key=v.map(n=>n.toFixed(6)).join(',');
+          let index=unique.get(key);
+          if(index===undefined){vertices.push(v);index=vertices.length;unique.set(key,index);}
+          indices.push(index);
+        }
+        const faces=[];
+        for(let i=0;i<indices.length;i+=3) { const face=indices.slice(i,i+3); if(new Set(face).size===3)faces.push(`(${face.join(',')})`); }
+        const points=add(`IFCCARTESIANPOINTLIST3D((${vertices.map(v=>`(${v.map(num).join(',')})`).join(',')}))`);
+        items.push(add(`IFCTRIANGULATEDFACESET(${points},$,.T.,(${faces.join(',')}),$)`));
+        geometry.dispose();
+    } else if (s.type === 'run') {
+      for (const p of runSolids(s)) {
+        items.push(solid(rect(p.length / 2, 0, p.length, p.thickness), p.x, -p.y, p.z - zBase, p.dx, -p.dy, p.height));
       }
     } else if (s.type === 'surface') {
       if (s.ring.length < 3) return null;
       const profile = s.holes.length ? add(`IFCARBITRARYPROFILEDEFWITHVOIDS(.AREA.,$,${polyline(s.ring)},(${s.holes.filter((h) => h.length >= 3).map(polyline).join(',')}))`) : add(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${polyline(s.ring)})`);
       items.push(solid(profile, 0, 0, s.z - zBase, 1, 0, s.thickness));
     } else {
-      items.push(solid(rect(0, 0, s.size[0], s.size[1]), s.at[0], -s.at[1], s.z - zBase, 1, 0, s.size[2]));
+      items.push(solid(rect(0, 0, s.size[0], s.size[1]), s.at[0], -s.at[1], s.z - zBase, Math.cos(s.rotation ?? 0), -Math.sin(s.rotation ?? 0), s.size[2]));
     }
     if (!items.length) return null;
-    const rep = add(`IFCSHAPEREPRESENTATION(${body},'Body','SweptSolid',(${items.join(',')}))`);
+    const rep = add(`IFCSHAPEREPRESENTATION(${body},'Body','${((s.type === 'surface' && s.slope) || (s.type==='run' && (s.topPlane || s.profile))) ? 'Tessellation' : 'SweptSolid'}',(${items.join(',')}))`);
     return add(`IFCPRODUCTDEFINITIONSHAPE($,$,(${rep}))`);
   };
 
@@ -137,21 +151,25 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
   // Elements with no place in the model (level unknown, not a plan) are still exported, with their
   // quantities and properties and no geometry, in the building: no takeoff is lost on the way out.
   const loose: string[] = [];
-  for (const e of model.elements) {
+  const exportElements = [...new Map([...model.elements, ...(model.drawingGeometry ?? [])].map(e => [e.id, e])).values()];
+  for (const e of exportElements) {
     const lv = e.level ? storeys.get(e.level) : undefined;
     const shape = e.shape && lv ? shapeOf(e, lv.elevation) : null;
-    const pl = add(`IFCLOCALPLACEMENT(${shape && lv ? lv.pl : bldPl},${add(`IFCAXIS2PLACEMENT3D(${origin},$,$)`)})`);
+    const locator = e.shape?.type === 'locator' && lv ? e.shape : null;
+    const pl = locator
+      ? placeAt(lv!.pl, locator.at[0], -locator.at[1], locator.z - lv!.elevation)
+      : add(`IFCLOCALPLACEMENT(${shape && lv ? lv.pl : bldPl},${add(`IFCAXIS2PLACEMENT3D(${origin},$,$)`)})`);
     const { cls, tail } = classOf(e);
-    const ref = add(`${cls}('${ifcGuid(e.id)}',${owner},${str(e.name)},${str(e.typeName)},${str(tradeByKey.get(e.trade)?.name ?? e.trade)},${pl},${shape ?? '$'},${str(e.id.slice(0, 8))}${tail})`);
-    refOf.set(e.id, ref);
-    if (shape && lv) lv.members.push(ref);
+    const ref = add(`${cls}('${ifcGuid(e.id)}',${owner},${str(e.name)},${str(e.typeName)},${str(tradeByKey.get(e.trade)?.name ?? e.trade)},${pl},${shape ?? '$'},${str(e.origin === 'drawing' ? e.id : e.id.slice(0, 8))}${tail})`);
+    if (e.origin !== "drawing") refOf.set(e.id, ref);
+    if ((shape || locator) && lv) lv.members.push(ref);
     else loose.push(ref);
     // Properties: what it is, where it came from, what governs it, when it is built.
-    const type = types.get(e.typeId);
-    const m = ms.get(e.measurementId);
+    const type = e.origin === 'drawing' ? undefined : types.get(e.typeId);
+    const m = e.origin === 'drawing' ? undefined : ms.get(e.measurementId);
     const sheet = sheets.get(e.sheetId);
-    const t = schedule?.times[actOf.get(e.id) ?? ''];
-    const act = schedule?.activities.find((a) => a.id === actOf.get(e.id));
+    const t = e.origin === 'drawing' ? undefined : schedule?.times[actOf.get(e.id) ?? ''];
+    const act = e.origin === 'drawing' ? undefined : schedule?.activities.find((a) => a.id === actOf.get(e.id));
     const props = [
       label('TakeoffType', e.typeName),
       label('System', tradeByKey.get(e.trade)?.name ?? e.trade),
@@ -159,15 +177,24 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
       label('Level', e.level ?? ''),
       label('SourceSheet', sheet ? `${sheet.name} ${sheet.title ?? ''}`.trim() : ''),
       label('SourcePage', String(sheet?.page ?? '')),
-      label('TakenOffBy', m?.source ?? 'hand'),
+      ...(locator && m?.points[0] ? [label('TagPointOnSheet', m.points[0].map((n) => n.toFixed(2)).join(', '))] : []),
+      ...(e.origin === 'drawing' ? [label('Acceptance', 'Not accepted takeoff'), text('GeometrySourceEvidence', e.sources.map(s => `${s.label}, page ${s.page ?? ''}: ${s.quote ?? ''}`).join(' | '))] : [label('TakenOffBy', m?.source ?? 'hand')]),
       label('Placement', e.placement),
-      label('Quantity', `${Math.round(e.quantity * 100) / 100} ${e.unit}`),
+      ...(e.origin === 'drawing' ? [] : [label('Quantity', `${Math.round(e.quantity * 100) / 100} ${e.unit}`)]),
       label('SpecSections', e.specs.map((s) => { const sec = secs.get(s.key); return sec ? `${sec.number} ${sec.title}${sec.missing ? ' (not issued)' : ''}` : s.key; }).join('; ')),
       ...(type?.assemblyTitle ? [label('Assembly', type.assemblyTitle)] : []),
       ...(type?.description ? [text('AssemblyBuildUp', type.description.slice(0, 900))] : []),
       ...(act ? [label('BuiltBy', act.name)] : []),
       ...(t ? [label('ScheduledStart', t.start), label('ScheduledFinish', t.finish), label('Critical', t.critical ? 'yes' : 'no')] : []),
-      ...(e.trade === 'demolition' ? [label('Status', 'DEMOLISH')] : [label('Status', 'NEW')]),
+      label("Status",
+        e.status === "existing"
+          ? "EXISTING"
+          : e.trade === 'demolition' ? "DEMOLISH"
+            : "NEW",
+      ),
+      label("Origin", e.origin === "drawing" ? "Drawing-derived geometry - not accepted takeoff" : e.origin === "building"
+          ? "Derived building context - not measured takeoff"
+          : "Measured takeoff", ),
       ...(e.issues.length ? [text('OpenIssues', e.issues.join(' | ').slice(0, 900))] : []),
     ].map(add);
     const pset = add(`IFCPROPERTYSET('${ifcGuid(`pset:${e.id}`)}',${owner},'Pset_TakeoffAI',$,(${props.join(',')}))`);
@@ -186,6 +213,8 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
         }
       }
     }
+    // Drawing candidates deliberately carry no quantity sets or schedule links.
+    if (e.origin === 'drawing') continue;
     // Base quantities, in metres.
     const q: string[] = [];
     const s = e.shape;
@@ -194,6 +223,9 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
       if (e.unit === 'ft' || e.unit === 'm') q.push(add(`IFCQUANTITYLENGTH('Length',$,$,${num(e.unit === 'ft' ? e.quantity * 0.3048 : e.quantity)},$)`));
       else if (e.unit === 'SF' || e.unit === 'm²') q.push(add(`IFCQUANTITYAREA('NetArea',$,$,${num(e.unit === 'SF' ? e.quantity * 0.09290304 : e.quantity)},$)`));
       else q.push(add(`IFCQUANTITYCOUNT('Count',$,$,${num(e.quantity)},$)`));
+    } else if (s.type === 'axis') {
+      const len = s.points.slice(1).reduce((acc, p, i) => acc + Math.hypot(p[0] - s.points[i][0], p[1] - s.points[i][1]), 0);
+      q.push(add(`IFCQUANTITYLENGTH('Length',$,$,${num(len)},$)`));
     } else if (s.type === 'run') {
       const len = s.points.slice(1).reduce((acc, p, i) => acc + Math.hypot(p[0] - s.points[i][0], p[1] - s.points[i][1]), 0);
       q.push(add(`IFCQUANTITYLENGTH('Length',$,$,${num(len)},$)`), add(`IFCQUANTITYLENGTH('Height',$,$,${num(s.height)},$)`), add(`IFCQUANTITYAREA('GrossSideArea',$,$,${num(len * s.height)},$)`));
@@ -202,7 +234,7 @@ export function toIfc({ model, schedule, project, sections, now = new Date() }: 
       q.push(add(`IFCQUANTITYAREA('NetArea',$,$,${num(area)},$)`));
     } else q.push(add(`IFCQUANTITYCOUNT('Count',$,$,1.,$)`));
     if (s && ft && e.unit === 'ft') q.push(add(`IFCQUANTITYLENGTH('TakeoffLength',$,$,${num(e.quantity * 0.3048)},$)`));
-    const qto = add(`IFCELEMENTQUANTITY('${ifcGuid(`qto:${e.id}`)}',${owner},'Qto_TakeoffAI',$,'Takeoff',(${q.join(',')}))`);
+    const qto = add(`IFCELEMENTQUANTITY('${ifcGuid(`qto:${e.id}`)}',${owner},'${e.origin === "building" ? "Qto_BuildingAllowance" : "Qto_TakeoffAI"}',$,'${e.origin === "building" ? "Inferred geometry" : "Takeoff"}',(${q.join(',')}))`);
     add(`IFCRELDEFINESBYPROPERTIES('${ifcGuid(`rqto:${e.id}`)}',${owner},$,$,(${ref}),${qto})`);
   }
   if (loose.length) add(`IFCRELCONTAINEDINSPATIALSTRUCTURE('${ifcGuid(`cont:${project.id}:building`)}',${owner},'Not placed',$,(${loose.join(',')}),${building})`);

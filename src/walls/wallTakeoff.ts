@@ -202,6 +202,77 @@ export function wallTakeoff(
       continues.push({ r1: ri, end1: end, r2: b.r2, end2: b.end2 });
     }
   });
+  // A wall carries on through an opening drawn in its line (a window, a storefront, an overhead
+  // door up to 3 m; a wider one, an overhead door, is left out as estimators do): free ends facing each other on one line, with the opening's
+  // own lines (glazing, sill, frame) running along the wall between them for most of the gap.
+  // A doorway or an open end has no such lines across it.
+  const lineIndex = new SegmentIndex(allSegments, 32);
+  const spanned = (r: WallRun, e: Pt, e2: Pt) => {
+    const L = dist(e, e2);
+    const [ux, uy] = [(e2[0] - e[0]) / L, (e2[1] - e[1]) / L];
+    const half = r.thickness / 2 + 1;
+    const pieces: [number, number][] = [];
+    for (const i of lineIndex.query(Math.min(e[0], e2[0]) - half, Math.min(e[1], e2[1]) - half, Math.max(e[0], e2[0]) + half, Math.max(e[1], e2[1]) + half)) {
+      const s = allSegments[i];
+      if (s.curve || s.filled) continue;
+      const sl = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+      if (sl < 0.5 || Math.abs(((s.x2 - s.x1) * uy - (s.y2 - s.y1) * ux) / sl) > 0.02) continue;
+      const across = (x: number, y: number) => Math.abs((x - e[0]) * -uy + (y - e[1]) * ux);
+      if (across(s.x1, s.y1) > half || across(s.x2, s.y2) > half) continue;
+      const t1 = (s.x1 - e[0]) * ux + (s.y1 - e[1]) * uy;
+      const t2 = (s.x2 - e[0]) * ux + (s.y2 - e[1]) * uy;
+      const lo = Math.max(0, Math.min(t1, t2));
+      const hi = Math.min(L, Math.max(t1, t2));
+      if (hi > lo) pieces.push([lo, hi]);
+    }
+    pieces.sort((m, n) => m[0] - n[0]);
+    let covered = 0;
+    let at = 0;
+    for (const [lo, hi] of pieces) {
+      if (hi <= at) continue;
+      covered += hi - Math.max(lo, at);
+      at = hi;
+    }
+    return covered >= 0.6 * L;
+  };
+  const reachO = pt(3);
+  index = endBoxes(runs);
+  runs.forEach((r, ri) => {
+    for (const end of ['a', 'b'] as const) {
+      if (joined.has(`${ri}${end}`)) continue;
+      const e = r[end];
+      const o = end === 'a' ? r.b : r.a;
+      const L = dist(e, o);
+      const ux = (e[0] - o[0]) / L;
+      const uy = (e[1] - o[1]) / L;
+      let best: { r2: number; end2: 'a' | 'b'; gap: number } | null = null;
+      nearRuns(index, e, e, reachO, 2).forEach((r2i) => {
+        const r2 = runs[r2i];
+        if (r2i === ri) return;
+        for (const end2 of ['a', 'b'] as const) {
+          if (joined.has(`${r2i}${end2}`)) continue;
+          const e2 = r2[end2];
+          const o2 = end2 === 'a' ? r2.b : r2.a;
+          const L2 = dist(e2, o2);
+          if (((o2[0] - e2[0]) * ux + (o2[1] - e2[1]) * uy) / L2 < 0.998) continue;
+          const gap = (e2[0] - e[0]) * ux + (e2[1] - e[1]) * uy;
+          const off = Math.abs((e2[0] - e[0]) * -uy + (e2[1] - e[1]) * ux);
+          const thin = Math.min(r.thickness, r2.thickness);
+          if (gap <= 0 || gap > reachO || off > Math.max(1.5, 0.3 * thin)) continue;
+          if (Math.abs(r.thickness - r2.thickness) / Math.max(r.thickness, r2.thickness) > 0.35) continue;
+          if (!best || gap < best.gap) best = { r2: r2i, end2, gap };
+        }
+      });
+      if (!best) continue;
+      const b = best as { r2: number; end2: 'a' | 'b'; gap: number };
+      const e2 = runs[b.r2][b.end2];
+      if (!spanned(r, e, e2)) continue;
+      const mid: Pt = [(e[0] + e2[0]) / 2, (e[1] + e2[1]) / 2];
+      moves.push({ run: r, end, to: mid }, { run: runs[b.r2], end: b.end2, to: mid });
+      joined.add(`${ri}${end}`).add(`${b.r2}${b.end2}`);
+      continues.push({ r1: ri, end1: end, r2: b.r2, end2: b.end2 });
+    }
+  });
   // Tags are matched against each wall as drawn, before its ends reach into junctions.
   const drawn = runs.map((r) => ({ ...r, a: [...r.a] as Pt, b: [...r.b] as Pt }));
   for (const m of moves) m.run[m.end] = m.to;

@@ -4,7 +4,7 @@ import { scalesFromSet } from '../src/automate/sheets';
 import { simplify } from '../src/fill/raster';
 import type { Sheet } from '../src/model';
 import type { PageText } from '../src/pageText';
-import { classifySheet, hasCeilingPlan } from '../src/sheetKind';
+import { classifySet, classifySheet, hasCeilingPlan } from '../src/sheetKind';
 import { drawingTitles, mainDrawingScale, scaleHintsOf, scaleNotes, viewTitle } from '../src/sheetScale';
 import { parseScale } from '../src/units';
 
@@ -36,6 +36,19 @@ describe('sheets sorted as an estimator sorts a set', () => {
     expect(kind('PLAN AND SECTION DETAILS')).toBe('other');
     expect(kind('DOOR AND SCREEN SCHEDULE')).toBe('schedule');
     expect(kind('STAIRS - PLANS, SECTIONS & ELEVATIONS')).toBe('other');
+  });
+
+  it('takes a washroom layout as an enlarged plan, and as the floor plan of a set with no other', () => {
+    expect(classifySheet({ name: 'A101', title: 'PROPOSED WASHROOM LAYOUTS' })).toMatchObject({ kind: 'floor plan', level: 'enlarged' });
+    // A trade's layout stays a trade drawing.
+    expect(classifySheet({ name: 'A101', title: 'LIGHTING LAYOUT' }).kind).toBe('other');
+    const set = [
+      { name: 'A100', title: 'SITE PLAN & PROJECT NOTES' },
+      { name: 'A101', title: 'PROPOSED WASHROOM LAYOUTS' },
+    ];
+    expect(classifySet(set).map((k) => `${k.kind} ${k.level ?? ''}`.trim())).toEqual(['other', 'floor plan level']);
+    // With a plan of the level, the layouts stay enlarged plans (walls only).
+    expect(classifySet([{ name: 'A100', title: 'OVERALL FLOOR PLAN' }, set[1]!])[1]).toMatchObject({ level: 'enlarged' });
   });
 
   it('tells finish plans from floor plans', () => {

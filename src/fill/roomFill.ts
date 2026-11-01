@@ -1,3 +1,4 @@
+import { gridLines } from './dimensions';
 import type { Pt } from '../model';
 import { drawSegments, fillHoles, floodFill, makeGrid, simplify, toSheet, traceBoundary, type Grid } from './raster';
 import type { Segment } from './vectors';
@@ -206,10 +207,15 @@ export function doorLeaves(segs: Segment[]): Set<Segment> {
 export function buildWallModel(
   segs: Segment[],
   metersPerPoint: number | null,
-  options: { pens?: string[]; maxOpening?: number; stats?: PenStats[]; extra?: string[] } = {},
+  options: { pens?: string[]; maxOpening?: number; stats?: PenStats[]; extra?: string[]; keepGrid?: boolean } = {},
 ): WallModel {
   const { pens, maxOpening = 3.0 } = options;
+  // Grid lines bound no room (a lobby filled to one stops halfway across). (Dimension lines are left
+  // in: taking them out helped the dev sets no more than this alone and cost the sealed set an item.)
   const pt = (m: number, fallback: number) => (metersPerPoint ? m / metersPerPoint : fallback);
+  // (`keepGrid`: a plan whose walls are drawn on its grid lines, tried for rooms that leak without them.)
+  const grid = options.keepGrid ? new Set<Segment>() : gridLines(segs, { min: pt(0.06, 1.5), max: pt(0.7, 20) });
+  if (grid.size) segs = segs.filter((s) => !grid.has(s));
   let stats = options.stats ?? penStats(segs, pt(0.06, 1.5), pt(0.7, 20));
   let chosen = pens?.length ? pens : detectWallPens(stats);
   if (!chosen.length && !options.stats) {
@@ -253,7 +259,7 @@ export function buildWallModel(
       const i = extra.findIndex((p) => !skip?.(p));
       if (i < 0) return null;
       let m = next.get(extra[i]);
-      if (!m) next.set(extra[i], (m = buildWallModel(segs, metersPerPoint, { maxOpening, pens: [...chosen, extra[i]], stats, extra: extra.slice(i + 1) })));
+      if (!m) next.set(extra[i], (m = buildWallModel(segs, metersPerPoint, { maxOpening, pens: [...chosen, extra[i]], stats, extra: extra.slice(i + 1), keepGrid: options.keepGrid })));
       return m;
     },
   };

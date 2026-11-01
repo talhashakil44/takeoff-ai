@@ -51,7 +51,10 @@ export async function automateCeilings(p: Project, access: SetAccess, current: S
       // An untagged ceiling under the grey tone a renovation plan lays over the areas outside the work is existing: left alone.
       const page = read.areas.some((a) => a.source !== 'tag') ? await access.page(x) : null;
       const tone = page ? await toneMap(page) : null;
-      if (tone) read.areas = read.areas.filter((a) => a.source === 'tag' || toneShare(a.points, tone) <= 0.6);
+      // (A stipple or hatch the legend names is that ceiling's own pattern, dark as it renders: not the tone.)
+      if (tone) read.areas = read.areas.filter((a) => a.source === 'tag' || (a.legend && (a.kind === 'stipple' || a.kind === 'hatch')) || toneShare(a.points, tone) <= 0.6);
+      // On a tagged plan, an untagged area with nothing drawn in it (an open stair, a shaft) has no ceiling to take off.
+      if (read.tagged) read.areas = read.areas.filter((a) => a.code || a.legend || a.kind !== 'plain');
       if (read.areas.length) found.push({ sheet: x, read });
     });
   }

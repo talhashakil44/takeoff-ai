@@ -25,12 +25,27 @@ export function tagTextsFrom(texts: PageText[], known: readonly string[] = [], s
   // (Only lists right under their heading: a plan's own tags can line up by chance.)
   const listed = size ? listedCodes(texts, size[0], size[1], true) : new Map();
   const out: TagText[] = [];
+  // A code OCR misread by a letter (WI-1 or WTI-4 for WT-1, WT-4 where the set lists WT types and
+  // no WI or WTI at all) is the listed one.
+  const listedWalls = [...new Set([...context.wall, ...known].map((c) => c.toUpperCase().replace(/[-\s]/g, '')))];
+  const anyListed = new Set([...listedWalls, ...context.other.map((c) => c.toUpperCase().replace(/[-\s]/g, ''))]);
+  const snap = (code: string) => {
+    const plain = code.toUpperCase().replace(/[-\s]/g, '');
+    if (anyListed.has(plain) || listedWalls.length < 2) return code;
+    const m = /^([A-Z]+)(\d.*)$/.exec(plain);
+    if (!m) return code;
+    const hits = listedWalls.filter((w) => {
+      const n = /^([A-Z]+)(\d.*)$/.exec(w);
+      return !!n && n[2] === m[2] && n[1] !== m[1] && oneEdit(n[1], m[1]) && !listedWalls.some((o) => o.startsWith(m[1]) && /\d/.test(o.slice(m[1].length, m[1].length + 1)));
+    });
+    return hits.length === 1 ? hits[0]! : code;
+  };
   for (const t of texts) {
     if (!CODE.test(t.str.trim()) || listed.has(t)) continue;
-    const c = classifyCode(codeOfText(t.str), context, known, (code) => WALL_TAG.test(code));
+    const c = classifyCode(snap(codeOfText(t.str)), context, known, (code) => WALL_TAG.test(code));
     if (!c) continue;
     // W-1 and W1 are the same type ("EX 1" is EX1).
-    const code = codeOfText(t.str).replace('-', '');
+    const code = snap(codeOfText(t.str)).replace('-', '');
     out.push({ code, cx: t.cx, cy: t.cy, w: t.w, h: t.h, ...(c.wall ? (c.confirmed ? { confirmed: true } : {}) : { generic: true }) });
   }
   return out;
@@ -88,4 +103,13 @@ export async function sheetWallTakeoff(
   return wallTakeoffByTags(model, segments, texts, mpp, { throughDoors, stopAtDoors, exterior: known.exterior, kinds: known.set?.kinds }, (pens) =>
     buildWallModel(segments, mpp, { pens, maxOpening, stats: model.stats }),
   );
+}
+
+/** Do two letter groups differ by one letter added, dropped or changed (WT and WI, WT and WTI)? */
+function oneEdit(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1 || a === b) return false;
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1);
+  return a.length > b.length ? a.slice(i + 1) === b.slice(i) : a.slice(i) === b.slice(i + 1);
 }

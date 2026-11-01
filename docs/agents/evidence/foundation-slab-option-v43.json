@@ -1,0 +1,172 @@
+{
+  "version": 43,
+  "baseline": "40a5fe5",
+  "projectUnchanged": true,
+  "shapesQuantitiesAndPlanFootprintsUnchanged": true,
+  "drawingCandidatesUnchanged": true,
+  "linkedRecords": [
+    {
+      "id": "251590c2-2659-4689-8911-acea3a116d95",
+      "shape": {
+        "type": "axis",
+        "points": [
+          [
+            -7.880478817003123,
+            -26.35853491369936
+          ],
+          [
+            -7.880478817003116,
+            -21.28911824703269
+          ]
+        ],
+        "z": -1.2
+      },
+      "quantity": 5.069416666666668,
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 19,
+          "label": "Schedule-linked slab thickening schedule",
+          "box": [
+            1179.5750843039964,
+            1215.0861979656015,
+            1683.7789445383803,
+            1235.0861979656015
+          ],
+          "quote": "SF-N schedule row: type ST; REFER TO DETAIL 10/S1.2. A slab-thickening reference, not a dimensioned rectangular strip section."
+        },
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 23,
+          "label": "Schedule-linked slab thickening detail",
+          "quote": "10/S1.2: DETAIL - SLAB THICKENING OPTION. Reference option only. Local slab thickness, top elevation, sloped profile and applicability must be established before physical geometry is generated."
+        }
+      ]
+    },
+    {
+      "id": "7686abc8-8bc3-4591-b2ec-89fbac26a908",
+      "shape": {
+        "type": "axis",
+        "points": [
+          [
+            -16.26565381700312,
+            -26.102418247032688
+          ],
+          [
+            -7.354487150336453,
+            -26.102418247032688
+          ]
+        ],
+        "z": -1.2
+      },
+      "quantity": 8.911166666666672,
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 19,
+          "label": "Schedule-linked slab thickening schedule",
+          "box": [
+            1179.5750843039964,
+            1215.0861979656015,
+            1683.7789445383803,
+            1235.0861979656015
+          ],
+          "quote": "SF-N schedule row: type ST; REFER TO DETAIL 10/S1.2. A slab-thickening reference, not a dimensioned rectangular strip section."
+        },
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 23,
+          "label": "Schedule-linked slab thickening detail",
+          "quote": "10/S1.2: DETAIL - SLAB THICKENING OPTION. Reference option only. Local slab thickness, top elevation, sloped profile and applicability must be established before physical geometry is generated."
+        }
+      ]
+    },
+    {
+      "id": "a4b54d58-024a-41b5-b516-d9352e3c82ea",
+      "shape": {
+        "type": "axis",
+        "points": [
+          [
+            -12.205887150336444,
+            -20.916584913699353
+          ],
+          [
+            -5.076953817003115,
+            -20.916584913699353
+          ]
+        ],
+        "z": -1.2
+      },
+      "quantity": 7.128933333333331,
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 19,
+          "label": "Schedule-linked slab thickening schedule",
+          "box": [
+            1179.5750843039964,
+            1215.0861979656015,
+            1683.7789445383803,
+            1235.0861979656015
+          ],
+          "quote": "SF-N schedule row: type ST; REFER TO DETAIL 10/S1.2. A slab-thickening reference, not a dimensioned rectangular strip section."
+        },
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 23,
+          "label": "Schedule-linked slab thickening detail",
+          "quote": "10/S1.2: DETAIL - SLAB THICKENING OPTION. Reference option only. Local slab thickness, top elevation, sloped profile and applicability must be established before physical geometry is generated."
+        }
+      ]
+    },
+    {
+      "id": "366a2bb8-4158-49c1-b10a-7e059a7a12a3",
+      "shape": {
+        "type": "axis",
+        "points": [
+          [
+            -12.588298261447562,
+            -19.257118247032693
+          ],
+          [
+            -12.588298261447562,
+            -26.43896824703269
+          ]
+        ],
+        "z": -1.2
+      },
+      "quantity": 7.181849999999997,
+      "sources": [
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 19,
+          "label": "Schedule-linked slab thickening schedule",
+          "box": [
+            1179.5750843039964,
+            1215.0861979656015,
+            1683.7789445383803,
+            1235.0861979656015
+          ],
+          "quote": "SF-N schedule row: type ST; REFER TO DETAIL 10/S1.2. A slab-thickening reference, not a dimensioned rectangular strip section."
+        },
+        {
+          "kind": "spec",
+          "id": "bec80a15-e5e2-4cdd-a142-c02af1b8f631",
+          "page": 23,
+          "label": "Schedule-linked slab thickening detail",
+          "quote": "10/S1.2: DETAIL - SLAB THICKENING OPTION. Reference option only. Local slab thickness, top elevation, sloped profile and applicability must be established before physical geometry is generated."
+        }
+      ]
+    }
+  ],
+  "geometryLimit": "SF-N ST row refers to an optional slab thickening. Local profile/elevation/applicability not established. No physical solid generated.",
+  "sourceAudit": "Revised Add5p19 row ->10/S1.2 onp23. Visually200mm total,600mm bottom,2:1 sides; do not replace700mm plan band/assumed300mm rectangle automatically.",
+  "columnAudit": "8/D in3/S4.0 has dashed background rather than closed post faces. Withheld."
+}

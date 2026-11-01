@@ -87,6 +87,11 @@ describe('what the set says its codes are', () => {
     expect(classifyCode('VS1', none, [], fallback)).toEqual({ wall: false, generic: true });
   });
 
+  it('reads a tag written with a number sign as its type (W#1 is W1)', () => {
+    const tags = tagTextsFrom([pageText('W#1', 500, 400), pageText('W#2', 700, 400)], [], undefined, [2592, 1728]);
+    expect(tags.map((t) => t.code)).toEqual(['W1', 'W2']);
+  });
+
   it('leaves out a schedule listed on the plan itself', () => {
     const texts = [pageText('WALL ASSEMBLIES', 2059, 80, 8.4, 110), pageText('VS1', 1743, 159), pageText('VS1', 1300, 1100), ...Array.from({ length: 9 }, (_, i) => pageText('note', 900, 300 + i * 9))];
     const tags = tagTextsFrom(texts, [], undefined, [2835, 2004]);
@@ -209,6 +214,38 @@ describe('tag symbols', () => {
     expect(r.leader).toBe(true);
     const end = r.paths[0][r.paths[0].length - 1];
     expect(end[0] * MPP).toBeCloseTo(4.5, 2);
+  });
+
+  it('follows a plain-text tag\'s arrow: a shoulder from beside the text, a leader, an arrowhead (Dunnville S1-1 "FW-2")', () => {
+    // Text 24 x 7 pt at (940, 213); shoulder from its left end, leader down-left to (910.3, 252.6), arrowhead there.
+    const L = (x1: number, y1: number, x2: number, y2: number, width = 0.48, filled = false): Segment => ({ x1, y1, x2, y2, width, filled });
+    const leader = [L(925.8, 213.4, 920.6, 213.4), L(920.6, 213.4, 910.3, 252.6)];
+    const head = [L(910.3, 252.6, 913.9, 244.8, 0, true), L(913.9, 244.8, 911.0, 244.1, 0, true), L(911.0, 244.1, 910.3, 252.6, 0, true)];
+    const t: TagText = { code: 'FW-2', cx: 940.4, cy: 213.2, w: 23.7, h: 6.7 };
+    const [r] = resolveTags([t], [...leader, ...head]);
+    expect(r.leader).toBe(true);
+    const end = r.paths[0][r.paths[0].length - 1];
+    expect(end[0]).toBeCloseTo(910.3, 1);
+    expect(end[1]).toBeCloseTo(252.6, 1);
+    // No arrowhead: a line passing beside the text is not its leader.
+    expect(resolveTags([t], leader)[0].leader).toBe(false);
+  });
+
+  it('takes the tick off a tag box, not a section bubble drawn over it with a cut line from its side', () => {
+    // Kelso S1.0 FW-4: a box with a tick from the middle of its right side onto the wall at x 4.5,
+    // and a section bubble (a polyline circle in a finer pen) over it with its cut line running off.
+    const box = poly(0.84, [2.6, 2.86], [3.4, 2.86], [3.4, 3.14], [2.6, 3.14], [2.6, 2.86]);
+    const tick = poly(0.84, [3.4, 3], [4.5, 3]);
+    const bubble: Segment[] = [];
+    for (let k = 0; k < 16; k++) {
+      const [a0, a1] = [(k * Math.PI) / 8, ((k + 1) * Math.PI) / 8];
+      bubble.push(...poly(0.6, [3.1 + 0.35 * Math.cos(a0), 3.05 + 0.35 * Math.sin(a0)], [3.1 + 0.35 * Math.cos(a1), 3.05 + 0.35 * Math.sin(a1)]));
+    }
+    const cut = poly(0.6, [3.45, 3.05], [8, 3.05]);
+    const [r] = resolveTags([text('FW-4', 2.95, 3, { w: 18.6, h: 5.2 })], [...box, ...tick, ...bubble, ...cut]);
+    expect(r.leader).toBe(true);
+    expect(r.target[0] * MPP).toBeCloseTo(4.5, 2);
+    expect(r.target[1] * MPP).toBeCloseTo(3, 2);
   });
 });
 

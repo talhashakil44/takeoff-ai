@@ -139,11 +139,14 @@ export interface DrawingTitle {
 export function drawingTitles(texts: PageText[], lines = textLinesOf(texts)): DrawingTitle[] {
   const out: DrawingTitle[] = [];
   for (const c of lines) {
-    // The title is its biggest run(s): a scale or a note beside it in smaller print is not.
-    const big = c.runs.filter((t) => t.h >= c.h * 0.9);
+    // The title is its biggest run(s) of words: a scale or a note beside it in smaller print is not, nor
+    // the drawing's number in its bubble beside it (often bigger than the title).
+    const worded = c.runs.filter((t) => /[A-Z]{2}/i.test(t.str));
+    const h = worded.length ? Math.max(...worded.map((t) => t.h)) : c.h;
+    const big = (worded.length ? worded : c.runs).filter((t) => t.h >= h * 0.9);
     const str = big.map((t) => t.str).join(' ').trim();
     if (str.length < 4 || str.length > 80 || !VIEW_WORDS.test(str) || NOT_A_TITLE.test(str) || CALLOUT_KEY.test(str) || /[:.]$/.test(str)) continue;
-    out.push({ str, box: boxOf(big), h: c.h });
+    out.push({ str, box: boxOf(big), h });
   }
   return out.sort((a, b) => b.h - a.h);
 }
@@ -156,11 +159,15 @@ export function drawingTitles(texts: PageText[], lines = textLinesOf(texts)): Dr
 export function viewTitle(texts: { str: string; h: number; cx?: number; cy?: number; w?: number; angle?: number }[]): string | null {
   // Any direction: a title block's title often runs up the sheet's edge.
   // A title, not a note: no sentence ("Revise vent location on the roof plan.") or caption ("DETAIL NO.").
-  const c = texts.filter((t) => {
+  let c = texts.filter((t) => {
     const str = t.str.trim();
     return str.length >= 4 && str.length <= 80 && VIEW_WORDS.test(str) && !/^(SEE|REFER|NOTE|ALL|PROVIDE)\b/i.test(str) && !CALLOUT_KEY.test(str) && !/[:.]$/.test(str) && str.split(/\s+/).length <= 10;
   });
   if (!c.length) return null;
+  // A key plan, legend or notes is never what the sheet is of while a drawing title is there (a
+  // key plan's title is often the biggest on a sheet of enlarged plans).
+  const drawings = c.filter((t) => !/\b(KEY PLAN|LEGEND|NOTES|ABBREVIATIONS|SYMBOLS)\b/i.test(t.str));
+  if (drawings.length) c = drawings;
   const top = Math.max(...c.map((t) => t.h));
   // Titles as big as each other (a plan and the legend drawn beside it): the sheet is the plan's.
   const biggest = c.filter((t) => t.h >= top * 0.98);

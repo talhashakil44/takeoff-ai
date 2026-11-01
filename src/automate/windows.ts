@@ -1,9 +1,9 @@
 import { findEnclosedTags } from '../fill/typeTags';
 import { newId, type Project, type Sheet, type TakeoffType } from '../model';
-import { classifySheet } from '../sheetKind';
+import { classifySheet, tradeOfNumber } from '../sheetKind';
 import type { Automation } from './result';
 import { pause, perSheet, PALETTE, type SetAccess } from './set';
-import { countListedItems, countWindowTags, isBuildingElevation, setLists, setTypesFrom, type TagCount, type TagSheet } from './tagCounts';
+import { countListedItems, countPlumbingFixtures, countWindowTags, isBuildingElevation, setLists, setTypesFrom, type TagCount, type TagSheet } from './tagCounts';
 
 /**
  * Every sheet's text, and on the sheets `withTags` picks its codes in closed symbols, for the
@@ -112,4 +112,19 @@ export function numberedWindows(counts: TagCount[]): TagCount[] | null {
       all.total += pl.at.length;
     }
   return [all];
+}
+
+/**
+ * Plumbing fixtures counted by their tags on the plumbing plans, from the fixture schedule on the
+ * mechanical or plumbing drawings (see `countPlumbingFixtures`). A code an architectural list
+ * already counts (a type already named for it) is left to that count.
+ */
+export async function automatePlumbingFixtures(p: Project, access: SetAccess): Promise<Automation> {
+  access.progress?.('Counting plumbing fixtures…');
+  await pause(30);
+  const sheets = await readTagSheets({ ...p, sheets: p.sheets.filter((s) => /^(M|MD|MH|MP|ME|P|PD|PL)$/.test(tradeOfNumber(s.name ?? '') ?? '')) }, access);
+  const have = new Set(p.types.filter((t) => t.kind === 'count').map((t) => t.name.split(' – ')[0].toUpperCase().replace(/[^A-Z0-9]/g, '')));
+  const counts = countPlumbingFixtures(sheets).filter((c) => !have.has(c.code.toUpperCase().replace(/[^A-Z0-9]/g, '')));
+  if (!counts.length) return { message: 'No plumbing fixture tags found on the plumbing plans.' };
+  return tagTakeoff(p, counts, 'Plumbing fixture', '22 Plumbing', 'symbols');
 }

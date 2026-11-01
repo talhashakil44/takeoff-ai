@@ -1,6 +1,10 @@
 import { applyFinishes, ceilingsFromRcps, finishRooms, levelOfSheet, readFinishes } from './finishes';
 import { automateCeilings } from './ceilings';
 import { automateKeynotes } from './keynotes';
+import { automateDucts } from './ducts';
+import { automateRoof } from './envelope';
+import { automateElectricalTags } from './electrical';
+import { automatePipes } from './pipes';
 import { automateRuns } from './runs';
 import { automateTrades } from './trades';
 import { doorTakeoff, findDoorTagsIn } from './doors';
@@ -10,12 +14,16 @@ import { pause, type SetAccess } from './set';
 import { automateSprinklers } from './sprinklers';
 import { defaultSymbolChoices, symbolTakeoff, symbolTallies } from './symbols';
 import { automateWalls, projectSetTypes } from './walls';
-import { automateWindows } from './windows';
+import { automatePlumbingFixtures, automateWindows } from './windows';
 import { planShift as planShiftKnown, repeatedRuns } from './overlap';
 import { findRoomLabels } from '../fill/rooms';
+import { automateFoundations } from './foundations';
+import { automateStructure } from './structure';
+import { automateSite } from './site';
+import { automateSheetViews } from './sheets';
 import type { Project, Pt, Sheet } from '../model';
 import type { PDFDocumentProxy } from '../pdf';
-import { classifySheet, tradeOfNumber, type SheetKind } from '../sheetKind';
+import { classifySet, tradeOfNumber, type SheetKind } from '../sheetKind';
 import { viewTitle } from '../sheetScale';
 import { readTitleBlock } from '../titleBlock';
 
@@ -126,6 +134,7 @@ export async function takeOffWholeSet(
   // line, "PLAN" for "LEVEL 1 (LOWER) DEMO PLAN") is put right, since what a sheet is decides
   // which tools run on it.
   const retitled = new Map<string, string>();
+  const titled: { id: string; name: string; title?: string; ocr?: boolean }[] = [];
   for (const s of live) {
     const texts = await access.texts(s).catch(() => []);
     const fresh = texts.length ? (readTitleBlock(texts, s.width, s.height).title ?? viewTitle(texts)) : null;
@@ -134,8 +143,10 @@ export async function takeOffWholeSet(
       title = fresh;
       retitled.set(s.id, fresh);
     }
-    kinds.set(s.id, classifySheet({ name: s.name, title }));
+    titled.push({ id: s.id, name: s.name, ...(title ? { title } : {}), ...(s.ocr ? { ocr: true } : {}) });
   }
+  // Sorted with the set in view (a set drawn only as washroom layouts takes them as its plans).
+  for (const [i, k] of classifySet(titled).entries()) kinds.set(titled[i]!.id, k);
   if (retitled.size) {
     project = { ...project, sheets: project.sheets.map((s) => (retitled.has(s.id) ? { ...s, title: retitled.get(s.id) } : s)) };
     live = project.sheets.filter((s) => !s.superseded);
@@ -151,6 +162,14 @@ export async function takeOffWholeSet(
   const tagged = new Map<string, string>();
   const roomKey = (n: string) => n.replace(/[\s.-]/g, '').toUpperCase();
 
+  // Sheets holding drawings at their own scales, with no sheet scale: each drawing's scale.
+  await run('Drawing scales', async () => {
+    const r = await automateSheetViews(project, access);
+    apply('Drawing scales', r);
+    live = project.sheets.filter((s) => !s.superseded);
+    return r.message;
+  });
+
   // Sheets the tools need a scale on.
   const needScale = live.filter((s) => !s.metersPerPoint && ['floor plan', 'RCP', 'finish plan'].includes(kinds.get(s.id)!.kind));
   for (const s of needScale) {
@@ -159,7 +178,9 @@ export async function takeOffWholeSet(
       sheet: s.name,
       sheetId: s.id,
       text:
-        s.scaleHints.length > 1
+        s.views?.length
+          ? `${sheetLabel(s)}: no sheet scale set; takeoffs in ${s.views.map((v) => `${v.title} (${v.scaleLabel})`).join(', ')} are measured at that drawing's scale. Check them, or set the sheet scale.`
+          : s.scaleHints.length > 1
           ? `${sheetLabel(s)}: no scale set, the sheet notes several (${s.scaleHints.join(', ')}). Set it, then run again for this sheet.`
           : `${sheetLabel(s)}: no scale set. Set it, then run again for this sheet.`,
     });
@@ -258,6 +279,48 @@ export async function takeOffWholeSet(
       return of.length ? `${made} of ${of.length} plans` : 'no new-work floor plans found';
     });
   }
+
+  // Below and behind the walls: the foundations off the foundation plan and structural schedules,
+  // and the framing (beams, columns, lintels, structural walls) off the framing plans.
+  await run('foundations', async () => {
+    say('Whole set: foundations…');
+    await pause();
+    const r = await automateFoundations(project, access, opts.maxOpening);
+    apply('foundations', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('structure', async () => {
+    say('Whole set: structural framing…');
+    await pause();
+    const r = await automateStructure(project, access, opts.maxOpening);
+    apply('structure', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('site works', async () => {
+    say('Whole set: site services and roads…');
+    await pause();
+    const r = await automateSite(project, access);
+    apply('site', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('roof', async () => {
+    say('Whole set: roof…');
+    await pause();
+    const r = automateRoof(project);
+    apply('envelope', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
 
   await run('doors', async () => {
     const home = levels[0] ?? plans[0];
@@ -366,8 +429,16 @@ export async function takeOffWholeSet(
     const r = await automateRuns(project, access);
     apply('runs', r);
     await hold();
-    for (const c of r.checks) review.push({ kind: 'check', text: c });
-    return r.message;
+    // Plans without layers: their piping by its labels, off the sheet as drawn.
+    const pipes = await automatePipes(project, access);
+    apply('pipes', pipes);
+    await hold();
+    const ducts = await automateDucts(project, access);
+    apply('ducts', ducts);
+    await hold();
+    const checks = pipes.apply || ducts.apply ? r.checks.filter((c) => !/have no CAD layers/.test(c)) : r.checks;
+    for (const c of [...checks, ...pipes.checks, ...ducts.checks]) review.push({ kind: 'check', text: c });
+    return [r.apply ? r.message : '', pipes.apply ? pipes.message : '', ducts.apply ? ducts.message : ''].filter(Boolean).join(' · ') || r.message;
   });
 
   await run('mechanical and electrical counts', async () => {
@@ -375,6 +446,25 @@ export async function takeOffWholeSet(
     await pause();
     const r = await automateTrades(project, access);
     apply('trades', r);
+    await hold();
+    for (const c of r.checks) review.push({ kind: 'check', text: c });
+    return r.message;
+  });
+
+  await run('plumbing fixtures', async () => {
+    say('Whole set: plumbing fixtures…');
+    await pause();
+    const r = await automatePlumbingFixtures(project, access);
+    apply('plumbing', r);
+    await hold();
+    return r.message;
+  });
+
+  await run('electrical tags', async () => {
+    say('Whole set: electrical circuit tags…');
+    await pause();
+    const r = await automateElectricalTags(project, access);
+    apply('etags', r);
     await hold();
     for (const c of r.checks) review.push({ kind: 'check', text: c });
     return r.message;

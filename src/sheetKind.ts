@@ -12,6 +12,8 @@ export interface SheetKind {
   level?: PlanLevel;
   /** A floor plan that is the reflected ceiling plan too ("Ground floor plan & RCP"): ceilings are read off it as well. */
   ceilings?: boolean;
+  /** A plan of part of the building (a washroom's, an enlarged plan): the floor plan of a set that has no other. */
+  part?: boolean;
 }
 
 /** Plans that are not the plan of a level of the building (walls, rooms and doors are not taken off them). */
@@ -49,10 +51,13 @@ const partsOf = (t: string) =>
  * sheet number) are not. A title naming several drawings ("Ground floor plan & finishes
  * schedule", "Roof plan and canopy details") is the plan it names. `why` says what decided it.
  */
-export function classifySheet(sheet: Pick<Sheet, 'name' | 'title'>): SheetKind {
-  const t = `${sheet.title ?? ''}`.toUpperCase().replace(/\s+/g, ' ').trim();
+export function classifySheet(sheet: Pick<Sheet, 'name' | 'title'> & { ocr?: boolean }): SheetKind {
+  const raw = `${sheet.title ?? ''}`.toUpperCase().replace(/\s+/g, ' ').trim();
   // The sheet number, or one the title starts with (an addendum page listing "S2.01 – Foundation plan").
-  const trade = tradeOfNumber(sheet.name ?? '') ?? (/^[A-Z]{1,3}[-.]?\d+(?:\.\d+)?\b/.test(t) ? tradeOfNumber(t) : null);
+  // A number OCR read may be misread (T-3 for A2), so it alone does not make a sheet a trade's.
+  const trade = (sheet.ocr ? null : tradeOfNumber(sheet.name ?? '')) ?? (/^[A-Z]{1,3}[-.]?\d+(?:\.\d+)?\b/.test(raw) ? tradeOfNumber(raw) : null);
+  // On an architectural sheet a "layout" with no trade named is a plan ("Proposed washroom layouts").
+  const t = !trade && /\bLAYOUTS?\b/.test(raw) && !TRADE.test(raw.replace(/\bLAYOUTS?\b/g, '')) ? raw.replace(/\bLAYOUT(S?)\b/g, 'PLAN$1') : raw;
   const parts = partsOf(t);
   const planParts = parts.filter((p) => PLAN.test(p) || RCP.test(p));
   const named = planParts.length ? planParts : parts;
@@ -83,6 +88,11 @@ export function classifySheet(sheet: Pick<Sheet, 'name' | 'title'>): SheetKind {
   // An enlarged plan shows walls of the floor plan at a larger scale, often tagging the types the overall plan leaves to it.
   if (plan && /ENLARGED\b[^&]*\bPLANS?\b/.test(p) && !/SITE|KEY PLAN|LIFE SAFETY|FURNITURE|SIGNAGE|ACCESSOR|MILLWORK|CASEWORK|EQUIPMENT|LANDSCAPE/.test(p))
     return { kind: 'floor plan', why: 'enlarged plan (walls only, types the overall plans leave out)', level: 'enlarged' };
+  // A plan of part of the building (a washroom's): an enlarged plan by another name, and the
+  // set's floor plan when it has no other (see classifySet).
+  const PART = /WASHROOM|ENLARGED?|PART(IAL)? PLAN/g;
+  if (plan && PART.test(p) && !NOT_A_FLOOR_PLAN.test(p.replace(PART, '')) && !/ACCESSOR|CASEWORK/.test(p))
+    return { kind: 'floor plan', why: 'part plan (walls only, types the overall plans leave out)', level: 'enlarged', part: true };
   if (plan && NOT_A_FLOOR_PLAN.test(p)) return { kind: 'other', why: 'site, enlarged, life-safety or other special plan' };
   const both = floorToo ? { ceilings: true } : {};
   if (/ROOF/.test(p) && plan) return { kind: 'floor plan', why: 'roof plan (walls only)', level: 'roof', ...both };
@@ -101,3 +111,14 @@ export const hasCeilingPlan = (sheet: Pick<Sheet, 'name' | 'title'>) => {
   const k = classifySheet(sheet);
   return k.kind === 'RCP' || !!k.ceilings;
 };
+
+/**
+ * Every sheet of a set sorted, as `classifySheet` does each, with the set in view: a set with no
+ * plan of a level (a washroom renovation drawn only as enlarged layouts) takes its part plans as
+ * its floor plans.
+ */
+export function classifySet(sheets: (Pick<Sheet, 'name' | 'title'> & { ocr?: boolean })[]): SheetKind[] {
+  const kinds = sheets.map(classifySheet);
+  if (kinds.some((k) => k.kind === 'floor plan' && k.level === 'level')) return kinds;
+  return kinds.map((k) => (k.part ? { kind: 'floor plan', why: 'part plan (the set has no plan of a whole level)', level: 'level' } : k));
+}

@@ -46,8 +46,8 @@ export function scheduleKind(title: string): ScheduleKind {
 const TITLE = /\bSCHEDULE\b|^(WALL|PARTITION|FLOOR|ROOF|CEILING)\s+(ASSEMBLIES|TYPES)$/i;
 const NOT_TITLE = /\b(PER|SEE|REFER|AS|TO|IN|ON|WITH|FOR|FROM|OF|AND)\s+(THE\s+)?([A-Z/&]+\s+){0,3}SCHEDULES?\b|^(SCHEDULES?|AND SCHEDULES?)$|\bNOTES?\b|^SCHEDULES?\s+(AND|FOR|TO|ON|IN|AT|WITH|IS|ARE)\b|\bSCHEDULES?\s+(INDICATES?|SHOWS?|IS|ARE)\b|[.&,:;]\s*$/i;
 
-/** A row's mark: D101, 101A, D000.1, W1, SC-2, EF-1, 000, B12, a fixture type A or J1. */
-const MARK = /^(?:[A-Z]{0,4}[-.]?\d{1,4}[A-Z]{0,2}(?:[-.]\d{1,3}[A-Z]?)?|[A-Z]{1,3}[-.]?\d{0,2}[A-Z]?)$/;
+/** A row's mark: D101, 101A, D000.1, W1, SC-2, EF-1, 000, B12, a fixture type A or J1, a strip footing S/F-5. */
+const MARK = /^(?:[A-Z]{0,4}[-.]?\d{1,4}[A-Z]{0,2}(?:[-.]\d{1,3}[A-Z]?)?|[A-Z]{1,3}[-.]?\d{0,2}[A-Z]?|[A-Z]{1,2}\/[A-Z]{1,2}[-.]?\d{1,3}[A-Z]?)$/;
 
 /** A column's heading word, not a row's mark (NO., TAG, ITEM, MARK). */
 const HEAD_WORD = /^(NO\.?|NOS?\.?|NUMBER|#|TAG|TAGS|ITEM|MARK|TYPE|ID|REF\.?|SYM\.?|SYMBOL|KEY|CODE|ROOM|ZONE|UNIT|QTY\.?|SIZE|HP|KW|SP|ESP|RPM|TONS?|CFM|GPM|MBH|DB|WB|EAT|LAT)$/i;
@@ -116,15 +116,27 @@ function readOne(title: PageText, texts: PageText[], titles: PageText[], vert: S
   // Not into another schedule beside this one.
   for (const o of titles) {
     if (o === title || Math.abs(o.cy - title.cy) > 3 * th) continue;
-    if (o.cx < title.cx) L = Math.max(L, (o.cx + o.w / 2 + title.cx - title.w / 2) / 2);
-    else R = Math.min(R, (o.cx - o.w / 2 + title.cx + title.w / 2) / 2);
+    // The two tables' shared border when one is drawn (a rule down between them from under the
+    // titles: a table can be wider than its title), else halfway between the titles.
+    const lo = Math.min(o.cx, title.cx);
+    const hi = Math.max(o.cx, title.cx);
+    const border = vert
+      .filter((v) => {
+        const x = (v.x1 + v.x2) / 2;
+        return x > lo + 2 * th && x < hi - 2 * th && Math.min(v.y1, v.y2) < title.cy + 4 * th && Math.max(v.y1, v.y2) > title.cy + 2 * th && Math.abs(v.y2 - v.y1) > 3 * th;
+      })
+      .map((v) => (v.x1 + v.x2) / 2)
+      .sort((a, b) => Math.abs(a - (lo + hi) / 2) - Math.abs(b - (lo + hi) / 2))[0];
+    if (o.cx < title.cx) L = Math.max(L, border ?? (o.cx + o.w / 2 + title.cx - title.w / 2) / 2);
+    else R = Math.min(R, border ?? (o.cx - o.w / 2 + title.cx + title.w / 2) / 2);
   }
   // Down to the next schedule's title below in this band.
   const next = titles.filter((o) => o !== title && o.cy > title.cy + 2 * th && o.cx > L && o.cx < R).sort((a, b) => a.cy - b.cy)[0];
   const bottom = next ? next.cy - next.h : title.cy + 2400;
 
   // The mark column: the leftmost column of marks lined up on their left edge (or centred).
-  const marks = texts.filter((t) => level(t) && !used.has(t) && t.cy > top && t.cy < bottom && t.cx > L - 2 && t.cx < R + 2 && MARK.test(t.str.trim()) && !HEAD_WORD.test(t.str.trim()));
+  // A metric bar size (15M, 20M) in a reinforcing column is not a row's mark.
+  const marks = texts.filter((t) => level(t) && !used.has(t) && t.cy > top && t.cy < bottom && t.cx > L - 2 && t.cx < R + 2 && MARK.test(t.str.trim()) && !HEAD_WORD.test(t.str.trim()) && !/^\d{2}M$/.test(t.str.trim()));
   if (marks.length < 1) return null;
   const groups = new Map<string, PageText[]>();
   for (const t of marks) {
@@ -139,7 +151,10 @@ function readOne(title: PageText, texts: PageText[], titles: PageText[], vert: S
   const best = Math.max(...merged.map((g) => g.length));
   const leftOf = (g: PageText[]) => Math.min(...g.map((t) => t.cx - t.w / 2));
   // A one-row schedule (a single ERV): its one mark names the thing (ERV-1), at the table's left.
-  const qualifies = (g: PageText[]) => g.length >= Math.max(2, best * 0.4) || (g.length === 1 && STRONG.test(g[0].str.trim()) && g[0].cy - top < 300);
+  // Or one mark set right under a MARK heading (a one-row pad footing or pier schedule: "F1", "P1").
+  const underMark = (m: PageText) =>
+    texts.some((h) => /^(MARK|TAG)$/i.test(h.str.trim()) && m.cy - h.cy > 0 && m.cy - h.cy <= 4 * m.h && Math.abs(m.cx - m.w / 2 - (h.cx - h.w / 2)) <= 2 * m.h);
+  const qualifies = (g: PageText[]) => g.length >= Math.max(2, best * 0.4) || (g.length === 1 && (STRONG.test(g[0].str.trim()) || underMark(g[0])) && g[0].cy - top < 300);
   const candidates = merged.filter(qualifies);
   if (!candidates.length) return null;
   const x0 = Math.min(...candidates.map(leftOf));

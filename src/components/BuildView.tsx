@@ -1,10 +1,14 @@
+import type { DrawingLines } from '../build/roof';
+import './BuildView.css';
+import type { DrawingTexts } from '../build/building';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { loadBuild, runBuild, saveBuild } from '../build/client';
+import { loadBuild, runBuild, runReplan, saveBuild } from '../build/client';
 import { Calendar } from '../build/cpm';
-import { isPlan, levelWords, sourceHashOf, titleBlockWords, TRADES, tradeByKey } from '../build/extract';
+import { isPlan, sourceHashOf, titleBlockWords, TRADES, tradeByKey } from '../build/extract';
 import { readSpecFacts } from '../build/facts';
-import { replan, type BuildOutput } from '../build/run';
-import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Issue, PlanSetup, SourceRef, SpecFact } from '../build/types';
+import { loadDrawingSources, type RevisionAccess, type RevisionSheet } from '../build/sources';
+import { type BuildOutput } from '../build/run';
+import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Feasibility, Issue, PlanSetup, ScopeAllowance, ScopeSuggestion, SourceRef, SpecFact } from '../build/types';
 import type { Project } from '../model';
 import type { Place } from '../graph/graph';
 import type { SpecSection } from '../spec/parse';
@@ -25,7 +29,10 @@ interface Props {
   /** A spec page's text (for the time requirements it states). */
   specText: (docId: string, page: number) => Promise<string>;
   /** A sheet's text, for the level its title block names. */
-  sheetText: (sheetId: string) => Promise<{ str: string; cx: number; cy: number }[]>;
+  sheetText: (sheetId: string) => Promise<{ str: string; cx: number; cy: number; w?: number; h?: number; angle?: number }[]>;
+  sheetLines?: (sheetId: string) => Promise<DrawingLines[string]>;
+  /** Pages of the addendum files kept with the specifications, for drawing sheets they re-issue. */
+  revisions?: RevisionAccess;
   onEdits: (edits: BuildEdits) => void;
   onOpenSpec: (docId: string, page: number, key: string) => void;
   onOpenDrawing: (places: Place[], label: string) => void;
@@ -37,22 +44,30 @@ interface Props {
 
 const BASIS_LABEL: Record<Basis, string> = { documented: 'Documented', inferred: 'Inferred', assumed: 'Assumption', unknown: 'Unknown' };
 const KIND_LABEL: Record<Activity['kind'], string> = { milestone: 'Milestone', mobilize: 'Site', submittal: 'Submittal', review: 'Review', resubmittal: 'Resubmittal', procurement: 'Procurement', work: 'Work', testing: 'Testing', commissioning: 'Commissioning', closeout: 'Closeout' };
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today on this computer's calendar (not UTC's: in the evening in Toronto UTC is already tomorrow). */
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 const fmt = (iso: string | null | undefined) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
 
 function Badge({ basis }: { basis: Basis }) {
   return <span className={`bld-badge ${basis}`}>{BASIS_LABEL[basis]}</span>;
 }
 
-export default function BuildView({ project, sections, specText, sheetText, onEdits, onOpenSpec, onOpenDrawing, onSave, renderSheet, onClose }: Props) {
+export default function BuildView({ project, sections, specText, sheetText, sheetLines, revisions, onEdits, onOpenSpec, onOpenDrawing, onSave, renderSheet, onClose }: Props) {
   const edits = useMemo(() => project.build ?? {}, [project.build]);
   const [out, setOut] = useState<BuildOutput | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [facts, setFacts] = useState<SpecFact[] | null>(null);
+  const [drawingTexts, setDrawingTexts] = useState<DrawingTexts>({});
+  const [drawingLines, setDrawingLines] = useState<DrawingLines>({});
+  const [revisionSheets, setRevisionSheets] = useState<RevisionSheet[]>([]);
   const [hints, setHints] = useState<Record<string, string> | null>(null);
   const [setupOpen, setSetupOpen] = useState(true);
   const [issuesOpen, setIssuesOpen] = useState(false);
+  const [issueFilter,setIssueFilter] = useState<'all'|'conflict'|'warning'>('all');
   const [sel, setSel] = useState<{ kind: 'element' | 'activity'; id: string } | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [day, setDay] = useState(0);
@@ -65,7 +80,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
   const [explode, setExplode] = useState(0);
   const [explodeSystems, setExplodeSystems] = useState(false);
   const [cut, setCut] = useState<number | null>(null);
-  const [colourMode, setColourMode] = useState<'system' | 'status' | 'level' | 'spec' | 'quality'>('system');
+  const [colourMode, setColourMode] = useState<'material' | 'system' | 'status' | 'level' | 'spec' | 'quality'>('material');
   const [view, setView] = useState<ViewCommand | null>(null);
   const [treeSel, setTreeSel] = useState<TreeSel | null>(null);
   // A new pick starts at the top of the inspector, not where the last one was scrolled to.
@@ -73,6 +88,9 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
   useEffect(() => {
     if (inspectRef.current) inspectRef.current.scrollTop = 0;
   }, [sel?.kind, sel?.id, treeSel?.key]);
+  const [workspace, setWorkspace] = useState<'model' | 'sequence'>('model');
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [bottom, setBottom] = useState<'schedule' | 'quantities'>('schedule');
   const go = (kind: ViewCommand['kind']) => setView({ kind, n: Date.now() });
   const [zoom, setZoom] = useState(9);
@@ -108,40 +126,53 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
       gone = true;
     };
   }, [sections, specText]);
+  // The drawing evidence the model reads (sheet text, elevation linework): only the sheets it
+  // uses, a few at a time, kept on this computer so the next opening is quick.
+  const [reading, setReading] = useState<{ done: number; of: number } | null>(null);
   useEffect(() => {
     let gone = false;
     void (async () => {
-      const h: Record<string, string> = {};
-      for (const sid of measured) {
-        const s = project.sheets.find((x) => x.id === sid);
-        if (!s || s.superseded || !isPlan(s)) continue;
-        const lw = levelWords(s.title ?? '');
-        if (lw.num !== undefined || lw.word) continue;
-        const t = await sheetText(sid).catch(() => []);
-        h[sid] = titleBlockWords(t, s.width, s.height);
+      const src = await loadDrawingSources({
+        project,
+        sheetText,
+        sheetLines,
+        revisions,
+        titleWords: titleBlockWords,
+        progress: (done, of) => !gone && setReading(done < of ? { done, of } : null),
+        cancelled: () => gone,
+      });
+      if (!gone) {
+        setHints(src.hints);
+        setDrawingTexts(src.texts);
+        setDrawingLines(src.lines);
+        setRevisionSheets(src.revisions);
+        setReading(null);
       }
-      if (!gone) setHints(h);
     })();
     return () => {
       gone = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [measured.join(',')]);
+  }, [project.sheets, measured.join(','), sheetText, sheetLines]);
   const ready = facts !== null && hints !== null;
 
+  const requestVersion = useRef(0);
+  useEffect(() => () => { requestVersion.current++; }, []);
   const build = async (withEdits: BuildEdits = edits) => {
     if (!facts || !hints) return;
+    const request = ++requestVersion.current;
     setBusy('Building the model and the plan…');
     setError(null);
     try {
-      const o = await runBuild({ project, sections, facts, levelHints: hints, edits: withEdits, today: today() });
+      const o = await runBuild({ project, sections, facts, drawingTexts, drawingLines, levelHints: hints, edits: withEdits, today: today() });
+      if (request !== requestVersion.current) return;
       setOut(o);
       if (project.id) void saveBuild(project.id, o);
       setLeft('model');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(null);
+      if (request === requestVersion.current) setBusy(null);
     }
   };
 
@@ -161,8 +192,8 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
   const currentHash = useMemo(() => {
     if (!out) return null;
     const ftf = out.setup.floorToFloor.value;
-    return sourceHashOf({ project, sections, levelHints: hints ?? undefined, edits, floorToFloor: project.units === 'imperial' ? ftf * 0.3048 : ftf });
-  }, [project, sections, hints, edits, out]);
+    return sourceHashOf({ project, sections, drawingTexts, drawingLines, levelHints: hints ?? undefined, edits, floorToFloor: project.units === 'imperial' ? ftf * 0.3048 : ftf });
+  }, [project, sections, hints, drawingTexts, drawingLines, edits, out]);
   const stale = !!out && !!currentHash && hints !== null && currentHash !== out.model.sourceHash;
 
   // Edits: setup values and activity changes replan at once (the model unchanged); levels and heights rebuild it.
@@ -171,10 +202,15 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
     if (!out) return;
     if (rebuild) return void build(next);
     const setup = applyEditsToSetup(out.setup, next);
-    const { schedule } = replan(out.model, setup, { sections, facts: facts ?? [], edits: next });
-    const o = { ...out, setup, schedule };
-    setOut(o);
-    if (project.id) void saveBuild(project.id, o);
+    const request=++requestVersion.current;
+    setBusy('Updating construction plan…');
+    setError(null);
+    void runReplan(out,setup,{sections,facts:facts??[],edits:next}).then(o=>{
+      if(request!==requestVersion.current)return;
+      setOut(o);
+      if(project.id)void saveBuild(project.id,o);
+    }).catch(e=>{if(request===requestVersion.current)setError(e instanceof Error?e.message:String(e));})
+      .finally(()=>{if(request===requestVersion.current)setBusy(null);});
   };
 
   const model = out?.model ?? null;
@@ -183,7 +219,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
   const acts = schedule?.activities ?? [];
   const times = schedule?.times ?? {};
   const actById = useMemo(() => new Map(acts.map((a) => [a.id, a])), [acts]);
-  const elById = useMemo(() => new Map((model?.elements ?? []).map((e) => [e.id, e])), [model]);
+  const elById = useMemo(() => new Map([...(model?.elements ?? []), ...(model?.drawingGeometry ?? [])].map((e) => [e.id, e])), [model]);
   const actOfElement = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of acts) for (const id of a.elements) m.set(id, a.id);
@@ -217,6 +253,8 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
 
   const dayInt = Math.floor(day);
   const stateOf = (e: BuildElement): ElementState => {
+    if (workspace === 'model') return e.status === 'demolished' ? 'gone' : 'done';
+    if (e.status === 'existing') return 'existing';
     const t = times[actOfElement.get(e.id) ?? ''];
     if (!t) return 'done';
     const demo = e.trade === 'demolition';
@@ -224,7 +262,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
     if (dayInt < t.ef) return demo ? 'removing' : 'doing';
     return demo ? 'gone' : 'done';
   };
-  const stateKey = `${colourMode}|${dayInt}|${Object.keys(times).length}|${acts.map((a) => times[a.id]?.es).join(',')}`;
+  const stateKey = `${workspace}|${colourMode}|${dayInt}|${Object.keys(times).length}|${acts.map((a) => times[a.id]?.es).join(',')}`;
 
   const levels = model?.levels ?? [];
   const tradesUsed = useMemo(() => TRADES.filter((t) => model?.elements.some((e) => e.trade === t.key)), [model]);
@@ -233,22 +271,32 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
   const LEVEL_COLOURS = ['#5b9cff', '#ff9f43', '#5be3b0', '#c58cff', '#ffd35b', '#ff5fa2', '#5bd6ff'];
   const specMissing = useMemo(() => new Set(sections.filter((s) => s.missing).map((s) => s.key)), [sections]);
   const colourOf = (e: BuildElement): string => {
+    if (colourMode === 'material') {
+      if (/roof/i.test(e.name) && e.shape?.type === 'surface') return '#586674';
+      if (/window|glaz|curtain/i.test(e.name)) return '#91b7c9';
+      if (e.shape?.type === 'surface') return e.trade === 'ceilings' ? '#e4e5e0' : '#aeb5b9';
+      if (e.trade.startsWith('mech')) return '#97b7be';
+      if (e.trade.startsWith('fire')) return '#bb7270';
+      if (e.trade.startsWith('elec')) return '#bca981';
+      return e.shape?.type === 'run' ? '#d7d4cb' : '#a4b4bd';
+    }
     if (colourMode === 'level') return LEVEL_COLOURS[Math.max(0, levels.findIndex((l) => l.id === e.level)) % LEVEL_COLOURS.length];
     if (colourMode === 'status') {
       const t = times[actOfElement.get(e.id) ?? ''];
       return t?.late ? '#ff5f57' : t?.critical ? '#ff9f43' : '#3ddc84';
     }
     if (colourMode === 'spec') return !e.specs.length ? '#ff5f57' : e.specs.some((s) => specMissing.has(s.key)) ? '#ffb340' : '#4da3ff';
-    if (colourMode === 'quality') return e.issues.length ? '#ffb340' : e.placement === 'inferred' ? '#4da3ff' : '#ff5f57';
+    if (colourMode === 'quality') return e.issues.length ? '#ffb340' : e.placement === 'documented' ? '#3ddc84' : e.placement === 'inferred' ? '#4da3ff' : '#c58cff';
     return tradeByKey.get(e.trade)?.colour ?? '#b8c4ff';
   };
   const tradeOrder = useMemo(() => new Map(TRADES.map((t, i) => [t.key, i])), []);
   const LEGENDS: Record<typeof colourMode, [string, string][]> = {
+    material: [['#d7d4cb','Walls'],['#aeb5b9','Slabs'],['#586674','Roof'],['#91b7c9','Glazing'],['#97b7be','Services']],
     system: tradesUsed.map((t) => [t.colour, t.name]),
     status: [['#3ddc84', 'Has float'], ['#ff9f43', 'Critical path'], ['#ff5f57', 'Can’t make the target']],
     level: levels.map((l, i) => [LEVEL_COLOURS[i % LEVEL_COLOURS.length], l.name]),
     spec: [['#4da3ff', 'Spec section linked'], ['#ffb340', 'Its section isn’t issued'], ['#ff5f57', 'No spec section']],
-    quality: [['#4da3ff', 'Placed from the plan'], ['#ffb340', 'Has open issues'], ['#ff5f57', 'Not placed']],
+    quality: [['#3ddc84', 'Documented'], ['#4da3ff', 'Inferred geometry'], ['#ffb340', 'Needs review'], ['#c58cff', 'Assumed geometry']],
   };
   const topZ = Math.max(4, ...levels.map((l) => l.elevation + 4));
 
@@ -309,17 +357,33 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
   const hoverEl = hover ? elById.get(hover) : undefined;
 
   return (
-    <div className="bld" role="region" aria-label="Build It">
+    <div className={`bld bld-workspace bld-mode-${workspace}`} role="region" aria-label="Build It">
       <header className="bld-bar">
+        {(busy || reading) && <div className="bld-live-status" role="status">{busy ?? `Reading the drawings… ${reading!.done} of ${reading!.of} sheets`}</div>}
+        {!busy && !reading && revisionSheets.some((r) => !r.superseded) && (
+          <div className="bld-live-status" role="note">
+            {(() => {
+              const live = revisionSheets.filter((r) => !r.superseded);
+              const issues = [...new Set(live.map((r) => r.issue))];
+              const moved = live.filter((r) => r.revises && project.measurements.some((m) => m.sheetId === r.revises));
+              const again = live.filter((r) => r.revises).map((r) => r.name);
+              const added = live.filter((r) => !r.revises).map((r) => r.name);
+              return `${issues.join(', ')} ${again.length ? `re-issued ${again.join(', ')}` : ''}${again.length && added.length ? ' and ' : ''}${added.length ? `added ${added.join(', ')}` : ''}.${moved.length ? ` Takeoffs on ${moved.map((r) => r.name).join(', ')} are on the earlier issue.` : ''}`;
+            })()}
+          </div>
+        )}
+        {error && <div className="bld-live-error" role="alert">{error}</div>}
         <div className="bld-title">
           <Icon name="walls" size={16} />
           <strong>Build it</strong>
           <span className="bld-sub">{project.name}</span>
         </div>
+        {out && <nav className="bld-workspace-switch" aria-label="Workspace">
+          <button aria-pressed={workspace === 'model'} onClick={() => { setWorkspace('model'); setPlaying(false); }}>Model</button>
+          <button aria-pressed={workspace === 'sequence'} onClick={() => setWorkspace('sequence')}>Construction</button>
+        </nav>}
         {out && feas && (
-          <div className={`bld-feas ${feas.target ? (feas.overBy ? 'late' : 'ok') : 'none'}`} title={feas.target ? `Target ${fmt(feas.target)}` : 'No target set'}>
-            {feas.target ? (feas.overBy ? `${feas.overBy} working days late · earliest ${fmt(feas.earliestFinish)}` : `Fits the target · ${fmt(feas.earliestFinish)}`) : `Earliest finish ${fmt(feas.earliestFinish)} · no target set`}
-          </div>
+          <FeasibilityBadge feas={feas} start={out.setup.start} />
         )}
         {stale && (
           <button className="bld-stale" onClick={() => void build()} title="The drawings, takeoff or specification changed since this was built">
@@ -328,20 +392,23 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
         )}
         <div className="bld-actions">
           <button className={setupOpen ? 'on' : ''} onClick={() => setSetupOpen((o) => !o)} title="The model browser and the setup">
-            Panel
+            Browser
           </button>
           <button className={issuesOpen ? 'on' : ''} onClick={() => setIssuesOpen((o) => !o)} disabled={!out}>
             Issues {allIssues.length ? <i className={allIssues.some((i) => i.severity === 'conflict') ? 'bad' : ''}>{allIssues.length}</i> : null}
           </button>
-          <button onClick={() => void exportIfc()} disabled={!out} title="IFC 4: opens in Revit, Archicad, Solibri, Navisworks, Bonsai — elements with their takeoff, materials, spec sections and the 4D schedule">
+          <button aria-pressed={inspectorOpen} onClick={() => setInspectorOpen(v => !v)} disabled={!out}>Inspector</button>
+          <details className="bld-export"><summary>Export</summary><div>
+          <button onClick={() => void exportIfc()} disabled={!out || !!busy} title="IFC 4: opens in Revit, Archicad, Solibri, Navisworks, Bonsai — elements with their takeoff, materials, spec sections and the 4D schedule">
             Export IFC
           </button>
-          <button onClick={exportPlan} disabled={!out} title="The model, the assumptions and the schedule, as data">
+          <button onClick={exportPlan} disabled={!out || !!busy} title="The model, the assumptions and the schedule, as data">
             Export plan
           </button>
-          <button onClick={exportCsv} disabled={!out} title="The schedule as a spreadsheet">
+          <button onClick={exportCsv} disabled={!out || !!busy} title="The schedule as a spreadsheet">
             Schedule CSV
           </button>
+          </div></details>
           <button className="bld-close" onClick={onClose} aria-label="Close">
             <Icon name="close" size={14} />
           </button>
@@ -350,23 +417,34 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
 
       <div className="bld-main">
         {setupOpen && out && (
-          <div className="bld-left-tabs">
-            <button className={left === 'model' ? 'on' : ''} onClick={() => setLeft('model')}>
-              Model
+          <div className="bld-left-tabs" role="tablist" aria-label="Side panel">
+            {/* "Elements", not "Model": the header's Model/Construction switch already has that name (and "Browser" opens this panel). */}
+            <button role="tab" aria-selected={left === 'model'} className={left === 'model' ? 'on' : ''} onClick={() => setLeft('model')}>
+              Elements
             </button>
-            <button className={left === 'setup' ? 'on' : ''} onClick={() => setLeft('setup')}>
+            <button role="tab" aria-selected={left === 'setup'} className={left === 'setup' ? 'on' : ''} onClick={() => setLeft('setup')}>
               Setup
             </button>
           </div>
         )}
         {setupOpen && out && left === 'model' && model && (
           <aside className="bld-left">
+            {(model.drawingGeometry?.length ?? 0) > 0 && <section className="bld-tree" aria-label="Drawing-derived geometry">
+              <strong>From drawings · {model.drawingGeometry!.length}</strong>
+              <p className="dim small">No accepted takeoff · excluded from quantities and schedule</p>
+              {model.drawingGeometry!.map(e => <button key={e.id} className="bld-spec-title" onClick={() => {
+                setInspectorOpen(true);
+                setTreeSel(null);
+                setSel({ kind: 'element', id: e.id });
+              }}>{e.name}</button>)}
+            </section>}
             <ModelTree
               model={model}
               hidden={hidden}
               onHidden={setHidden}
               picked={treeSel?.key ?? null}
               onPick={(t) => {
+                setInspectorOpen(true);
                 setSel(null);
                 setTreeSel(t);
               }}
@@ -388,6 +466,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
             onEdit={edit}
             onSource={openSource}
             tradeKeys={tradesUsed.map((t) => t.key)}
+            suggestions={out?.scopeSuggestions ?? []}
             unplacedSheets={model ? [...new Set(model.elements.filter((e) => !e.level && e.issues.some((x) => /level/.test(x))).map((e) => e.sheetId))] : []}
           />
         )}
@@ -411,12 +490,13 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                 view={view}
                 tradeOrder={tradeOrder}
                 onSelect={(id) => {
+                  if (id) setInspectorOpen(true);
                   setTreeSel(null);
                   setSel(id ? { kind: 'element', id } : null);
                 }}
                 onHover={setHover}
               />
-              <div className="bld-toolbar" role="toolbar" aria-label="View">
+              <div className={`bld-toolbar ${toolsOpen ? "expanded" : ""}`} role="toolbar" aria-label="View">
                 <div className="bld-tg" role="group" aria-label="Views">
                   {(
                     [
@@ -434,20 +514,22 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                     <Icon name="fit" size={13} />
                   </button>
                 </div>
-                <label className="bld-tg slider" title="Pull the levels apart (and the systems, when ticked)">
+                <button className="bld-tools-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(v => !v)}>View tools</button>
+                <label className="bld-tg slider bld-advanced" title="Pull the levels apart (and the systems, when ticked)">
                   <span>Explode</span>
                   <input type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => setExplode(Number(e.target.value))} />
                   <input type="checkbox" checked={explodeSystems} onChange={(e) => setExplodeSystems(e.target.checked)} title="Systems too" />
                   <em>systems</em>
                 </label>
-                <label className="bld-tg slider" title="Section cut: hide everything above this height">
+                <label className="bld-tg slider bld-advanced" title="Section cut: hide everything above this height">
                   <span>Section</span>
                   <input type="range" min={0} max={topZ} step={0.05} value={cut ?? topZ} onChange={(e) => setCut(Number(e.target.value) >= topZ - 0.01 ? null : Number(e.target.value))} />
                   <em>{cut === null ? 'off' : `${(project.units === 'imperial' ? cut / 0.3048 : cut).toFixed(1)} ${project.units === 'imperial' ? 'ft' : 'm'}`}</em>
                 </label>
-                <label className="bld-tg">
+                <label className="bld-tg bld-advanced">
                   <span>Colour by</span>
                   <select value={colourMode} onChange={(e) => setColourMode(e.target.value as typeof colourMode)}>
+                    <option value="material">Materials</option>
                     <option value="system">System</option>
                     <option value="status">Schedule status</option>
                     <option value="level">Level</option>
@@ -455,7 +537,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                     <option value="quality">Data quality</option>
                   </select>
                 </label>
-                <div className="bld-tg">
+                <div className="bld-tg bld-advanced">
                   <button className={ghosts ? 'on' : ''} onClick={() => setGhosts(!ghosts)} title="Show what isn’t built yet, as a ghost">
                     Ghosts
                   </button>
@@ -480,9 +562,9 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                 ))}
               </div>
               <div className="bld-day">
-                <b>{cal ? fmt(cal.date(dayInt)) : ''}</b>
+                <b>{workspace === 'model' ? 'Building model' : cal ? fmt(cal.date(dayInt)) : ''}</b>
                 <span>
-                  Day {dayInt + 1} of {end} · {progress}% of the work done
+                  {workspace === 'model' ? `${model.elements.filter(e => e.shape).length.toLocaleString()} represented · ${model.elements.filter(e => !e.shape).length.toLocaleString()} unplaced` : `Day ${dayInt + 1} of ${end} · ${progress}% of work packages complete`}
                 </span>
               </div>
               {hoverEl && (
@@ -502,7 +584,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                 {project.measurements.length.toLocaleString()} takeoffs on {measured.length} sheets · {sections.length} spec sections
               </p>
               <button className="primary big" disabled={!ready || !!busy || !project.measurements.length} onClick={() => void build()}>
-                {busy ?? (!ready ? 'Reading the documents…' : 'Build it')}
+                {busy ?? (!ready ? (reading ? `Reading the drawings… ${reading.done} of ${reading.of}` : 'Reading the documents…') : 'Build it')}
               </button>
               {!project.measurements.length && <p className="dim">There is no takeoff yet: take off the drawings first.</p>}
               {error && <p className="bld-error">{error}</p>}
@@ -510,7 +592,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
           )}
         </section>
 
-        {out && (
+        {out && inspectorOpen && (
           <aside className="bld-inspect" ref={inspectRef}>
             {selAct ? (
               <ActivityCard
@@ -530,8 +612,8 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                 e={selEl}
                 project={project}
                 sections={sections}
-                act={actById.get(actOfElement.get(selEl.id) ?? '')}
-                t={times[actOfElement.get(selEl.id) ?? '']}
+                act={selEl.origin === 'drawing' ? undefined : actById.get(actOfElement.get(selEl.id) ?? '')}
+                t={selEl.origin === 'drawing' ? undefined : times[actOfElement.get(selEl.id) ?? '']}
                 state={stateOf(selEl)}
                 render={renderSheet}
                 onPickAct={(id) => setSel({ kind: 'activity', id })}
@@ -562,7 +644,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                 </p>
                 {feas.target && feas.overBy > 0 && (
                   <p>
-                    {feas.overBy} working days late under the current assumptions. Nothing has been squeezed to fit: the chain below sets the date.
+                    {feas.overBy} working days late under the current assumptions. The chain below shows the remaining production, sequencing and fixed constraints after any resource changes.
                   </p>
                 )}
                 <h4>What sets the date</h4>
@@ -582,6 +664,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                 <p className="dim">
                   {feas.documentedDays} days of it are documented requirements; {feas.assumedDays} rest on quantities, rates and assumptions you can change.
                 </p>
+                {(feas.changes?.length ?? 0) > 0 && <div><strong>Changes to meet target</strong><ul>{feas.changes!.map((c, i) => <li key={i}>{c}</li>)}</ul></div>}
                 {feas.levers.length > 0 && (
                   <>
                     <h4>What would change it</h4>
@@ -605,10 +688,14 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
                 <Icon name="close" size={12} />
               </button>
             </div>
+            <div className="bld-issue-filters" aria-label="Filter issues">
+              {(['all','conflict','warning'] as const).map(filter=><button key={filter} aria-pressed={issueFilter===filter} onClick={()=>setIssueFilter(filter)}>{filter==='all'?'All issues':filter==='conflict'?'Conflicts':'Needs review'}</button>)}
+            </div>
             <ul>
-              {allIssues.map((i) => (
+              {allIssues.filter(i=>issueFilter==='all'||i.severity===issueFilter).map((i) => (
                 <li key={i.id} className={i.severity}>
                   {i.text}
+                  {!!i.sources?.length && <details className="bld-issue-evidence"><summary>Source evidence</summary>{[...new Map(i.sources.map(source=>[`${source.id}:${source.page}`,source])).values()].map(source=><button className="link-button" key={`${source.id}:${source.page}`} onClick={()=>openSource(source)}>{source.label} · page {source.page}{source.quote ? ` — ${source.quote}` : ''}</button>)}</details>}
                   {i.refs?.length && actById.has(i.refs[0]) ? (
                     <button className="link-button" onClick={() => setSel({ kind: 'activity', id: i.refs![i.refs!.length - 1] })}>
                       Show
@@ -621,7 +708,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
         )}
       </div>
 
-      {out && cal && (
+      {out && cal && workspace === 'sequence' && (
         <footer className="bld-time">
           <div className="bld-controls">
             <div className="bld-btabs" role="tablist">
@@ -652,7 +739,7 @@ export default function BuildView({ project, sections, specText, sheetText, onEd
             </span>
           </div>
           {bottom === 'schedule' ? (
-            <Gantt groups={groups} times={times} end={end} zoom={zoom} day={day} target={targetIdx} cal={cal} selected={sel?.kind === 'activity' ? sel.id : null} onPick={(id) => (setTreeSel(null), setSel({ kind: 'activity', id }))} onDay={(d) => (setPlaying(false), setDay(d))} />
+            <Gantt groups={groups} times={times} end={end} zoom={zoom} day={day} target={targetIdx} cal={cal} selected={sel?.kind === 'activity' ? sel.id : null} onPick={(id) => (setInspectorOpen(true), setTreeSel(null), setSel({ kind: 'activity', id }))} onDay={(d) => (setPlaying(false), setDay(d))} />
           ) : (
             model && (
               <QuantitySchedule
@@ -676,6 +763,7 @@ function applyEditsToSetup(setup: PlanSetup, edits: BuildEdits): PlanSetup {
   const out: PlanSetup = { ...setup, trades: { ...setup.trades } };
   for (const [k, v] of Object.entries(edits.setup ?? {})) {
     if (k === 'trades' || v === undefined) continue;
+    if (k === 'targetFor') { out.targetFor = v as PlanSetup['targetFor']; continue; }
     const cur = (out as unknown as Record<string, Assumption<unknown>>)[k];
     if (cur && JSON.stringify(cur.value) !== JSON.stringify(v)) (out as unknown as Record<string, Assumption<unknown>>)[k] = { value: v, basis: 'assumed', why: cur.basis === 'documented' ? `Set by you (the documents say ${JSON.stringify(cur.value)})` : 'Set by you' };
   }
@@ -684,6 +772,114 @@ function applyEditsToSetup(setup: PlanSetup, edits: BuildEdits): PlanSetup {
     if (cur) out.trades[t] = { value: { ...cur.value, ...v, rates: { ...cur.value.rates, ...(v.rates ?? {}) } }, basis: 'assumed', why: 'Set by you' };
   }
   return out;
+}
+
+/** What an allowance is entered in, and a typical rate per crew-day to start from (provisional until set). */
+const ALLOWANCE_DEFAULTS: Record<string, { metric: [string, number]; imperial: [string, number] }> = {
+  site: { metric: ['m³', 50], imperial: ['CY', 65] },
+  foundations: { metric: ['m³', 6], imperial: ['CY', 8] },
+  structure: { metric: ['m²', 40], imperial: ['SF', 430] },
+  envelope: { metric: ['m²', 30], imperial: ['SF', 320] },
+  'mech-rough': { metric: ['m', 15], imperial: ['ft', 50] },
+  'elec-rough': { metric: ['m', 30], imperial: ['ft', 100] },
+  'fire-rough': { metric: ['m', 20], imperial: ['ft', 65] },
+};
+
+/**
+ * Allowances: scope the takeoff doesn't measure (no drawing for it, or not taken off yet) entered
+ * as a quantity and a rate, so the plan carries its time. Each becomes its own activity; nothing
+ * is added to the takeoff or the model. A trade with measured work shows it, so an allowance is
+ * only added on purpose.
+ */
+function AllowancesForm(props: {
+  allowances: Record<string, ScopeAllowance>;
+  measured: string[];
+  metric: boolean;
+  /** Allowances Build It proposes for trades with nothing measured: shown until accepted. */
+  suggestions?: { key: string; allowance: ScopeAllowance; why: string }[];
+  onChange: (next: Record<string, ScopeAllowance>) => void;
+}) {
+  const { allowances, measured, metric, onChange } = props;
+  const suggested = (props.suggestions ?? []).filter((x) => !allowances[x.key] && !measured.includes(x.key));
+  const keys = [{ key: 'foundations', name: 'Foundations', colour: '#ffb340' }, ...TRADES.filter((t) => t.key !== 'other')];
+  const nameOf = (k: string) => keys.find((t) => t.key === k)?.name ?? k;
+  const missing = keys.filter((t) => !allowances[t.key]);
+  const put = (k: string, v: ScopeAllowance | null) => {
+    const next = { ...allowances };
+    if (v) next[k] = v;
+    else delete next[k];
+    onChange(next);
+  };
+  const add = (k: string) => {
+    const d = ALLOWANCE_DEFAULTS[k]?.[metric ? 'metric' : 'imperial'] ?? (metric ? ['m²', 20] : ['SF', 200]);
+    put(k, { quantity: 0, unit: d[0], rate: d[1], provisional: true });
+  };
+  const rows = Object.entries(allowances);
+  return (
+    <div className="bld-form">
+      <p className="dim small">Scope the takeoff doesn’t measure, so the plan still carries its time: a quantity and how much one crew does a day. Each becomes its own activity in the schedule; nothing is added to the takeoff or the model. A quantity of 0 is a draft.</p>
+      {suggested.length > 0 && (
+        <>
+          <h4>Suggested</h4>
+          {suggested.map((x) => (
+            <div key={x.key} className="bld-trade bld-allowance suggested">
+              <b>
+                {nameOf(x.key)}
+                <button className="link-button" onClick={() => put(x.key, x.allowance)} title="Add this allowance to the plan; you can change it after">
+                  Accept
+                </button>
+              </b>
+              <p className="dim small">
+                {Math.round(x.allowance.quantity)} {x.allowance.unit} at {x.allowance.rate} {x.allowance.unit}/crew-day ({Math.ceil(x.allowance.quantity / Math.max(x.allowance.rate, 1e-9))} days for one crew), provisional. {x.why}
+              </p>
+            </div>
+          ))}
+        </>
+      )}
+      {rows.length === 0 && <p className="dim">No allowances.</p>}
+      {rows.map(([k, a]) => {
+        const days = a.quantity > 0 && a.rate > 0 ? Math.ceil(a.quantity / a.rate) : 0;
+        return (
+          <div key={k} className="bld-trade bld-allowance">
+            <b>
+              {nameOf(k)}
+              {measured.includes(k) && <em className="dim small"> · also measured in the takeoff</em>}
+              <button className="link-button" onClick={() => put(k, null)} title="Remove this allowance">
+                Remove
+              </button>
+            </b>
+            <div>
+              <label>
+                <input type="number" min={0} value={a.quantity} onChange={(e) => put(k, { ...a, quantity: Math.max(0, Number(e.target.value) || 0) })} />
+                <input type="text" className="bld-unit" value={a.unit} onChange={(e) => put(k, { ...a, unit: e.target.value })} />
+              </label>
+              <label>
+                <input type="number" min={0} value={a.rate} onChange={(e) => put(k, { ...a, rate: Math.max(0, Number(e.target.value) || 0) })} /> {a.unit || 'units'}/crew-day
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={a.provisional} onChange={(e) => put(k, { ...a, provisional: e.target.checked })} /> provisional
+              </label>
+            </div>
+            <p className="dim small">{days ? `${days} working day${days === 1 ? '' : 's'} for one crew` : a.quantity > 0 ? 'Set a rate above 0.' : 'Draft: not in the plan until it has a quantity.'}</p>
+          </div>
+        );
+      })}
+      {missing.length > 0 && (
+        <label className="bld-field">
+          <span>Add</span>
+          <select value="" onChange={(e) => e.target.value && add(e.target.value)}>
+            <option value="">Allowance for…</option>
+            {missing.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.name}
+                {measured.includes(t.key) ? ' (measured)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
 }
 
 function SetupPanel(props: {
@@ -697,6 +893,7 @@ function SetupPanel(props: {
   built: boolean;
   unplacedSheets: string[];
   tradeKeys: string[];
+  suggestions: ScopeSuggestion[];
   onBuild: () => void;
   onEdit: (e: BuildEdits, rebuild?: boolean) => void;
   onSource: (s: SourceRef) => void;
@@ -724,15 +921,15 @@ function SetupPanel(props: {
       </label>
     );
   };
-  const [tab, setTab] = useState<'project' | 'trades' | 'levels'>('project');
+  const [tab, setTab] = useState<'project' | 'trades' | 'scope' | 'levels'>('project');
   const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const wd = val<number[]>('workDays', [1, 2, 3, 4, 5]);
   return (
     <aside className="bld-setup">
       <div className="bld-tabs" role="tablist">
-        {(['project', 'trades', 'levels'] as const).map((t) => (
+        {(['project', 'trades', 'scope', 'levels'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-            {t === 'project' ? 'Dates & reviews' : t === 'trades' ? 'Crews & rates' : 'Levels'}
+            {t === 'project' ? 'Dates & reviews' : t === 'trades' ? 'Crews & rates' : t === 'scope' ? 'Allowances' : 'Levels'}
           </button>
         ))}
       </div>
@@ -754,7 +951,7 @@ function SetupPanel(props: {
               </button>
             )}
           </label>
-          <p className="dim small">A target, not a reason to squeeze the work: if it can’t be met, Build It shows why.</p>
+          <p className="dim small">Earlier targets test extra crews and overlapping levels. Later targets restore the baseline. Fixed reviews and lead times remain; changes and risks are shown.</p>
           <div className="bld-field">
             <span>Working days</span>
             <span className="bld-days">
@@ -784,6 +981,10 @@ function SetupPanel(props: {
           <label className="bld-field check">
             <input type="checkbox" checked={val<boolean>('levelsInParallel', false)} onChange={(e) => set('levelsInParallel', e.target.checked)} />
             <span>A trade may work on more than one level at a time</span>
+          </label>
+          <label className="bld-field check">
+            <input type="checkbox" checked={val<boolean>('dryInBeforeFinishes', true)} onChange={(e) => set('dryInBeforeFinishes', e.target.checked)} />
+            <span>Interior finishes wait for the building to be weather-tight (roof and exterior walls)</span>
           </label>
         </div>
       )}
@@ -821,6 +1022,7 @@ function SetupPanel(props: {
               })}
         </div>
       )}
+      {tab === 'scope' && <AllowancesForm allowances={val<Record<string, ScopeAllowance>>('allowances', {})} measured={props.tradeKeys} metric={metric} suggestions={props.suggestions} onChange={(next) => set('allowances', next)} />}
       {tab === 'levels' && (
         <div className="bld-form">
           <p className="dim small">Each measured plan sheet’s level, from its title or title block. Set the ones that aren’t known, or fix any that are wrong.</p>
@@ -1106,5 +1308,50 @@ function Gantt(props: {
       {target !== null && <div className="bld-g-target" style={{ left: `calc(var(--g-name) + ${target * zoom}px)` }} title="Target" />}
       </div>
     </div>
+  );
+}
+
+/**
+ * The header's verdict on the target. "Fits" says when it only fits with recovery changes
+ * (extra crews, overlapped levels: unpriced), and what the finish is without them; a start
+ * date already behind us is pointed out rather than silently planned from.
+ *
+ * Data contract (src/build/replanTarget.ts, docs/build-it-review-fixes.md): `feasibility.changes`
+ * lists the recovery changes accepted; `feasibility.baselineFinish` is the target milestone's
+ * date before any recovery (always set by planToTarget).
+ */
+function FeasibilityBadge({ feas, start }: { feas: Feasibility; start: Assumption<string> }) {
+  const changes = feas.changes ?? [];
+  const baselineFinish = feas.baselineFinish;
+  const n = changes.length;
+  const recovery = n ? `${n} recovery change${n === 1 ? '' : 's'}` : '';
+  const late = !!feas.target && feas.overBy > 0;
+  const text = !feas.target
+    ? `Earliest finish ${fmt(feas.earliestFinish)} · no target set`
+    : late
+      ? `${feas.overBy} working days late${n ? ` even with ${recovery}` : ''} · earliest ${fmt(feas.earliestFinish)}`
+      : n
+        ? `Fits only with ${recovery} · ${fmt(feas.earliestFinish)}`
+        : `Fits the target · ${fmt(feas.earliestFinish)}`;
+  const tip = [
+    feas.target ? `Target ${fmt(feas.target)}` : 'No target set',
+    baselineFinish && changes.length ? `Without recovery: ${fmt(baselineFinish)}` : '',
+    ...changes.map((c) => `• ${c}`),
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const past = start.value < today();
+  return (
+    <>
+      <div className={`bld-feas ${!feas.target ? 'none' : late ? 'late' : n ? 'stretched' : 'ok'}`} title={tip}>
+        {text}
+        {baselineFinish && n > 0 && <em> · without: {fmt(baselineFinish)}</em>}
+      </div>
+      {past && (
+        <div className="bld-feas past" title={`${start.why}. The plan runs from this date; set the real start in Setup if the work hasn't begun.`}>
+          Starts {fmt(start.value)} · in the past
+        </div>
+      )}
+    </>
   );
 }

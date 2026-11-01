@@ -61,7 +61,12 @@ const penOf = (s: Segment) => s.width.toFixed(2);
 /** The rectangle closed round a text (drawn once or doubled), if any. */
 function boxAround(t: PageText, index: SegmentIndex, lines: Segment[]): Box | null {
   // A box padded round its number; failing that, a wide one round a short number (a room "2").
-  return boxWithin(t, index, lines, Math.max(t.w, t.h) * 0.5 + 14) ?? (/^\d$/.test(t.str) ? boxWithin(t, index, lines, Math.max(t.w, t.h) * 0.5 + 4.5 * t.h, true) : null);
+  return (
+    boxWithin(t, index, lines, Math.max(t.w, t.h) * 0.5 + 14) ??
+    (/^\d$/.test(t.str) ? boxWithin(t, index, lines, Math.max(t.w, t.h) * 0.5 + 4.5 * t.h, true) : null) ??
+    // A long box round a short number in big lettering ("02" in a box three times its width).
+    (t.h > 6 ? boxWithin(t, index, lines, Math.max(t.w, t.h) * 0.5 + 2.6 * t.h, true) : null)
+  );
 }
 
 function boxWithin(t: PageText, index: SegmentIndex, lines: Segment[], r: number, wide = false): Box | null {
@@ -293,7 +298,8 @@ export function findDoorTags(texts: PageText[], segs: Segment[]): DoorTag[] {
   const out: DoorTag[] = [];
   const seen = new Set<string>();
   for (const t of texts) {
-    if (!/^[A-Z]?\d{3,4}(?:\.\d{1,2})?[A-Za-z]?$/.test(t.str) || seen.has(t.str)) continue;
+    // Basement doors take their room's lettered number (B23, B31d): two digits after a letter.
+    if (!/^(?:[A-Z]?\d{3,4}|[A-Z]\d{2})(?:\.\d{1,2})?[A-Za-z]?$/.test(t.str) || seen.has(t.str)) continue;
     const r = Math.max(t.w, t.h) * 0.5 + 14;
     const local = dedupe(index.query(t.cx - r, t.cy - r, t.cx + r, t.cy + r).map((i) => lines[i]));
     const inside = (x: number, y: number) => Math.hypot(x - t.cx, y - t.cy) <= r;

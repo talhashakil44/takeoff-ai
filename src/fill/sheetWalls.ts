@@ -1,3 +1,4 @@
+import { mergeTessellated } from './tessellation';
 import type { Sheet } from '../model';
 import type { PDFPageProxy } from '../pdf';
 import { buildWallModel, type WallModel } from './roomFill';
@@ -31,7 +32,7 @@ export function segmentsOf(page: PDFPageProxy): Promise<Segment[]> {
   if (!p) {
     p = page.getOperatorList().then((ops) => {
       const vp = page.getViewport({ scale: 1 });
-      return extractSegments(ops.fnArray, ops.argsArray, vp.transform as [number, number, number, number, number, number]);
+      return mergeTessellated(extractSegments(ops.fnArray, ops.argsArray, vp.transform as [number, number, number, number, number, number]));
     });
     // A failed read is not kept, so the next try reads again.
     p.catch(() => segmentCache.delete(page));
@@ -47,18 +48,18 @@ export async function segmentsOnce(page: PDFPageProxy): Promise<Segment[]> {
   if (cached) return cached;
   const ops = await page.getOperatorList();
   const vp = page.getViewport({ scale: 1 });
-  const segs = extractSegments(ops.fnArray, ops.argsArray, vp.transform as [number, number, number, number, number, number]);
+  const segs = mergeTessellated(extractSegments(ops.fnArray, ops.argsArray, vp.transform as [number, number, number, number, number, number]));
   page.cleanup();
   return segs;
 }
 
-export async function wallModelFor(page: PDFPageProxy, sheet: Sheet, maxOpening: number): Promise<WallModel> {
-  const key = `${sheet.metersPerPoint ?? 'none'}|${maxOpening}`;
+export async function wallModelFor(page: PDFPageProxy, sheet: Sheet, maxOpening: number, keepGrid = false): Promise<WallModel> {
+  const key = `${sheet.metersPerPoint ?? 'none'}|${maxOpening}|${keepGrid}`;
   let byKey = modelCache.get(page);
   if (!byKey) modelCache.set(page, (byKey = new Map()));
   const hit = byKey.get(key);
   if (hit) return hit;
-  const model = buildWallModel(await segmentsOf(page), sheet.metersPerPoint, { maxOpening });
+  const model = buildWallModel(await segmentsOf(page), sheet.metersPerPoint, { maxOpening, keepGrid });
   byKey.set(key, model);
   return model;
 }

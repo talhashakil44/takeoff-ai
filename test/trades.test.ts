@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { keynoteList } from '../src/automate/keynotes';
+import { isDemoPlan, keynoteList, removed } from '../src/automate/keynotes';
 import { blobs, scheduleTags } from '../src/automate/trades';
 import { chainRuns, dashLines, ductSizes, joinRuns, pairParallels, sizeRuns, withoutSymbols } from '../src/fill/runs';
 import type { Segment } from '../src/fill/vectors';
 import { baseLayer, isBackground, layerService, layerStatus } from '../src/layers';
 import type { PageText } from '../src/pageText';
+import type { Project, Sheet, TakeoffType } from '../src/model';
+import type { SetAccess } from '../src/automate/set';
 
 const seg = (x1: number, y1: number, x2: number, y2: number, extra: Partial<Segment> = {}): Segment => ({ x1, y1, x2, y2, width: 0.5, filled: false, ...extra });
 const text = (str: string, x0: number, cy: number, h = 6): PageText => ({ str, cx: x0 + (str.length * h * 0.6) / 2, cy, w: str.length * h * 0.6, h });
@@ -99,6 +101,33 @@ describe('schedules and keynotes', () => {
     expect(notes[1].text).toBe('REMOVE AND DISPOSE OF EXISTING HOLLOW METAL DOOR AND FRAME. REMOVE EXISTING BULLNOSE BLOCK.');
   });
 
+  it('reads a note whose number sits beside its middle, and skips legend pointers and note 0', () => {
+    const t = (str: string, x0: number, cy: number) => text(str, x0, cy, 6.2);
+    // Numbers centred on notes of several lines, a blank line between notes.
+    const texts = [
+      t('1', 10, 149), t('Remove door, frame, and hardware complete, and', 30, 141), t('dispose. Enlarge the opening to suit new frame.', 30, 150), t('See Openings Schedule.', 30, 159),
+      t('2', 10, 185), t('Remove door and hardware, and dispose.', 30, 181), t('Existing frame to remain.', 30, 190),
+      t('3', 10, 218), t('Disconnect and remove light fixtures in accordance with', 30, 209), t('Electrical Lighting Plan.', 30, 218), t('See also Electrical documents.', 30, 227),
+      t('4', 10, 248), t('Remove all washrooms accessories, and dispose.', 30, 245),
+      // A symbol legend: pointers to other sheets, one numbered 0.
+      t('0', 400, 140), t('Floor Types, see A000 series Sheets', 420, 140), t('5', 400, 160), t('Building Elevation See A300 series Sheets', 420, 160), t('6', 400, 180), t('Wall Section See A600 series Sheets', 420, 180),
+    ];
+    const notes = keynoteList(texts);
+    expect(notes.map((n) => n.number)).toEqual(['1', '2', '3', '4']);
+    expect(notes[0].text).toBe('Remove door, frame, and hardware complete, and dispose. Enlarge the opening to suit new frame. See Openings Schedule.');
+    expect(notes[2].text.startsWith('Disconnect and remove light fixtures')).toBe(true);
+  });
+
+  it('reads what a removal note removes, and a pointer to removals plans is no removals plan', () => {
+    expect(removed('Remove and dispose floor finish c/w base and make good all wood subfloors and wall substrates')).toBe('floor finish');
+    expect(removed('Remove partitions, and dispose. Make good all subfloors')).toBe('partitions');
+    expect(removed('REMOVE AND DISPOSE OF EXISTING WOOD FLOORING AND BASE.')).toBe('WOOD FLOORING AND BASE');
+    const sheet = { id: 's', name: 'A011', title: 'OBC Matrix and Information', metersPerPoint: 0.03 } as never;
+    const titled = (str: string) => ({ str, cx: 100, cy: 100, w: 200, h: 12.6 }) as PageText;
+    expect(isDemoPlan(sheet, [titled('For Floor Plan Removals see A200 series Sheets')])).toBe(false);
+    expect(isDemoPlan({ ...(sheet as object), name: 'A201', title: 'Basement Floor Removals Plan' } as never, [])).toBe(true);
+  });
+
   it('finds each fixture drawn on a demolition layer once', () => {
     const fixture = (x: number, sub: number) => [seg(x, 0, x + 10, 0, { sub }), seg(x + 10, 0, x + 10, 20, { sub }), seg(x + 10, 20, x, 20, { sub }), seg(x, 20, x, 0, { sub })];
     expect(blobs([...fixture(0, 1), ...fixture(100, 2), seg(2, 2, 8, 18, { sub: 3 })], 3, 5, 60)).toHaveLength(2);
@@ -130,5 +159,34 @@ describe('joining runs', () => {
       [0, 0],
       [100, 0],
     ]);
+  });
+});
+
+describe('structural counts the other takeoffs already have', () => {
+  it('counts a schedule tag once: not again where the foundations or structure took that code, nor a wall assembly', async () => {
+    const { automateTrades } = await import('../src/automate/trades');
+    const sched = { id: 's0', docId: 'd', page: 1, name: 'S0.2', title: 'SCHEDULES', width: 2592, height: 1728, metersPerPoint: null } as unknown as Sheet;
+    const fdn = { id: 's1', docId: 'd', page: 2, name: 'S1.0', title: 'FOUNDATION PLAN', width: 2592, height: 1728, metersPerPoint: 0.0353 } as unknown as Sheet;
+    const flr = { id: 's2', docId: 'd', page: 3, name: 'S2.0', title: 'FLOOR FRAMING PLAN', width: 2592, height: 1728, metersPerPoint: 0.0353 } as unknown as Sheet;
+    const texts: Record<string, PageText[]> = {
+      s0: [
+        text('WOOD LINTEL SCHEDULE', 100, 100, 10), text('L1', 100, 140), text('2 - 38x184 (2x8)', 160, 140), text('L2', 100, 160), text('4 PLY LVL', 160, 160),
+        text('STRUCTURAL WALL SCHEDULE', 100, 400, 10), text('WT-1', 100, 440), text('11 OSB SHEATHING', 160, 440), text('WT-2', 100, 460), text('13 PLYWOOD', 160, 460),
+      ],
+      s1: [text('FOUNDATION PLAN', 400, 1500, 10), text('L1', 600, 600)],
+      s2: [text('FLOOR FRAMING PLAN', 400, 1500, 10), text('L1', 600, 600), text('L2', 900, 600), text('WT-1', 700, 800)],
+    };
+    const lintel = { id: 't1', name: 'L1 – Lintel 2 - 38x184 (2x8)', kind: 'count', color: '#000', height: 0, items: [] } as unknown as TakeoffType;
+    const p = {
+      sheets: [sched, fdn, flr],
+      types: [lintel],
+      measurements: [{ id: 'm1', sheetId: 's2', typeId: 't1', points: [[600, 610]], holes: [], source: 'structure' }],
+    } as unknown as Project;
+    const access = { texts: async (s: Sheet) => texts[s.id], segments: async () => [], layers: async () => new Map(), page: async () => null } as unknown as SetAccess;
+    const r = await automateTrades(p, access);
+    const q = r.apply!(p);
+    const made = q.measurements.filter((m) => m.source === 'trades').map((m) => `${q.sheets.find((s) => s.id === m.sheetId)!.name} ${q.types.find((t) => t.id === m.typeId)!.name.split(' – ')[0]}`);
+    // L1 on S2.0 is the structure takeoff's; L1 on S1.0 is not taken there; WT-1 is a wall assembly.
+    expect(made.sort()).toEqual(['S1.0 L1', 'S2.0 L2']);
   });
 });

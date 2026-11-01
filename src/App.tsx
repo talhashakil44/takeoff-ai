@@ -1,3 +1,4 @@
+import { ExploreHost } from './explore/ExploreHost';
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { diffProjects, type ActivityEvent } from './activity';
 import { AiAssembliesDialog } from './components/AiAssembliesDialog';
@@ -34,6 +35,7 @@ import { checkScale, type ScaleCheck } from './scaleCheck';
 import { sheetImage } from './sheetImage';
 import { compareSheets } from './compareSheets';
 import { pageTexts, type PageText } from './pageText';
+import type { RevisionAccess } from './build/sources';
 import { readTitleBlock, titleBlockBox } from './titleBlock';
 import { middleOf } from './locate';
 import { buildingOfDoc, buildingsOf, fileLabel, onBuilding, quantitySections, type QtyGrouping } from './buildings';
@@ -46,7 +48,8 @@ import { SpecView, type SpecTarget } from './components/SpecView';
 import { FileManager } from './components/FileManager';
 import { addendumNumber, mergeSections, readSpec } from './spec/parse';
 import { isCombined, pageKinds, pagesOf, splitPdf } from './splitPdf';
-import { ocrTitleBlock, tidySetNumbers } from './ocr';
+import { ocrTitleBlock, pageOcr, tidySetNumbers } from './ocr';
+import { withOcrText, type OcrTextOptions } from './ocrText';
 import { buildProjectMap } from './spec/links';
 import { buildGraph, definitionsOf, type DrawingGraph, type Link, type Place } from './graph/graph';
 import { entries, norm, type Entry } from './smart/index';
@@ -87,6 +90,10 @@ import { doorTakeoff, findDoorTagsIn } from './automate/doors';
 import { automateWindows as windowTakeoff } from './automate/windows';
 import { applyRooms } from './automate/rooms';
 import { applyWalls, wallLegendFor } from './automate/walls';
+
+
+/** OCR in the app: flattened sets only, and a set whose sheet takes over 90 s is left to its own text (opening never stalls). */
+const APP_OCR: OcrTextOptions = { flattenedOnly: true, timeoutMs: 90_000 };
 
 const UNDO_LIMIT = 200;
 
@@ -275,7 +282,8 @@ export function App() {
     const opened = new Map<string, PDFDocumentProxy>();
     for (const doc of p.docs) {
       const data = await loadPdf(doc.id);
-      if (data) opened.set(doc.id, await openPdf(data));
+      // Pages with no text of their own (lettering drawn as linework) are read by OCR when a tool first reads them.
+      if (data) opened.set(doc.id, withOcrText(await openPdf(data), pageOcr, APP_OCR));
     }
     const log = p.id ? await loadActivity(p.id) : [];
     past.current = [];
@@ -376,23 +384,55 @@ export function App() {
     if (!sh || !pdf) throw new Error('The drawing is not on this computer.');
     return renderRegion(await pdf.getPage(sh.page), sh, projectRef.current!, box, scale, true);
   }, []);
+  const buildSheetLines = useCallback(async (sheetId: string) => {
+    const sh = projectRef.current?.sheets.find(s => s.id === sheetId);
+    const pdf = sh ? pdfsRef.current.get(sh.docId) : undefined;
+    if (!sh || !pdf) return [];
+    return segmentsOf(await pdf.getPage(sh.page));
+  }, []);
+  // Addendum files kept with the specifications re-issue drawing sheets (Kelso's Addendum 5
+  // carries the structural set re-issued): Build It reads those pages too.
+  const buildRevisions = useMemo<RevisionAccess>(
+    () => ({
+      pages: async (docId) => (await specPdfOf(docId))?.numPages ?? 0,
+      size: async (docId, page) => {
+        const pdf = await specPdfOf(docId);
+        if (!pdf) return null;
+        const vp = (await pdf.getPage(page)).getViewport({ scale: 1 });
+        return { width: vp.width, height: vp.height };
+      },
+      text: async (docId, page) => {
+        const pdf = await specPdfOf(docId);
+        return pdf ? pageTexts(await pdf.getPage(page)).catch(() => []) : [];
+      },
+      lines: async (docId, page) => {
+        const pdf = await specPdfOf(docId);
+        return pdf ? segmentsOf(await pdf.getPage(page)) : [];
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   const sheetTextOf = useCallback(async (sheetId: string) => {
     const sh = projectRef.current?.sheets.find((x) => x.id === sheetId);
     const pdf = sh ? pdfsRef.current.get(sh.docId) : undefined;
     if (!sh || !pdf) return [];
     return pageTexts(await pdf.getPage(sh.page)).catch(() => []);
   }, []);
+  // The spec and the map use the drawings' graph; Build It doesn't, so opening it doesn't read
+  // the whole set into one (that held the window up for half a minute on a big set).
+  const linkedView = view === 'specs' || view === 'map';
   const projectMap = useMemo(
-    () => (view !== 'drawings' && project && (specBooks.length || graph) ? buildProjectMap(graph, specBooks, project.sheets, graph?.specRefs ?? [], project.docs) : null),
+    () => (linkedView && project && (specBooks.length || graph) ? buildProjectMap(graph, specBooks, project.sheets, graph?.specRefs ?? [], project.docs) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [view === 'drawings', graph, specBooks, project?.sheets],
+    [linkedView, graph, specBooks, project?.sheets],
   );
   if (import.meta.env.DEV) (window as unknown as { __pmap: unknown; __graph: unknown }).__pmap = projectMap;
   if (import.meta.env.DEV) (window as unknown as { __pmap: unknown; __graph: unknown }).__graph = graph;
   const sheetByNumber = useMemo(() => new Map((project?.sheets ?? []).filter((s) => !s.superseded && /\d/.test(s.name)).map((s) => [norm(s.name), s])), [project?.sheets]);
   // The spec or the map open: the drawings are read into their graph for it (again when drawings come or go).
   useEffect(() => {
-    if (view !== 'drawings' && graphKey && !graphBuilding.current && graphRef.current?.key !== graphKey) void openLinks();
+    if (linkedView && graphKey && !graphBuilding.current && graphRef.current?.key !== graphKey) void openLinks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, graphKey]);
   // Drawings added or removed while links are on: read the set again.
@@ -745,7 +785,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('.modal-backdrop, .popover')) return;
+      if (t.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('.modal-backdrop, .popover, .ex-shell')) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -946,7 +986,7 @@ export function App() {
     // Sheets whose title block has no text (drawn as linework, or scanned): read by OCR.
     sheets = await namedByOcr(pdf, sheets, name);
     ocrTried.current.add(docId);
-    setPdfs((m) => new Map(m).set(docId, pdf));
+    setPdfs((m) => new Map(m).set(docId, withOcrText(pdf, pageOcr, APP_OCR)));
     commit((p) => ({ ...p, docs: [...p.docs, { id: docId, name }], sheets: [...p.sheets, ...sheets] }), 'Add drawings');
     setSheetId((cur) => cur ?? sheets[0]?.id ?? null);
     return { sheets, noText };
@@ -2738,6 +2778,7 @@ export function App() {
 
   return (
     <div className="app">
+      <ExploreHost liveProject={project} onBuild={()=>setView('build')} onOpenTakeoff={s=>{setView('drawings');follow([{sheetId:s.id,box:[0,0,s.width,s.height],label:s.name}],s.name);}} />
       <header className="titlebar">
         <input
           ref={projectFileInput}
@@ -3230,7 +3271,7 @@ export function App() {
           onDeleteMany={deleteMeasurements}
           onAdd={addMeasurement}
           onReplacePoints={(id, points, source = 'Fill room', openings) =>
-            commit((p) => ({ ...p, measurements: p.measurements.map((m) => (m.id === id ? { ...m, points, openings } : m)) }), source)
+            commit((p) => ({ ...p, measurements: p.measurements.map((m) => (m.id === id ? { ...m, points, openings, statedLength: undefined } : m)) }), source)
           }
           onMoveTakeoff={(id, points, holes) =>
             commit((p) => ({ ...p, measurements: p.measurements.map((m) => (m.id === id ? { ...m, points, holes } : m)) }), 'Move takeoff')
@@ -3557,6 +3598,8 @@ export function App() {
               sections={buildSections}
               specText={specTextOf}
               sheetText={sheetTextOf}
+              sheetLines={buildSheetLines}
+              revisions={buildRevisions}
               onEdits={(build) => commit((p) => ({ ...p, build }), 'Build It setup', 'build-edits')}
               onOpenSpec={(docId, page, key) => {
                 setSpecTarget({ docId, page, key, n: Date.now() });

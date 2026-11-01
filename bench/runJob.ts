@@ -10,7 +10,7 @@ import { defaultSymbolChoices, symbolTakeoff, symbolTallies } from '../src/autom
 import { automateWalls, projectSetTypes } from '../src/automate/walls';
 import { automateWindows } from '../src/automate/windows';
 import { newProject, type Project, type Sheet, type Units } from '../src/model';
-import { classifySheet, issueOrder, reissued, viewTitle, type PlanLevel, type SheetClass } from './classify';
+import { classifySet, issueOrder, reissued, viewTitle, type PlanLevel, type SheetClass } from './classify';
 import { resultItems, type ResultItem } from './items';
 import { makeSheets, NodeSet, openDoc, unitsOf, type OpenDoc } from './nodeSet';
 
@@ -156,13 +156,13 @@ export async function runJob(dir: string, log: (s: string) => void = () => {}, o
   const set = new NodeSet(new Map(docs.map((d) => [d.id, d])), sheets);
   const fileOf = new Map(docs.map((d) => [d.id, d.file]));
   const reports = new Map<string, SheetReport>();
-  for (const s of sheets) {
-    // No title in the title block: the sheet's biggest drawing title instead.
-    const view = s.title ? null : viewTitle(await set.texts(s).catch(() => []));
-    const c = classifySheet({
-      name: s.name,
-      title: s.title ?? view ?? undefined,
-    });
+  // No title in the title block: the sheet's biggest drawing title instead.
+  const views = new Map<string, string | null>();
+  for (const s of sheets) views.set(s.id, s.title ? null : viewTitle(await set.texts(s).catch(() => [])));
+  const kinds = classifySet(sheets.map((s) => ({ name: s.name, title: s.title ?? views.get(s.id) ?? undefined, ocr: s.ocr })));
+  for (const [i, s] of sheets.entries()) {
+    const view = views.get(s.id);
+    const c = kinds[i]!;
     reports.set(s.id, {
       file: fileOf.get(s.docId)!,
       page: s.page,

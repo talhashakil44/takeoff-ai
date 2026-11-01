@@ -2,6 +2,7 @@ import { evaluate } from './formula';
 import { polylineLength, ringArea, ringLength } from './geometry';
 import { FINISH_ROLES, doorHeight, type FinishRole, type Measurement, type Project, type Sheet, type TakeoffType, type Units } from './model';
 import { areaUnit, lengthUnit, toArea, toLength } from './units';
+import { viewScaleAt } from './sheetViews';
 
 /** Formula variables in project units. */
 export interface Vars {
@@ -50,11 +51,36 @@ export function formulaVars(vars: Vars, type: TakeoffType): Record<string, numbe
   };
 }
 
+/**
+ * Metres per sheet point for a takeoff: the sheet's scale; with none set, that of the one drawing
+ * on it the takeoff lies in; inside an inset at its own scale, the inset's (see below). Shared
+ * with anything that turns a takeoff's points into metres, so all agree.
+ */
+export function measurementScale(m: Pick<Measurement, 'points'>, sheet: Sheet): number | null {
+  // An inset drawn at its own scale (Kelso S1.0's 1:50 canopy foundation plan on a 1:100 sheet)
+  // gives its scale when the sheet's was read off the sheet (detected, or checked by the user),
+  // not preset or calibrated by hand, and the inset is under half the size of the sheet's main
+  // drawing (two drawings side by side, a key plan beside a site plan, are not insets).
+  const view = viewScaleAt(sheet.views, m.points as [number, number][]);
+  const inset =
+    !!view &&
+    sheet.metersPerPoint !== null &&
+    (sheet.scaleSource === 'detected' || sheet.scaleSource === 'verified') &&
+    Math.abs(view.metersPerPoint / sheet.metersPerPoint - 1) > 0.01 &&
+    (sheet.views ?? []).some((v) => (v.box[2] - v.box[0]) * (v.box[3] - v.box[1]) >= 2 * (view.box[2] - view.box[0]) * (view.box[3] - view.box[1]));
+  return inset ? view!.metersPerPoint : (sheet.metersPerPoint ?? view?.metersPerPoint ?? null);
+}
+
 /** Quantities of one measurement, or null when its sheet has no scale yet. */
 export function measurementVars(m: Measurement, type: TakeoffType, sheet: Sheet, units: Units): Vars | null {
   const H = type.height;
   if (type.kind === 'count') return { L: 0, H, A: 0, P: 0, N: 1, I: 0 };
-  const mpp = sheet.metersPerPoint;
+  // A length the drawing writes needs no scale.
+  if (type.kind === 'linear' && m.statedLength !== undefined) {
+    const L = toLength(m.statedLength, units);
+    return { L, H, A: L * H, P: 0, N: 1, I: 0 };
+  }
+  const mpp = measurementScale(m, sheet);
   if (mpp === null) return null;
   if (type.kind === 'linear') {
     const L = toLength(polylineLength(m.points) * mpp, units);

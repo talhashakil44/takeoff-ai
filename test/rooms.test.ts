@@ -73,6 +73,10 @@ describe('room takeoff', () => {
     expect(findDoorTags(texts, lines).map((d) => d.number)).toEqual(['201']);
   });
 
+  it('finds a basement door numbered after its lettered room (B23a)', () => {
+    expect(findDoorTags([...texts, text('B23a', 40, 40)], [...lines, ...oval(40, 40)]).map((d) => d.number)).toContain('B23a');
+  });
+
   it('keeps one copy of a room tagged again on a second plan', () => {
     const again = [...lines, ...tagBox(20, 2.5)];
     const labels = findRoomLabels([...texts, text('112', 20, 2.5)], again);

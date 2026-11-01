@@ -89,9 +89,10 @@ export function resolveTags(texts: TagText[], segs: Segment[]): WallTag[] {
     const candidates = local.filter(clear);
     // Tags and their leaders are drawn with one pen. Furniture or hatching can sit under
     // a tag, so each pen is tried and the smallest loop with a leader wins.
-    let best: { paths: Pt[][]; size: number; tick?: boolean } | null = null;
+    let best: { paths: Pt[][]; size: number; tick?: boolean; area?: number } | null = null;
     const loops: Segment[][] = [];
     const outlines: Segment[][] = [];
+    const boxes: { pen: number; symbol: Segment[]; area: number }[] = [];
     for (const pen of new Set(candidates.map((s) => s.width))) {
       const groups = symbolLoops(
         candidates.filter((s) => s.width === pen),
@@ -102,9 +103,23 @@ export function resolveTags(texts: TagText[], segs: Segment[]): WallTag[] {
       if (symbol.length < 3) continue;
       outlines.push(...groups);
       loops.push(symbol);
+      const area = boxArea(symbol);
+      if (groups.length === 1 && outlineShape(symbol) === 'box') boxes.push({ pen, symbol, area });
       if (best && symbol.length >= best.size) continue;
       const paths = leadersFrom(symbol, local.filter((s) => s.width === pen), t, index, lines);
-      if (paths.length) best = { paths, size: symbol.length };
+      if (paths.length) best = { paths, size: symbol.length, area };
+    }
+    // A box drawn round the text with a tick from the middle of its side, in its own
+    // pen, is the tag; a larger outline round it (a section bubble drawn over the tag) whose
+    // corners other lines run from is not (Kelso S1.0 FW-4 under the 6/S1.1 section mark).
+    if (best?.area !== undefined) {
+      for (const { pen, symbol } of boxes.filter((q) => q.area < best!.area! * 0.8).sort((a, b) => a.area - b.area)) {
+        const paths = leadersFrom(symbol, local.filter((s) => s.width === pen), t, index, lines, true);
+        if (paths.length) {
+          best = { paths, size: symbol.length, tick: true };
+          break;
+        }
+      }
     }
     // Filled outlines round the text (a solid diamond): part of the symbol, never a leader.
     const filled = dedupe(fillIndex.query(t.cx - r, t.cy - r, t.cx + r, t.cy + r).map((i) => fills[i])).filter(clear);
@@ -133,11 +148,78 @@ export function resolveTags(texts: TagText[], segs: Segment[]): WallTag[] {
         }
       }
     }
+    // A tag written as plain text with an arrow (Dunnville S1-1 "FW-2"): a line from beside the
+    // text, through any bends, to an arrowhead.
+    if (!best) {
+      const path = arrowLeader(t, index, lines, fillIndex, fills);
+      if (path) best = { paths: [path], size: Infinity };
+    }
     const symbol = describeSymbol(outlines, filledGroups.some((g) => g.some((s) => s.color && s.color !== '#ffffff')));
     const extra = symbol ? { symbol } : {};
     if (!best) return { ...t, target: [t.cx, t.cy] as Pt, paths: [], leader: false, ...extra };
     return { ...t, target: best.paths[0][1], paths: best.paths, leader: true, ...(best.tick ? { tick: true } : {}), ...extra };
   });
+}
+
+/**
+ * A leader from beside a tag's text to an arrowhead: it starts within about a letter of the text's
+ * left or right end, near its middle height, leads away from it (a short shoulder, then on), and
+ * ends at a small filled triangle with a corner on its end. Null when there is none: a line merely
+ * passing the text is not one.
+ */
+function arrowLeader(t: TagText, index: SegmentIndex, lines: Segment[], fillIndex: SegmentIndex, fills: Segment[]): Pt[] | null {
+  const reach = Math.max(1.5, t.h * 0.6);
+  const ends: Pt[] = [
+    [t.cx - t.w / 2, t.cy],
+    [t.cx + t.w / 2, t.cy],
+  ];
+  const near = (a: Pt, b: Pt, tol: number) => Math.abs(a[0] - b[0]) <= tol && Math.abs(a[1] - b[1]) <= tol;
+  const len = (s: Segment) => Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+  let best: Pt[] | null = null;
+  for (const e of ends) {
+    for (const i of index.query(e[0] - reach - 1, e[1] - t.h, e[0] + reach + 1, e[1] + t.h)) {
+      const s = lines[i];
+      for (const [a, b] of [
+        [[s.x1, s.y1], [s.x2, s.y2]],
+        [[s.x2, s.y2], [s.x1, s.y1]],
+      ] as [Pt, Pt][]) {
+        // Starts at the text's end, near its middle, and leads away from the text.
+        if (Math.abs(a[0] - e[0]) > reach || Math.abs(a[1] - e[1]) > t.h * 0.8) continue;
+        if (Math.hypot(b[0] - t.cx, b[1] - t.cy) <= Math.hypot(a[0] - t.cx, a[1] - t.cy)) continue;
+        if (len(s) < 1) continue;
+        const path: Pt[] = [a, b];
+        const used = new Set<Segment>([s]);
+        let end: Pt = b;
+        for (let k = 0; k < 6; k++) {
+          const next = index
+            .query(end[0] - 1, end[1] - 1, end[0] + 1, end[1] + 1)
+            .map((j) => lines[j])
+            .find((o) => !used.has(o) && o.width === s.width && len(o) > 1 && (near([o.x1, o.y1], end, 0.3) || near([o.x2, o.y2], end, 0.3)));
+          if (!next) break;
+          used.add(next);
+          end = near([next.x1, next.y1], end, 0.3) ? [next.x2, next.y2] : [next.x1, next.y1];
+          path.push(end);
+        }
+        // Long enough to lead somewhere, and ending at an arrowhead.
+        let L = 0;
+        for (let k = 1; k < path.length; k++) L += Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]);
+        if (L < t.h * 2) continue;
+        const head = fillIndex
+          .query(end[0] - 1, end[1] - 1, end[0] + 1, end[1] + 1)
+          .map((j) => fills[j])
+          .some((f) => (near([f.x1, f.y1], end, 0.8) || near([f.x2, f.y2], end, 0.8)) && len(f) < t.h * 3);
+        if (head && (!best || path.length < best.length)) best = path;
+      }
+    }
+  }
+  return best;
+}
+
+/** The area of the box round some lines. */
+function boxArea(segs: Segment[]): number {
+  const xs = segs.flatMap((s) => [s.x1, s.x2]);
+  const ys = segs.flatMap((s) => [s.y1, s.y2]);
+  return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
 }
 
 /** Names the outlines round a tag's text (see `TagSymbol`). */

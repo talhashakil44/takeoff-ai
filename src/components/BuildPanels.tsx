@@ -36,11 +36,12 @@ export function ModelTree(props: { model: BuildModel; hidden: Set<string>; onHid
   const { model, hidden, onHidden, onPick, onIsolate, picked } = props;
   const [open, setOpen] = useState<Set<string>>(() => new Set(model.levels.slice(0, 1).map((l) => `L:${l.id}`)));
   const [q, setQ] = useState('');
+  const [placement,setPlacement] = useState<'all'|'placed'|'unplaced'>('all');
   const tree = useMemo(() => {
-    const lv = [...model.levels.map((l) => ({ id: l.id, name: l.name })), { id: '', name: 'Not placed' }];
+    const lv = [...model.levels.map((l) => ({ id: l.id, name: l.name })), { id: '', name: 'Unassigned level' }];
     return lv
       .map((l) => {
-        const els = model.elements.filter((e) => (e.level ?? '') === l.id && (!q || `${e.name} ${e.typeName}`.toLowerCase().includes(q.toLowerCase())));
+        const els = model.elements.filter((e) => (e.level ?? '') === l.id && (placement==='all' || (placement==='placed' ? !!e.shape : !e.shape)) && (!q || `${e.name} ${e.typeName}`.toLowerCase().includes(q.toLowerCase())));
         const trades = TRADES.map((t) => {
           const te = els.filter((e) => e.trade === t.key);
           const types = new Map<string, BuildElement[]>();
@@ -50,7 +51,7 @@ export function ModelTree(props: { model: BuildModel; hidden: Set<string>; onHid
         return { l, els, trades };
       })
       .filter((x) => x.els.length);
-  }, [model, q]);
+  }, [model, q, placement]);
   const toggle = (k: string) => {
     const n = new Set(open);
     if (n.has(k)) n.delete(k);
@@ -87,13 +88,18 @@ export function ModelTree(props: { model: BuildModel; hidden: Set<string>; onHid
     <div className="bld-tree">
       <div className="bld-tree-search">
         <Icon name="search" size={13} />
-        <input placeholder="Find an element or type…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input aria-label="Search model elements" placeholder="Find an element or type…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      <select className="bld-placement-filter" aria-label="Geometry placement" value={placement} onChange={e=>setPlacement(e.target.value as typeof placement)}>
+        <option value="all">All elements · {model.elements.length}</option>
+        <option value="placed">With geometry · {model.elements.filter(e=>e.shape).length}</option>
+        <option value="unplaced">Needs placement · {model.elements.filter(e=>!e.shape).length}</option>
+      </select>
       {tree.map(({ l, els, trades }) => {
         const lk = `L:${l.id}`;
         return (
           <div key={lk} className="bld-tree-node">
-            <div className={`bld-tree-row lvl ${picked === lk ? 'on' : ''}`} onClick={() => (toggle(lk), onPick({ kind: 'level', key: lk, ids: els.map((e) => e.id), label: l.name }))} onDoubleClick={() => onIsolate(els.map((e) => e.id))}>
+            <div tabIndex={0} role="button" aria-expanded={open.has(lk)} onKeyDown={ev => { if(ev.target===ev.currentTarget && (ev.key==='Enter'||ev.key===' ')){ev.preventDefault();ev.currentTarget.click();} }} className={`bld-tree-row lvl ${picked === lk ? 'on' : ''}`} onClick={() => (toggle(lk), onPick({ kind: 'level', key: lk, ids: els.map((e) => e.id), label: l.name }))} onDoubleClick={() => onIsolate(els.map((e) => e.id))}>
               <span className={`caret ${open.has(lk) ? 'open' : ''}`}>▸</span>
               <b>{l.name}</b>
               <em>{els.length}</em>
@@ -104,7 +110,7 @@ export function ModelTree(props: { model: BuildModel; hidden: Set<string>; onHid
                 const tk = `${lk}|T:${t.key}`;
                 return (
                   <div key={tk}>
-                    <div className={`bld-tree-row trade ${picked === tk ? 'on' : ''}`} onClick={() => (toggle(tk), onPick({ kind: 'trade', key: tk, ids: te.map((e) => e.id), label: `${t.name} · ${l.name}` }))} onDoubleClick={() => onIsolate(te.map((e) => e.id))}>
+                    <div tabIndex={0} role="button" aria-expanded={open.has(tk)} onKeyDown={ev => { if(ev.target===ev.currentTarget && (ev.key==='Enter'||ev.key===' ')){ev.preventDefault();ev.currentTarget.click();} }} className={`bld-tree-row trade ${picked === tk ? 'on' : ''}`} onClick={() => (toggle(tk), onPick({ kind: 'trade', key: tk, ids: te.map((e) => e.id), label: `${t.name} · ${l.name}` }))} onDoubleClick={() => onIsolate(te.map((e) => e.id))}>
                       <span className={`caret ${open.has(tk) ? 'open' : ''}`}>▸</span>
                       <i style={{ background: t.colour }} />
                       <span className="nm">{t.name}</span>
@@ -115,7 +121,7 @@ export function ModelTree(props: { model: BuildModel; hidden: Set<string>; onHid
                       types.map((ty) => {
                         const yk = `${tk}|Y:${ty[0].typeId}`;
                         return (
-                          <div key={yk} className={`bld-tree-row type ${picked === yk ? 'on' : ''}`} onClick={() => onPick({ kind: 'type', key: yk, ids: ty.map((e) => e.id), label: ty[0].typeName })} onDoubleClick={() => onIsolate(ty.map((e) => e.id))} title={`${ty[0].typeName} — double-click to isolate`}>
+                          <div key={yk} tabIndex={0} role="button" onKeyDown={ev => { if(ev.target===ev.currentTarget && (ev.key==='Enter'||ev.key===' ')){ev.preventDefault();ev.currentTarget.click();} }} className={`bld-tree-row type ${picked === yk ? 'on' : ''}`} onClick={() => onPick({ kind: 'type', key: yk, ids: ty.map((e) => e.id), label: ty[0].typeName })} onDoubleClick={() => onIsolate(ty.map((e) => e.id))} title={`${ty[0].typeName} — double-click to isolate`}>
                             <span className="nm">{ty[0].typeName}</span>
                             <em>{qty(ty)}</em>
                             {eye(ty.map((e) => e.id))}
@@ -222,6 +228,7 @@ export function ElementProperties(props: {
   onIsolate: () => void;
 }) {
   const { e, project, sections, act, t, state, render, onPickAct, onSection, onSource, onFrame, onIsolate } = props;
+  const drawingOnly = e.origin === 'drawing';
   const type = project.types.find((x) => x.id === e.typeId);
   const m = project.measurements.find((x) => x.id === e.measurementId);
   const sheet = project.sheets.find((s) => s.id === e.sheetId);
@@ -237,9 +244,9 @@ export function ElementProperties(props: {
     });
   }, [type, m, sheet, project.units]);
   const sh = e.shape;
-  const lenM = sh?.type === 'run' ? sh.points.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - sh.points[i][0], p[1] - sh.points[i][1]), 0) : 0;
+  const lenM = sh?.type === 'run' || sh?.type === 'axis' ? sh.points.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - sh.points[i][0], p[1] - sh.points[i][1]), 0) : 0;
   const ft = project.units === 'imperial';
-  const L = (mtrs: number) => (ft ? `${fmtN(mtrs / 0.3048)} ft` : `${fmtN(mtrs)} m`);
+  const L = (mtrs: number) => (ft ? `${(mtrs / 0.3048).toLocaleString(undefined, { maximumFractionDigits: 3 })} ft` : `${mtrs.toFixed(3)} m`);
   const secs = e.specs.map((s) => ({ link: s, sec: sections.find((x) => x.key === s.key) }));
   return (
     <div className="bld-props">
@@ -248,10 +255,11 @@ export function ElementProperties(props: {
           {trade?.name}
         </span>
         <h3>{e.name}</h3>
+        {e.origin === 'building' && <p>Building context allowance — excluded from measured takeoff totals.</p>}
         <p className="bld-big">
-          {fmtN(e.quantity)} {e.unit}
-          <span className={`bld-state ${state}`}>{STATE[state]}</span>
+          {drawingOnly ? 'No accepted takeoff' : <>{fmtN(e.quantity)} {e.unit}<span className={`bld-state ${state}`}>{STATE[state]}</span></>}
         </p>
+        {drawingOnly && <p>Drawing-derived geometry. Excluded from takeoff totals, materials and schedule.</p>}
         <div className="bld-props-actions">
           <button onClick={onFrame}>
             <Icon name="fit" size={13} /> Zoom to
@@ -268,11 +276,16 @@ export function ElementProperties(props: {
       </div>
 
       <Group title="From the drawing">
-        <BlowUp el={e} project={project} render={render} onOpen={() => onSource(e.sources[0])} />
+        {drawingOnly ? e.sources.map((source, i) => (
+          <div key={`${source.id}-${source.page}-${i}`} className="bld-spec">
+            <button className="bld-spec-title" onClick={() => onSource(source)}>{source.label} · page {source.page}</button>
+            {source.quote && <p className="bld-excerpt">{source.quote}</p>}
+          </div>
+        )) : <BlowUp el={e} project={project} render={render} onOpen={() => onSource(e.sources[0])} />}
       </Group>
 
       <Group title="Identity">
-        <Prop k="Takeoff type">{e.typeName}</Prop>
+        <Prop k={drawingOnly ? "Drawing mark" : "Takeoff type"}>{e.typeName}</Prop>
         {type?.assemblyTitle && <Prop k="Assembly">{type.assemblyTitle}</Prop>}
         <Prop k="System">{trade?.name}</Prop>
         <Prop k="Division">{e.division || '—'}</Prop>
@@ -285,6 +298,7 @@ export function ElementProperties(props: {
       </Group>
 
       <Group title="Dimensions">
+        {sh?.type === 'axis' && <><Prop k={drawingOnly ? "Plan outline length" : "Span in plan"}>{L(lenM)}</Prop><Prop k="3D display">Plan-only geometry; physical section and elevation require verification</Prop></>}
         {sh?.type === 'run' && (
           <>
             <Prop k="Length">{L(lenM)}</Prop>
@@ -296,24 +310,26 @@ export function ElementProperties(props: {
         )}
         {sh?.type === 'surface' && (
           <>
-            <Prop k="Area">
-              {fmtN(e.quantity)} {e.unit}
-            </Prop>
+            {!drawingOnly && <Prop k="Area">{fmtN(e.quantity)} {e.unit}</Prop>}
             <Prop k="Elevation">{L(sh.z)}</Prop>
             <Prop k="Openings in it">{sh.holes.length}</Prop>
           </>
         )}
         {sh?.type === 'point' && (
           <>
-            <Prop k="Count">1 ea</Prop>
-            <Prop k="Mounting height">{L(sh.z)}</Prop>
+            {!drawingOnly && <Prop k="Count">1 ea</Prop>}
+            <Prop k="Width">{L(sh.size[0])}</Prop>
+            <Prop k="Depth">{L(sh.size[1])}</Prop>
+            <Prop k="Height">{L(sh.size[2])}</Prop>
+            <Prop k="Base elevation">{L(sh.z)}</Prop>
+            <Prop k="Top elevation">{L(sh.z + sh.size[2])}</Prop>
           </>
         )}
         {!sh && <p className="dim small">Not placed in the model.</p>}
         {type && type.height > 0 && <Prop k="Type height">{`${type.height} ${ft ? 'ft' : 'm'}`}</Prop>}
       </Group>
 
-      <Group title="Takeoff and materials">
+      {!drawingOnly && <Group title="Takeoff and materials">
         <Prop k="Quantity">
           {fmtN(e.quantity)} {e.unit}
         </Prop>
@@ -334,7 +350,7 @@ export function ElementProperties(props: {
           <p className="dim small">No materials on this takeoff type.</p>
         )}
         {type?.description && <p className="dim small bld-desc">{type.description}</p>}
-      </Group>
+      </Group>}
 
       <Group title="Specification" extra={<em className="bld-count">{secs.length}</em>}>
         {secs.length === 0 && <p className="dim small">No section linked to this type.</p>}
@@ -365,7 +381,7 @@ export function ElementProperties(props: {
         ))}
       </Group>
 
-      <Group title="Construction">
+      {!drawingOnly && <Group title="Construction">
         {act ? (
           <>
             <Prop k="Built by">
@@ -390,14 +406,14 @@ export function ElementProperties(props: {
         ) : (
           <p className="dim small">Not in the schedule.</p>
         )}
-      </Group>
+      </Group>}
 
       <Group title="Data quality" open={e.issues.length > 0}>
         <Prop k="Place">
           <Badge basis={e.placement} />
         </Prop>
-        <Prop k="Quantity">
-          <Badge basis={m ? 'documented' : 'unknown'} />
+        <Prop k={drawingOnly ? "Acceptance" : "Quantity"}>
+          {drawingOnly ? 'Not accepted takeoff' : <Badge basis={m ? 'documented' : 'unknown'} />}
         </Prop>
         {e.issues.length > 0 && (
           <ul className="bld-warn">
@@ -512,7 +528,7 @@ export function QuantitySchedule(props: { model: BuildModel; onPick: (s: TreeSel
   const levels = model.levels;
   const rows = useMemo(() => {
     const by = new Map<string, BuildElement[]>();
-    for (const e of model.elements) by.set(e.typeId, [...(by.get(e.typeId) ?? []), e]);
+    for (const e of model.elements.filter(e => e.origin !== 'building')) by.set(e.typeId, [...(by.get(e.typeId) ?? []), e]);
     return [...by.values()]
       .map((els) => ({
         typeId: els[0].typeId,

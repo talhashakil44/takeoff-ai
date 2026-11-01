@@ -46,6 +46,8 @@ const pointIn = ([x, y]: Pt, ring: Pt[]) => {
   return inside;
 };
 
+const ringArea = (r: Pt[]) => Math.abs(r.reduce((a, [x, y], i) => a + x * r[(i + 1) % r.length][1] - r[(i + 1) % r.length][0] * y, 0)) / 2;
+
 const upright = (t: PageText) => Math.abs(Math.sin(t.angle ?? 0)) < 0.1;
 
 /**
@@ -54,11 +56,14 @@ const upright = (t: PageText) => Math.abs(Math.sin(t.angle ?? 0)) < 0.1;
  * run on down to the next number.
  */
 export function keynoteList(texts: PageText[]): Keynote[] {
-  const nums = texts.filter((t) => upright(t) && /^\d{1,2}$/.test(t.str.trim()));
+  const nums = texts.filter((t) => upright(t) && /^\d{1,2}$/.test(t.str.trim()) && +t.str.trim() > 0);
+  // The note's words start just right of its number: on its line, or (a number centred on a note
+  // of several lines) a line or two above or below it.
   const withWords = nums
     .map((n) => {
-      const words = texts.filter((o) => o !== n && upright(o) && Math.abs(o.cy - n.cy) < n.h * 0.6 && o.cx - o.w / 2 > n.cx + n.w / 2 && o.cx - o.w / 2 - (n.cx + n.w / 2) < n.h * 9 && /^[A-Z*"(][A-Za-z]/.test(o.str.trim()));
-      return { n, first: words.sort((a, b) => a.cx - b.cx)[0] };
+      const words = texts.filter((o) => o !== n && upright(o) && Math.abs(o.cy - n.cy) < n.h * 2.5 && o.cx - o.w / 2 > n.cx + n.w / 2 && o.cx - o.w / 2 - (n.cx + n.w / 2) < n.h * 9 && /^[A-Z*"(][A-Za-z]/.test(o.str.trim()));
+      const level = words.filter((o) => Math.abs(o.cy - n.cy) < n.h * 0.6).sort((a, b) => a.cx - b.cx)[0];
+      return { n, first: level ?? words.sort((a, b) => Math.abs(a.cy - n.cy) - Math.abs(b.cy - n.cy) || a.cx - b.cx)[0] };
     })
     .filter((x) => x.first && /[A-Za-z]{3}/.test(x.first.str));
   // Columns: numbers whose words start at one left edge.
@@ -69,15 +74,29 @@ export function keynoteList(texts: PageText[]): Keynote[] {
     cols.set(key, [...(cols.get(key) ?? []), x]);
   }
   const out: Keynote[] = [];
-  for (const col of cols.values()) {
+  // The longest list first: a number in both a keynote list and a short legend is the keynote's.
+  for (const all0 of [...cols.values()].sort((a, b) => b.length - a.length)) {
+    // Numbers down one column (not room tags scattered beside their names).
+    const mid = [...all0.map((x) => x.n.cx)].sort((a, b) => a - b)[Math.floor(all0.length / 2)];
+    const col = all0.filter((x) => Math.abs(x.n.cx - mid) <= Math.max(3, x.n.h * 0.6));
     if (col.length < 3) continue;
     col.sort((a, b) => a.n.cy - b.n.cy);
     const left = Math.min(...col.map((x) => x.first.cx - x.first.w / 2));
+    const h = col[0].n.h;
+    const all = texts
+      .filter((o) => upright(o) && Math.abs(o.cx - o.w / 2 - left) <= 3 && o.cy >= col[0].n.cy - h * 6 && o.cy <= col[col.length - 1].n.cy + h * 8)
+      .sort((a, b) => a.cy - b.cy);
+    // Notes set apart by a blank line: each number takes the note it sits beside (its first line
+    // or its middle), so a number centred on its note does not take the next note's first line.
+    const blocks = noteBlocks(all);
+    const owner = (cy: number) => blocks?.filter((b) => cy >= b[0].cy - h * 1.6 && cy <= b[b.length - 1].cy + h * 1.6).sort((a, b) => Math.abs((a[0].cy + a[a.length - 1].cy) / 2 - cy) - Math.abs((b[0].cy + b[b.length - 1].cy) / 2 - cy))[0];
+    const owned = blocks && col.map((x) => owner(x.n.cy));
+    const byBlock = owned && owned.every((b, i) => b && owned.indexOf(b) === i);
     col.forEach((x, i) => {
       const next = col[i + 1]?.n.cy ?? x.n.cy + x.n.h * 6;
-      const lines = texts
-        .filter((o) => upright(o) && Math.abs(o.cx - o.w / 2 - left) <= 3 && o.cy >= x.n.cy - x.n.h * 0.5 && o.cy < next - x.n.h * 0.5 && o.cy - x.n.cy < x.n.h * 6)
-        .sort((a, b) => a.cy - b.cy);
+      const lines = byBlock
+        ? owned![i]!
+        : all.filter((o) => o.cy >= x.n.cy - x.n.h * 0.5 && o.cy < next - x.n.h * 0.5 && o.cy - x.n.cy < x.n.h * 6);
       const text = lines
         .map((l) => l.str.trim())
         .join(' ')
@@ -87,8 +106,24 @@ export function keynoteList(texts: PageText[]): Keynote[] {
     });
   }
   // One note per number: the first list wins (a sheet with two lists keeps both only if their numbers differ).
+  // A note with no words, or only a pointer to other sheets ("Building Elevation, see A300 series
+  // Sheets": a symbol legend's row), is not a note to take off.
   const seen = new Set<string>();
-  return out.filter((k) => (seen.has(k.number) ? false : (seen.add(k.number), true)));
+  return out.filter((k) => k.text && !REFERENCE.test(k.text) && (seen.has(k.number) ? false : (seen.add(k.number), true)));
+}
+
+/** A legend row pointing to other sheets or schedules, with nothing to do. */
+const REFERENCE = /^(?!.*\b(REMOVE|DEMOLISH|DISPOSE|SALVAGE|RELOCATE|PROVIDE|INSTALL|REPLACE)\b)[^.]*\bSEE\b[^.]*\b(SHEETS?|SERIES|SCHEDULES?|A\d{3})\b[^.]*\.?$/i;
+
+/** Lines of a list split into notes at blank lines (a gap over 1.5 times the line pitch); null when no gap splits them. */
+function noteBlocks(lines: PageText[]): PageText[][] | null {
+  if (lines.length < 3) return null;
+  const gaps = lines.slice(1).map((l, i) => l.cy - lines[i].cy);
+  const pitch = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 4)];
+  if (!(pitch > 0)) return null;
+  const blocks: PageText[][] = [[lines[0]]];
+  gaps.forEach((g, i) => (g > pitch * 1.5 ? blocks.push([lines[i + 1]]) : blocks[blocks.length - 1].push(lines[i + 1])));
+  return blocks.length > 1 ? blocks : null;
 }
 
 /** A note removing a room's surface, measured as the room's area: flooring, a ceiling (not a thing hung from one). */
@@ -97,12 +132,20 @@ const AREA = /^(FLOORING|CARPET|[A-Z ]*\bFLOOR (AND BASE|TILE|FINISH)|[A-Z ]*\b(
 /** Whether a sheet is an architectural demolition plan. */
 export const isDemoPlan = (s: Sheet, texts: PageText[]) => {
   if (s.superseded || !s.metersPerPoint || tradeOfNumber(s.name ?? '')) return false;
-  const t = [s.title ?? '', ...drawingTitles(texts).slice(0, 3).map((d) => d.str)].join(' ').toUpperCase();
-  return /\bPLANS?\b/.test(t) && /DEMOLITION|\bDEMO\b|REMOVALS?/.test(t);
+  // Titles, not pointers to other sheets ("For Floor Plan Removals see A200 series Sheets").
+  const t = [s.title ?? '', ...drawingTitles(texts).slice(0, 3).map((d) => d.str)].filter((x) => !/^FOR\b|\bSEE\b/i.test(x)).join(' ').toUpperCase();
+  return /\bPLANS?\b/.test(t) && /DEMOLITION|\bDEMO\b|REMOVALS?/.test(t) && !/\bOBC\b|\bCODE\b|EGRESS|LIFE SAFETY|MATRIX/.test(t);
 };
 
 /** A note removing a wall or partition (not something on one): measured as a length. */
 const WALL_NOTE = { test: (t: string) => /\b(PARTITIONS?|WALLS?)\b/i.test(t) && !/\bWITHIN\b|\bIN WALL|MOUNTED|CLIMBING|TILE|BRACKETS?|BACKSTOP|SCREEN|FIXTURE|DRAIN|OPENING/i.test(t) };
+
+/** What a removal note removes: the words after "Remove (and dispose of) (existing)" up to the first comma, full stop or "c/w". */
+export const removed = (text: string) =>
+  text
+    .replace(/^(DISCONNECT,? )?REMOVE,?( AND DISPOSE( OF)?| STORE AND REINSTALL)?,? (EXISTING )?/i, '')
+    .split(/[,.;]|\bC\/W\b|\bAND (MAKE GOOD|DISPOSE|PREP)\b|\bFROM ABOVE\b/i)[0]
+    .trim();
 
 const SITE_SURFACE = /\b(ASPHALT|PAVEMENT|PAVING|PAVERS?|CONCRETE|GRASS|SOD|SEED|TOPSOIL|GRAVEL|GRANULAR|LANDSCAP\w*|MULCH|PLANTING)\b/i;
 
@@ -162,16 +205,20 @@ export async function automateKeynotes(p: Project, access: SetAccess, maxOpening
           if (demo) {
             const name = `Demo ${n.number}: ${what}`;
             // A wall or partition to remove: measured from the dashed walls it points at (below).
-            if (WALL_NOTE.test(n.text.replace(/^REMOVE AND DISPOSE OF (EXISTING )?|^REMOVE (EXISTING )?/i, ''))) {
+            // What the note removes: its first words ("floor finish c/w base and make good … wall
+            // substrates" removes a floor finish, not a wall).
+            const object = removed(n.text);
+            if (WALL_NOTE.test(object)) {
               wallTags.push({ note: n.number, name, at: t.at });
               continue;
             }
-            if (AREA.test(n.text.replace(/^REMOVE AND DISPOSE OF (EXISTING )?|^REMOVE (EXISTING )?/i, ''))) {
+            if (AREA.test(object)) {
               model ??= buildWallModel(segs, s.metersPerPoint, { maxOpening });
               // A second tag of the note in a room already measured: the same room.
               if (filled.some((f) => f.note === n.number && pointIn(t.at, f.points))) continue;
-              const r = fillRoom(model, [t.at], s.width, s.height);
-              if (r.ok) {
+              const r = fillRoom(model, [t.at], s.width, s.height, 2);
+              // A fill over 120 m² (1,300 SF) has run out through an open doorway into the floor: counted instead.
+              if (r.ok && ringArea(r.points) * s.metersPerPoint! ** 2 <= 120) {
                 filled.push({ note: n.number, points: r.points });
                 added.push({ id: newId(), sheetId: s.id, typeId: typeFor(name, 'area', '02 Existing Conditions', units ? 'm²' : 'SF'), points: r.points, holes: [], source: 'demolition', label: `${n.number}` });
                 continue;
@@ -186,10 +233,10 @@ export async function automateKeynotes(p: Project, access: SetAccess, maxOpening
             added.push({ id: newId(), sheetId: s.id, typeId: typeFor(name, 'count', ['08 Openings', '20-25 Mechanical', '26 Electrical'].includes(guessDivision(n.text) ?? '') ? guessDivision(n.text)! : '10 Specialties', 'ea'), points: [t.at], holes: [], source: 'demolition', label: n.number });
           }
         }
-        // A surface note whose tag sat outside a closed room: the room its other tags measured covers
-        // it; only a note measured nowhere is counted, to measure by hand.
+        // A surface note's tag that no closed room took: counted, to measure by hand.
         for (const f of failed) {
-          if (filled.some((x) => x.note === f.note)) continue;
+          // A tag in a room the note already measured (a second tag, or one on the room's edge) is that room.
+          if (filled.some((x) => x.note === f.note && pointIn(f.at, x.points))) continue;
           unfilled++;
           added.push({ id: newId(), sheetId: s.id, typeId: typeFor(`${f.name} (each, measure by hand)`, 'count', '02 Existing Conditions', 'ea'), points: [f.at], holes: [], source: 'demolition', label: f.note });
         }
@@ -211,7 +258,8 @@ export async function automateKeynotes(p: Project, access: SetAccess, maxOpening
           }
         }
       }
-      if (demo) {
+      // A roof plan's dashed pairs are curbs, parapets and overhead lines, not walls to demolish.
+      if (demo && !/\bROOF\b/.test(heads)) {
         // Walls to demolish: drawn dashed, two lines 3" to 14" (75 to 350 mm) apart.
         const pt = (m: number) => m / s.metersPerPoint!;
         const dashed = dashLines(segs, pt(0.5)).filter((g: Segment) => outside([g.x1, g.y1]));

@@ -291,7 +291,8 @@ export async function automateTrades(p: Project, access: SetAccess): Promise<Tra
   // 2. Lettering the legends use as symbols ("OS" an occupancy sensor, "TR" tamper resistant), counted where written.
   const lettered = new Map<string, { label: string; disc: string }>();
   for (const i of info.values()) {
-    if (i.plan) continue;
+    // A structural legend's lettering marks spans and assemblies ("F1 DENOTES SPAN OF CLT WOOD PANELS"), not items to count.
+    if (i.plan || i.disc === 'S') continue;
     const segs = await segsOf(i.sheet);
     if (!segs) continue;
     const box = titleBlockBox(i.texts, i.sheet.width, i.sheet.height);
@@ -305,11 +306,27 @@ export async function automateTrades(p: Project, access: SetAccess): Promise<Tra
     if (i.plan) continue;
     const d = i.disc === 'P' ? 'M' : i.disc;
     const m = listedBy.get(d) ?? new Map<string, { description: string; light: boolean }>();
-    for (const r of scheduleTags(i.texts)) if (!m.has(r.code)) m.set(r.code, { description: r.description, light: /LIGHT|LUMINAIRE/i.test(r.schedule) });
+    for (const r of scheduleTags(i.texts)) {
+      // Structural wall, floor and roof assemblies are taken as lengths and areas, not counted (Kelso R1, WT-1).
+      if (d === 'S' && /ASSEMBL|\b(WALL|FLOOR|ROOF|SLAB|DECK)S?\b/i.test(r.schedule)) continue;
+      if (!m.has(r.code)) m.set(r.code, { description: r.description, light: /LIGHT|LUMINAIRE/i.test(r.schedule) });
+    }
     listedBy.set(d, m);
   }
   // Mechanical equipment the electrical schedules list for its connections is the mechanical count's.
   for (const code of listedBy.get('M')?.keys() ?? []) if (!listedBy.get('E')?.get(code)?.light) listedBy.get('E')?.delete(code);
+
+  // Codes another takeoff already has on a sheet (the foundation step's F1 pad footings on Kelso
+  // S1.0, a code counted by hand): not counted again here under a legend's other meaning for it.
+  const codeOf = (name: string) => name.split(/\s+[–-]\s+/)[0].trim().replace(/-/g, '').toUpperCase();
+  const typeCode = new Map(p.types.map((t) => [t.id, codeOf(t.name)]));
+  const taken = new Map<string, Set<string>>();
+  for (const m of p.measurements) {
+    if (m.source === 'trades') continue;
+    const c = typeCode.get(m.typeId);
+    if (c) taken.set(m.sheetId, (taken.get(m.sheetId) ?? new Set()).add(c));
+  }
+  const takenOn = (s: Sheet, code: string) => taken.get(s.id)?.has(code.replace(/-/g, '').toUpperCase()) ?? false;
 
   for (const i of info.values()) {
     if (!i.plan || i.status === 'demo') continue;
@@ -337,13 +354,14 @@ export async function automateTrades(p: Project, access: SetAccess): Promise<Tra
       }
       const lt = lettered.get(str);
       if (lt && lt.disc === d) {
+        if (takenOn(s, str)) continue;
         if ((await judge(s, at, Math.max(6, t.h * 3))) !== 'new') continue;
         add(`${lt.label} (${str})`, division, { sheet: s, at, floor: i.floor, remove: false });
         continue;
       }
       for (const { code, at: cat } of codesIn(t, TAG)) {
         const it = listed.get(code);
-        if (!it || it.light || !outside(cat)) continue;
+        if (!it || it.light || !outside(cat) || takenOn(s, code)) continue;
         // A code in a sentence ("CONNECT TO CU-1") is a reference, not the item.
         if (str.split(/\s+/).length > 3) continue;
         if ((await judge(s, cat, Math.max(6, t.h * 3))) !== 'new') continue;

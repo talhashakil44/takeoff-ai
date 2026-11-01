@@ -61,6 +61,28 @@ group('schedules', () => {
     expect(scheduleKind('FAN SCHEDULE')).toBe('other');
   });
 
+  it('reads a one-row schedule under a MARK heading beside another, split at their shared border (Brampton S1.1 PIER SCHEDULE)', () => {
+    const c = (str: string, cx: number, cy: number, h = 6.6): PageText => ({ str, cx, cy, w: str.length * h * 0.6, h });
+    const texts: PageText[] = [
+      c('FOUNDATION WALL SCHEDULE', 722, 1070, 13.2),
+      c('MARK', 595, 1093), c('WALL TYPE', 650, 1093), c('REINFORCING', 748, 1093),
+      c('FW-1', 586, 1104), c('200 CONCRETE', 650, 1104), c('2 - 15M CONT. TOP BARS', 766, 1104),
+      c('FW-2', 586, 1114), c('350 CONCRETE', 650, 1114), c('2 - 15M CONT. TOP BARS', 766, 1114),
+      c('PIER SCHEDULE', 1041.5, 1070, 13.2),
+      c('MARK', 909, 1093), c('SIZE', 942, 1093), c('REINFORCING', 1067, 1093),
+      c('P1', 902, 1104), c('300 x 300 CONCRETE', 971, 1104), c('4 - 15M VERT. BARS', 1077, 1104),
+    ];
+    const segs: Segment[] = [
+      seg(560, 1085, 1190, 1085), seg(560, 1098, 1190, 1098), seg(560, 1120, 1190, 1120),
+      seg(560, 1085, 560, 1120), seg(890, 1080, 890, 1125), seg(1190, 1085, 1190, 1120),
+      seg(615, 1085, 615, 1120), seg(700, 1085, 700, 1120), seg(925, 1085, 925, 1120), seg(1010, 1085, 1010, 1120),
+    ];
+    const read = readSchedules(texts, segs);
+    const pier = read.find((x) => x.title === 'PIER SCHEDULE');
+    expect(pier?.rows.map((r) => r.cells.slice(0, 2))).toEqual([['P1', '300 x 300 CONCRETE']]);
+    expect(read.find((x) => x.title === 'FOUNDATION WALL SCHEDULE')?.rows.map((r) => r.mark)).toEqual(['FW-1', 'FW-2']);
+  });
+
   it('does not take a note pointing at a schedule for one', () => {
     expect(readSchedules([text('PER SCHEDULE', 100, 100), text('D1', 100, 120), text('D2', 100, 140)], [])).toEqual([]);
   });
