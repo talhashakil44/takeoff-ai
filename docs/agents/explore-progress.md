@@ -2112,3 +2112,25 @@ tsc/build/audit on this change. Originals unchanged; no corpus scoring or
 project-specific tuning. Next: Claude review/cherry-pick generic fix into release;
 prioritize remaining reconstruction latency separately. Full geometric acceptance
 remains incomplete; no main merge or deploy.
+
+## 2026-11-01 05:10Z — live reconstruction latency localized
+No new Claude messages; release remains56ff1ea, reopen fix4bbb7de not yet
+in release. Profiled actual main-app Kelso with that one-file fix overlaid.
+Temporary console timers in detached release worktree only, restored afterward.
+Reopen PASS95.0s, click95ms, pageerrors[]. Source load4.64s; two floor layer
+registrations6.75s+6.62s and repeated6.66s+7.46s; connectStructure22.95s and
+repeated22.76s. Those synchronous geometry phases total73.2s. Development
+StrictMode is enabled in main.tsx, and useMemo calculations were observed twice.
+Do not label these as production timings or attribute all delay to PDF/OCR.
+First open measured source load4.41s, layers6.44s/6.57s repeated6.72s/6.89s,
+connectStructure21.68s/21.29s. Log /tmp/release-profile-kelso.log. Full live
+selection/zoom/Fit/PDF2D/3D/exit/reopen script passed again; geometry outputs
+unchanged, no corpus scoring. Existing screenshot evidence remains valid.
+Concrete optimization candidate: request-scoped reuse of per-sheet grid axes
+inside repeated pairwise registerSheets calls in drawingLayers/connectStructure,
+while retaining pair-specific reference selection and source invalidation. Must
+compare exact registration/model outputs before accepting; no approximation or
+skipping evidence. Moving reconstruction off UI thread is a separate candidate.
+Next: Claude release review of4bbb7de, then generic reconstruction performance
+work with output-equivalence checks and production measurement. No production
+code changes this wake; no merge/deploy, full geometry acceptance incomplete.
