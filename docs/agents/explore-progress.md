@@ -1958,3 +1958,26 @@ Two partial strip solids remain with explicit unresolved-coverage labelling.
 This prevents false height propagation; it does not increase qualified coverage.
 Next remains shared detail-source loading and applicable relative-datum chains,
 then source/visual checks across projects and Claude review. T11 not complete.
+
+## 2026-10-31 evening local — signed imperial datum repair (model64)
+Fetched integration3b8a0db; Claude reports ten dev sets52/129, sealed summary2/20
+unchanged. No sealed inputs accessed. Detail-loader fix still absent. Inspected
+original Brampton S1.2 PDF33: exterior detail1 has1200 dimension, interior detail2
+has MIN.1200, door detail5 has separate1200 and200 wall drop; existing-condition
+detail4 references existing footing. Communicated distinct applicability and need
+for dimension endpoints to Claude; never converted minimums into exact heights.
+Independent general datum defect fixed: imperialFeet previously read -1ft6in as
+-0.5ft rather than -1.5ft. Leading minus now applies to entire value including
+negative-zero feet and fractions. Rejects zero-denominator/improper fractions
+and noncanonical inches. Roof-only imperial datum evidence now remains unresolved
+without a floor origin instead of emitting negative infinity. Added four tests,
+including relative basement/ground/roof elevations; model cache version64.
+Dev source/model runners PASS for Dunnville/Williamsburg/Brampton, preserving
+originals. Zero shape/quantity/unit changes versus63; level elevations/bases
+unchanged (Williamsburg sheet-array order differed only). Full689tests PASS,
+typecheck/build PASS. Original-PDF/2D/3D Dunnville views inspected, screenshots
+proofs/dunnville-*-v64.png; browsererrors[]. Existing two partial strips retained.
+These tests cover signed imperial behavior synthetically; no real imperial-project
+accuracy claim. No new qualified geometry coverage claimed. Next: shared detail
+loading and local dimension/reference applicability, plus Claude review. T11
+remains incomplete; no main merge or deploy.

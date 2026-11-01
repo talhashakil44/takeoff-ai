@@ -31,7 +31,7 @@ import type { Basis, BuildEdits, BuildElement, BuildModel, ElementShape, Issue, 
  * unscaled sheet, a sheet whose level isn't known) is listed with the reason and not drawn.
  */
 
-export const MODEL_VERSION = 63;
+export const MODEL_VERSION = 64;
 
 export interface Trade {
   key: string;
