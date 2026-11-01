@@ -2002,3 +2002,23 @@ receive Claude's detail-loader change; schedule matching also needs review for
 same member marks across multiple documents. T11 remains incomplete.
 Final live rerun PASS: originalPDF/plan/3D inspected in proofs/dunnville-*-v65.png,
 browsererrors[]; source panel now retains only local section datum links.
+
+## 2026-10-31 evening local — Claude detail text integrated
+Cherry-picked owner-supplied f7b0ad7 as2810541 (sources.ts and its regression only;
+no engine partial port). Foundation/footing detail text now enters the source
+pipeline. Brampton S1.2/PDF33 loads209 text items and S1.3/PDF34 loads139, previously
+zero. Both still have zero line segments: requested owner enable relevant detail
+linework and address stale cache as needed, so actual dimension extension lines,
+endpoints and panel boundaries can establish applicability. Text loading blocker
+resolved; exact local height linkage remains outstanding.
+Three dev source-to-model runs PASS (Dunnville, Williamsburg, Brampton), original
+preservation asserted, zero shape/quantity/unit deltas from65. Full harness at
+2810541 PASS690tests, tsc/build/audit; no audit pins changed. Original S1.2 rendered
+PDF inspected alongside Brampton live2D overlay and3D. First plan screenshot was
+taken during loading; replaced after awaiting original drawing and selecting F1.
+Final proofs/brampton-{plan,3d}-detail-loaded.png show unresolved structural records
+and original quantities, browsererrors[]. No foundation solids or coverage gain
+claimed; architecture remains inferred. Diagnostic preview files/data are ignored.
+Next: consume dimension-line loading, resolve explicit dimension endpoints against
+local levels/detail references; also review same member marks in multiple documents.
+T11 remains incomplete; no original changes, sealed access, main merge or deploy.
