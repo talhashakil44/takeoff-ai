@@ -275,6 +275,7 @@ export function addBuilding(model: BuildModel, project: Project, ftf: number) {
     : 'new';
   model.floorAreas = {};
   const floors = model.levels.filter((l) => !['roof', 'fdn'].includes(l.id));
+  const rings: Record<string, Pt[]> = {};
   for (const [i, l] of floors.entries()) {
     const els = model.elements.filter((e) => e.level === l.id);
     // The walls drawn on the floor plan close the building where the measured walls leave gaps.
@@ -286,14 +287,15 @@ export function addBuilding(model: BuildModel, project: Project, ftf: number) {
     const boundary = drawnRing
       ? { ring: drawnRing, exact: true, reconstructed: true, sources: [...new Map(drawnWalls.flatMap((e) => e.sources).map((s) => [`${s.id}:${s.page}`, { ...s, box: undefined }])).values()] }
       : measured;
-    // A drawn wall off the floor (on the roof of a lower wing, round an open area) is a parapet or
-    // low wall: a metre high, not a storey.
-    if (boundary?.exact)
+    // A drawn wall off this floor but over the floor below stands on a lower wing's roof: a
+    // parapet or low wall, a metre high, not a storey. (Off both, the outline is what's short.)
+    const below = i > 0 ? rings[floors[i - 1].id] : undefined;
+    if (boundary?.exact && below)
       for (const w of drawnWalls) {
         if (w.shape?.type !== 'run') continue;
         const [a, b] = w.shape.points;
         const mid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-        if (!insideRing(mid, boundary.ring) && ringDistance(mid, boundary.ring) > 0.5) {
+        if (!insideRing(mid, boundary.ring) && ringDistance(mid, boundary.ring) > 0.5 && (insideRing(mid, below) || ringDistance(mid, below) < 0.5)) {
           w.shape.height = Math.min(w.shape.height, 1.1);
           w.name = 'Parapet or low wall (from the floor plan, off this floor)';
         }
@@ -308,6 +310,7 @@ export function addBuilding(model: BuildModel, project: Project, ftf: number) {
     }
     const { ring, exact, reconstructed, unnamed, sources: source } = boundary,
       area = polygonArea(ring);
+    rings[l.id] = ring;
     model.floorAreas[l.id] = area;
     if (unnamed)
       model.issues.push({ id: `outline-unnamed:${l.id}`, severity: 'warning', text: `${l.name}: closed wall chain used as a likely exterior boundary without an exterior label. Confirm against the drawing before relying on its gross area.`, sources: source });
