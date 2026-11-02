@@ -201,6 +201,26 @@ function hull(points: Pt[]): Pt[] {
   };
   return [...half(ps), ...half([...ps].reverse())];
 }
+function insideRing(p: Pt, ring: Pt[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i],
+      [xj, yj] = ring[j];
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function ringDistance(p: Pt, ring: Pt[]): number {
+  let d = Infinity;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i],
+      b = ring[(i + 1) % ring.length];
+    const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+    d = Math.min(d, Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy));
+  }
+  return d;
+}
 /** Recover a closed exterior chain where possible; otherwise explicitly flag a hull allowance. */
 function outline(els: BuildElement[]): { ring: Pt[]; exact: boolean; reconstructed?: boolean; unnamed?: boolean; sources: BuildElement['sources'] } | null {
   const walls = els.filter((e) => e.shape?.type === 'run' && ['partitions', 'structure', 'envelope'].includes(e.trade));
@@ -257,7 +277,27 @@ export function addBuilding(model: BuildModel, project: Project, ftf: number) {
   const floors = model.levels.filter((l) => !['roof', 'fdn'].includes(l.id));
   for (const [i, l] of floors.entries()) {
     const els = model.elements.filter((e) => e.level === l.id);
-    const boundary = outline(els);
+    // The walls drawn on the floor plan close the building where the measured walls leave gaps.
+    const drawnWalls = (model.drawingGeometry ?? []).filter((e) => e.level === l.id && e.id.startsWith('drawing:wall:'));
+    // Measured exterior walls that close give the floor; where they don't (a convex allowance, or
+    // none), the walls drawn on the floor plan close it instead.
+    const measured = outline(els);
+    const drawnRing = (!measured || !measured.exact) && drawnWalls.length >= 4 ? wallFootprint([...drawnWalls, ...els.filter((e) => e.shape?.type === 'run' && ['partitions', 'structure', 'envelope'].includes(e.trade))]) : null;
+    const boundary = drawnRing
+      ? { ring: drawnRing, exact: true, reconstructed: true, sources: [...new Map(drawnWalls.flatMap((e) => e.sources).map((s) => [`${s.id}:${s.page}`, { ...s, box: undefined }])).values()] }
+      : measured;
+    // A drawn wall off the floor (on the roof of a lower wing, round an open area) is a parapet or
+    // low wall: a metre high, not a storey.
+    if (boundary?.exact)
+      for (const w of drawnWalls) {
+        if (w.shape?.type !== 'run') continue;
+        const [a, b] = w.shape.points;
+        const mid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        if (!insideRing(mid, boundary.ring) && ringDistance(mid, boundary.ring) > 0.5) {
+          w.shape.height = Math.min(w.shape.height, 1.1);
+          w.name = 'Parapet or low wall (from the floor plan, off this floor)';
+        }
+      }
     if (!boundary) {
       model.issues.push({
         id: `outline:${l.id}`,

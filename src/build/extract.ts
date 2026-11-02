@@ -8,6 +8,7 @@ import { nearestGridIntersection, gridLocationFailure } from './gridCounts';
 import { existingEquipmentNote, planningExclusion, roofViewEvidence } from './interpret';
 import { doorHostHints, doorSwings, type DoorHostHint, type DoorSwing } from './doorSwings';
 import { drawingFingerprint } from './sources';
+import { isFloorPlan, measuredOver, planWalls } from './drawnWalls';
 import { registerViewportMeasurements, viewportLevels, type ViewportLevel } from './viewports';
 import {
   addBuilding,
@@ -543,13 +544,57 @@ export function extractModel(input: ExtractInput): BuildModel {
       refs: [...gridCountsWithoutPlace.values()].flat(),
     });
 
+  // The walls drawn on each level's floor plan (all of them, measured or not), placed as the
+  // plan's takeoffs are: shown and lifted, never counted (see drawnWalls.ts).
+  const drawn: BuildElement[] = [];
+  for (const l of levels) {
+    if (l.id === 'roof' || l.id === 'fdn') continue;
+    const storeyHeight = (levels.find((x) => x.elevation > l.elevation)?.elevation ?? l.elevation + input.floorToFloor) - l.elevation;
+    const measuredRuns = elements.flatMap((e) => (e.level === l.id && e.shape?.type === 'run' ? [{ points: e.shape.points, thickness: e.shape.thickness }] : []));
+    for (const sid of l.sheets) {
+      const s = sheets.get(sid);
+      const lines = input.drawingLines?.[sid];
+      if (!s || s.superseded || !lines?.length || !isFloorPlan(s) || !placeable(s) || levelOfSheet.get(sid)?.id !== l.id) continue;
+      const k = s.metersPerPoint!;
+      const reg = registration[sid];
+      const [c, sn] = [Math.cos(reg?.rotation ?? 0), Math.sin(reg?.rotation ?? 0)];
+      const transform = (p: [number, number]): [number, number] => [(p[0] * c - p[1] * sn) * k - (reg?.x ?? 0), (p[0] * sn + p[1] * c) * k - (reg?.y ?? 0)];
+      const focus = project.measurements.filter((m) => m.sheetId === sid).flatMap((m) => m.points);
+      planWalls(lines, k, focus).forEach((r, i) => {
+        const a = transform(r.a),
+          b = transform(r.b),
+          thickness = Math.min(0.6, Math.max(0.1, r.thickness * k));
+        if (measuredOver(a, b, thickness, measuredRuns)) return;
+        drawn.push({
+          id: `drawing:wall:${sid}:${i}`,
+          name: 'Wall (from the floor plan)',
+          trade: 'partitions',
+          level: l.id,
+          shape: { type: 'run', points: [a, b], z0: l.elevation, height: storeyHeight, thickness },
+          quantity: 0,
+          unit: units === 'metric' ? 'm' : 'LF',
+          typeId: 'drawing:wall',
+          typeName: 'Wall from the floor plan',
+          division: '',
+          measurementId: '',
+          origin: 'drawing',
+          sheetId: sid,
+          specs: [],
+          sources: [{ kind: 'sheet', id: sid, page: s.page, label: s.name, box: [Math.min(r.a[0], r.b[0]), Math.min(r.a[1], r.b[1]), Math.max(r.a[0], r.b[0]), Math.max(r.a[1], r.b[1])] }],
+          placement: 'inferred',
+          issues: ['Read from the floor plan linework (its paired wall faces), at the storey height. Shown in 3D only: not part of the takeoff or the schedule.'],
+        });
+      });
+    }
+  }
+
   const modelOrigin: [number,number] = Number.isFinite(minX) ? [(minX+maxX)/2,(minY+maxY)/2] : [0,0];
   // Centre what is drawn on the origin.
   if (Number.isFinite(minX)) {
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     const shift = (p: [number, number]): [number, number] => [p[0] - cx, p[1] - cy];
-    for (const e of elements) {
+    for (const e of [...elements, ...drawn]) {
       const sh = e.shape;
       if (!sh) continue;
       if (sh.type === 'run' || sh.type === 'axis') sh.points = sh.points.map(shift);
@@ -600,6 +645,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     elements,
     issues,
     extent: Number.isFinite(minX) ? [minX, minY, maxX, maxY] : [0, 0, 0, 0],
+    ...(drawn.length ? { drawingGeometry: drawn } : {}),
   };
   addBuilding(model, project, input.floorToFloor);
   quarantineDetachedSheets(model, new Set([...Object.keys(registration), ...[...viewportRegistration.keys()].map((id) => project.measurements.find((m) => m.id === id)!.sheetId)]));
