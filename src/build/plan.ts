@@ -65,6 +65,8 @@ const AREA_RATE: Record<string, number> = {
 };
 /** Trades a renovation's floors need whatever the takeoff measured (no new structure or shell). */
 const RENOVATION_AREA_TRADES = new Set(['mech-rough', 'elec-rough', 'partitions', 'ceilings', 'doors', 'painting', 'flooring', 'mech-trim', 'elec-trim']);
+/** The rate a trade's floor-area planning reads from its setup: floor area per crew-day. */
+export const FLOOR_UNIT = { metric: 'm² of floor', imperial: 'SF of floor' } as const;
 /** Foundations: footprint (lowest floor's area) per crew-day. */
 const FOUNDATION_AREA_RATE = 30;
 
@@ -86,6 +88,8 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
     const rates: Record<string, number> = metric ? { m: Math.round(d.LF * 0.3048), 'm²': Math.round(d.SF * 0.0929), ea: d.ea } : { ft: d.LF, SF: d.SF, ea: d.ea };
     if (t.key === 'structure') rates[metric ? 'm³' : 'CY'] = metric ? 8 : 10;
     if (t.key === 'site') rates[metric ? 'm³' : 'CY'] = metric ? 50 : 65;
+    // Floor area a crew covers a day: the least time a floor takes this trade (see AREA_RATE).
+    if (AREA_RATE[t.key]) rates[FLOOR_UNIT[metric ? 'metric' : 'imperial']] = metric ? AREA_RATE[t.key] : Math.round(AREA_RATE[t.key] / 0.09290304);
     trades[t.key] = a({ rates, crews: d.crews, leadDays: d.lead }, 'assumed', t.key === 'structure'
       ? 'Planning allowances: 10 members or 8 m³ of foundation concrete per metric crew-day (10 CY imperial); confirm member complexity, forming, reinforcement and crew size with the trade'
       : t.key === 'elec-rough'
@@ -170,7 +174,13 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     if (trade === 'structure' && l === 'fdn') return !renovation && lowest && model.levels.some((x) => x.id === 'fdn') ? floorArea(lowest.id) : 0;
     return AREA_RATE[trade] ? floorArea(l) : 0;
   };
-  const areaRate = (trade: string, l: string | null) => (trade === 'structure' && l === 'fdn' ? FOUNDATION_AREA_RATE : AREA_RATE[trade]);
+  const floorUnit = FLOOR_UNIT[model.units === 'metric' ? 'metric' : 'imperial'];
+  // The trade's floor rate as set up (m² a crew-day), or the norm.
+  const areaRate = (trade: string, l: string | null) => {
+    if (trade === 'structure' && l === 'fdn') return FOUNDATION_AREA_RATE;
+    const set = setup.trades[trade]?.value.rates[floorUnit];
+    return set && set > 0 ? (model.units === 'metric' ? set : set * 0.09290304) : AREA_RATE[trade];
+  };
   const sqm = (m2: number) => (model.units === 'metric' ? `${Math.round(m2).toLocaleString()} m²` : `${Math.round(m2 / 0.09290304).toLocaleString()} SF`);
   const tradesUsed = TRADES.filter((t) => [...byTL.keys()].some((key) => key.startsWith(`${t.key}|`)) || (t.key === 'elec-rough' && taggedRough.length > 0) || model.levels.some((l) => areaOf(t.key, l.id) > 0));
   const levelName = (l: string | null) => (l ? model.levels.find((x) => x.id === l)?.name ?? l : 'Unplaced (level not known)');
@@ -238,7 +248,7 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
         let crewDays = 0;
         const missing: string[] = [];
         for (const [u, q] of Object.entries(quantities)) {
-          const r = rates[u];
+          const r = u === floorUnit ? 0 : rates[u];
           if (r && r > 0) crewDays += q / r;
           else if (q > 0) missing.push(u);
         }
@@ -247,7 +257,7 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
         const byArea = areaDays > measuredDays;
         const duration = Math.max(measuredDays, areaDays);
         const qty = Object.entries(quantities).map(([u, q]) => `${Math.round(q).toLocaleString()} ${u}`).join(' + ');
-        const areaWhy = `${l === 'fdn' ? 'footprint' : 'floor area'} ${sqm(area)} at ${areaRate(t.key, l)} m² of floor per crew-day (planning norm), ${crews} crew${crews === 1 ? '' : 's'}${workElements.length ? ` · the takeoff measures ${qty}, ${measuredDays} day${measuredDays === 1 ? '' : 's'} of it: part of this trade's work` : ' · not measured in the takeoff'}; set the trade's rate or an allowance in Build setup to change it`;
+        const areaWhy = `${l === 'fdn' ? 'footprint' : 'floor area'} ${sqm(area)} at ${Math.round(areaRate(t.key, l) * 10) / 10} m² of floor per crew-day (planning rate: Crews & rates), ${crews} crew${crews === 1 ? '' : 's'}${workElements.length ? ` · the takeoff measures ${qty}, ${measuredDays} day${measuredDays === 1 ? '' : 's'} of it: part of this trade's work` : ' · not measured in the takeoff'}; set the trade's rate or an allowance in Build setup to change it`;
         const earthwork = id === 'work:site:earthwork';
         const deps: Dependency[] = earthwork
           ? [dep('mobilize', 'Excavation after mobilization')]

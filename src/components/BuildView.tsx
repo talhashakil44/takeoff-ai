@@ -49,6 +49,28 @@ const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+/**
+ * A number box for setup: typing is free (an empty box, a half-typed decimal), and the value is
+ * applied when it reads as a number; it follows the plan's value again once the box is left.
+ */
+function NumberField({ value, min, step, onCommit }: { value: number; min?: number; step?: number; onCommit: (v: number) => void }) {
+  const [text, setText] = useState<string | null>(null);
+  return (
+    <input
+      type="number"
+      min={min}
+      step={step ?? 1}
+      value={text ?? String(value)}
+      onChange={(e) => {
+        setText(e.target.value);
+        const v = Number(e.target.value);
+        if (e.target.value.trim() !== '' && Number.isFinite(v) && (min === undefined || v >= min)) onCommit(v);
+      }}
+      onBlur={() => setText(null)}
+    />
+  );
+}
+
 /** Where the playback is, in weeks (a job under four months) or months: "Week 6 of 14", "Month 3 of 10". */
 const spanLabel = (day: number, total: number) =>
   total <= 85 ? `Week ${Math.max(1, Math.ceil(day / 5))} of ${Math.ceil(total / 5)}` : `Month ${Math.max(1, Math.ceil(day / 21.7))} of ${Math.ceil(total / 21.7)}`;
@@ -886,11 +908,11 @@ function AllowancesForm(props: {
             </b>
             <div>
               <label>
-                <input type="number" min={0} value={a.quantity} onChange={(e) => put(k, { ...a, quantity: Math.max(0, Number(e.target.value) || 0) })} />
+                <NumberField min={0} value={a.quantity} onCommit={(v) => put(k, { ...a, quantity: Math.max(0, v) })} />
                 <input type="text" className="bld-unit" value={a.unit} onChange={(e) => put(k, { ...a, unit: e.target.value })} />
               </label>
               <label>
-                <input type="number" min={0} value={a.rate} onChange={(e) => put(k, { ...a, rate: Math.max(0, Number(e.target.value) || 0) })} /> {a.unit || 'units'}/crew-day
+                <NumberField min={0} value={a.rate} onCommit={(v) => put(k, { ...a, rate: Math.max(0, v) })} /> {a.unit || 'units'}/crew-day
               </label>
               <label className="check">
                 <input type="checkbox" checked={a.provisional} onChange={(e) => put(k, { ...a, provisional: e.target.checked })} /> provisional
@@ -941,12 +963,14 @@ function SetupPanel(props: {
   const basisOf = (k: keyof PlanSetup): Assumption<unknown> | undefined => (setup ? (setup as unknown as Record<string, Assumption<unknown>>)[k] : undefined);
   const set = (k: string, v: unknown, rebuild = false) => onEdit({ ...edits, setup: { ...ed, [k]: v } }, rebuild);
   const fact = (k: SpecFact['key']) => facts?.find((f) => f.key === k);
-  const Row = ({ k, label, unit, rebuild }: { k: keyof PlanSetup; label: string; unit: string; rebuild?: boolean }) => {
+  // A plain function, not a component made here: one made in render is a new type each time,
+  // so its input was remounted (and lost focus) on every keystroke.
+  const row = ({ k, label, unit, rebuild }: { k: keyof PlanSetup; label: string; unit: string; rebuild?: boolean }) => {
     const b = basisOf(k);
     return (
-      <label className="bld-field">
+      <label className="bld-field" key={k}>
         <span>{label}</span>
-        <input type="number" min={0} step={k === 'floorToFloor' ? 0.1 : 1} value={val<number>(k, 0)} onChange={(e) => set(k, Number(e.target.value), rebuild)} />
+        <NumberField min={0} step={k === 'floorToFloor' ? 0.1 : 1} value={val<number>(k, 0)} onCommit={(v) => set(k, v, rebuild)} />
         <em>{unit}</em>
         {b && <Badge basis={(ed as Record<string, unknown>)[k] !== undefined ? 'assumed' : b.basis} />}
         {b?.source && (
@@ -1003,17 +1027,17 @@ function SetupPanel(props: {
             <input type="text" placeholder="2026-12-25, 2027-01-01" defaultValue={val<string[]>('holidays', []).join(', ')} onBlur={(e) => set('holidays', e.target.value.split(/[,\s]+/).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)))} />
           </label>
           <h4>Submittals and reviews</h4>
-          <Row k="submittalPrepDays" label="Preparing submittals" unit="days" />
-          <Row k="reviewDays" label="Consultant review" unit="days" />
+          {row({ k: 'submittalPrepDays', label: 'Preparing submittals', unit: 'days' })}
+          {row({ k: 'reviewDays', label: 'Consultant review', unit: 'days' })}
           {!fact('reviewDays') && facts !== null && <p className="dim small">The specification doesn’t give a review period: this is an assumption.</p>}
-          <Row k="resubmitRounds" label="Resubmissions" unit="rounds" />
-          <Row k="resubmitReviewDays" label="Re-review" unit="days" />
+          {row({ k: 'resubmitRounds', label: 'Resubmissions', unit: 'rounds' })}
+          {row({ k: 'resubmitReviewDays', label: 'Re-review', unit: 'days' })}
           <h4>Site and finish</h4>
-          <Row k="mobilizeDays" label="Mobilization" unit="days" />
-          <Row k="testingDays" label="Testing per trade" unit="days" />
-          <Row k="commissioningDays" label="Commissioning" unit="days" />
-          <Row k="closeoutDays" label="Closeout" unit="days" />
-          <Row k="floorToFloor" label="Floor to floor" unit={metric ? 'm' : 'ft'} rebuild />
+          {row({ k: 'mobilizeDays', label: 'Mobilization', unit: 'days' })}
+          {row({ k: 'testingDays', label: 'Testing per trade', unit: 'days' })}
+          {row({ k: 'commissioningDays', label: 'Commissioning', unit: 'days' })}
+          {row({ k: 'closeoutDays', label: 'Closeout', unit: 'days' })}
+          {row({ k: 'floorToFloor', label: 'Floor to floor', unit: metric ? 'm' : 'ft', rebuild: true })}
           <label className="bld-field check">
             <input type="checkbox" checked={val<boolean>('levelsInParallel', false)} onChange={(e) => set('levelsInParallel', e.target.checked)} />
             <span>A trade may work on more than one level at a time</span>
@@ -1043,14 +1067,14 @@ function SetupPanel(props: {
                     <div>
                       {Object.entries(cur.rates).map(([u, r]) => (
                         <label key={u}>
-                          <input type="number" min={0} value={mine.rates?.[u] ?? r} onChange={(e) => setT({ rates: { ...(mine.rates ?? {}), [u]: Number(e.target.value) } })} /> {u}/day
+                          <NumberField min={0} value={mine.rates?.[u] ?? r} onCommit={(v) => setT({ rates: { ...(mine.rates ?? {}), [u]: v } })} /> {u}/day
                         </label>
                       ))}
                       <label>
-                        <input type="number" min={1} value={mine.crews ?? cur.crews} onChange={(e) => setT({ crews: Math.max(1, Number(e.target.value)) })} /> crews
+                        <NumberField min={1} value={mine.crews ?? cur.crews} onCommit={(v) => setT({ crews: Math.max(1, Math.round(v)) })} /> crews
                       </label>
                       <label>
-                        <input type="number" min={0} value={mine.leadDays ?? cur.leadDays} onChange={(e) => setT({ leadDays: Number(e.target.value) })} /> days lead
+                        <NumberField min={0} value={mine.leadDays ?? cur.leadDays} onCommit={(v) => setT({ leadDays: Math.round(v) })} /> days lead
                       </label>
                     </div>
                   </div>
@@ -1065,7 +1089,7 @@ function SetupPanel(props: {
           {props.levels.map((l) => (
             <label key={l.id} className="bld-field">
               <span>{l.name}</span>
-              <input type="number" step={0.1} value={edits.elevations?.[l.id] ?? Math.round(l.elevation * 100) / 100} onChange={(e) => onEdit({ ...edits, elevations: { ...(edits.elevations ?? {}), [l.id]: Number(e.target.value) } }, true)} />
+              <NumberField step={0.1} value={edits.elevations?.[l.id] ?? Math.round(l.elevation * 100) / 100} onCommit={(v) => onEdit({ ...edits, elevations: { ...(edits.elevations ?? {}), [l.id]: v } }, true)} />
               <em>m elevation</em>
             </label>
           ))}
@@ -1157,11 +1181,11 @@ function ActivityCard(props: {
       <p>{a.durationWhy}</p>
       <div className="bld-edit">
         <label>
-          Days <input type="number" min={0} value={mine.duration ?? a.duration} onChange={(e) => setA({ duration: Number(e.target.value) })} />
+          Days <NumberField min={0} value={mine.duration ?? a.duration} onCommit={(v) => setA({ duration: Math.round(v) })} />
         </label>
         {a.kind === 'work' && (
           <label>
-            Crews <input type="number" min={1} value={mine.crews ?? a.crews ?? 1} onChange={(e) => setA({ crews: Math.max(1, Number(e.target.value)) })} />
+            Crews <NumberField min={1} value={mine.crews ?? a.crews ?? 1} onCommit={(v) => setA({ crews: Math.max(1, Math.round(v)) })} />
           </label>
         )}
         {a.edited && (
