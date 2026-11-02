@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('takeoffDesktop', {
     detect: () => ipcRenderer.invoke('agent:detect'),
     start: (opts) => ipcRenderer.invoke('agent:start', opts),
     stop: () => ipcRenderer.invoke('agent:stop'),
+    signIn: (agent) => ipcRenderer.invoke('agent:signIn', agent),
     running: () => ipcRenderer.invoke('agent:running'),
     onEvent: (fn) => {
       const h = (_e, ev) => fn(ev);

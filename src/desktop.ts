@@ -36,11 +36,15 @@ export interface AgentEvent {
   text: string;
   detail?: string;
   ok?: boolean;
+  /** The agent isn't signed in on this computer. */
+  login?: boolean;
 }
 export interface AgentBridge {
   detect(): Promise<Record<AgentKey, AgentFound>>;
   start(opts: { agent: AgentKey; projectName: string }): Promise<boolean>;
   stop(): Promise<boolean>;
+  /** Opens Terminal on the agent's sign-in. */
+  signIn?(agent: AgentKey): Promise<boolean>;
   running(): Promise<AgentKey | null>;
   onEvent(fn: (ev: AgentEvent) => void): () => void;
 }

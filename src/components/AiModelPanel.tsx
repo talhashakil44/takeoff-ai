@@ -40,7 +40,9 @@ export function AiModelPanel({ projectName, elements, run, onStart, onStop, onCl
     });
   const tools = run.log.filter((e) => e.kind === 'tool').length;
   const last = [...run.log].reverse().find((e) => e.kind === 'text' || e.kind === 'result' || e.kind === 'done');
-  const errors = run.log.filter((e) => e.kind === 'error').slice(-3);
+  const needsLogin = !!run.log.at(-1)?.login;
+  // Signed out: one plain line says so; the raw errors would only repeat it.
+  const errors = needsLogin ? [] : run.log.filter((e) => e.kind === 'error').slice(-3);
 
   return (
     <div className="ai3d" role="dialog" aria-label="Build 3D with AI">
@@ -54,7 +56,7 @@ export function AiModelPanel({ projectName, elements, run, onStart, onStop, onCl
         <section>
           <p className="ai3d-status">
             {run.running ? <span className="ai3d-dot" /> : null}
-            {run.running ? 'Building' : run.log.at(-1)?.ok ? 'Done' : 'Stopped'} · {elements.toLocaleString()} elements · {tools} steps
+            {run.running ? 'Building' : run.log.at(-1)?.ok ? 'Done' : needsLogin ? 'Not signed in' : 'Stopped'} · {elements.toLocaleString()} elements · {tools} steps
           </p>
           {last && <p className="ai3d-said">{last.text.slice(0, 600)}</p>}
           {errors.map((e, i) => (
@@ -75,9 +77,16 @@ export function AiModelPanel({ projectName, elements, run, onStart, onStop, onCl
           </ol>
           {run.running ? (
             <button onClick={onStop}>Stop</button>
+          ) : needsLogin && run.agent && api?.signIn ? (
+            <div className="ai3d-row">
+              <button className="primary" onClick={() => void api.signIn!(run.agent!).catch(() => undefined)}>
+                Sign in
+              </button>
+              <button onClick={() => run.agent && onStart(run.agent)}>Build</button>
+            </div>
           ) : (
             <button onClick={() => run.agent && onStart(run.agent)} disabled={!run.agent}>
-              Carry on building
+              {elements ? 'Carry on building' : 'Build'}
             </button>
           )}
         </section>
