@@ -276,28 +276,36 @@ export function addBuilding(model: BuildModel, project: Project, ftf: number) {
   model.floorAreas = {};
   const floors = model.levels.filter((l) => !['roof', 'fdn'].includes(l.id));
   const rings: Record<string, Pt[]> = {};
+  const built: { level: BuildModel['levels'][number]; ring: Pt[]; area: number; height: number; sources: BuildElement['sources']; glazing: boolean }[] = [];
   for (const [i, l] of floors.entries()) {
     const els = model.elements.filter((e) => e.level === l.id);
     // The walls drawn on the floor plan close the building where the measured walls leave gaps.
     const drawnWalls = (model.drawingGeometry ?? []).filter((e) => e.level === l.id && e.id.startsWith('drawing:wall:'));
+    const planWalls = (model.planWalls ?? []).filter((e) => e.level === l.id);
     // Measured exterior walls that close give the floor; where they don't (a convex allowance, or
     // none), the walls drawn on the floor plan close it instead.
     const measured = outline(els);
-    const drawnRing = (!measured || !measured.exact) && drawnWalls.length >= 4 ? wallFootprint([...drawnWalls, ...els.filter((e) => e.shape?.type === 'run' && ['partitions', 'structure', 'envelope'].includes(e.trade))]) : null;
+    const drawnRing = (!measured || !measured.exact) && planWalls.length >= 4 ? wallFootprint([...planWalls, ...els.filter((e) => e.shape?.type === 'run' && ['partitions', 'structure', 'envelope'].includes(e.trade))]) : null;
     const boundary = drawnRing
-      ? { ring: drawnRing, exact: true, reconstructed: true, sources: [...new Map(drawnWalls.flatMap((e) => e.sources).map((s) => [`${s.id}:${s.page}`, { ...s, box: undefined }])).values()] }
+      ? { ring: drawnRing, exact: true, reconstructed: true, sources: [...new Map(planWalls.flatMap((e) => e.sources).map((s) => [`${s.id}:${s.page}`, { ...s, box: undefined }])).values()] }
       : measured;
-    // A drawn wall off this floor but over the floor below stands on a lower wing's roof: a
-    // parapet or low wall, a metre high, not a storey. (Off both, the outline is what's short.)
     const below = i > 0 ? rings[floors[i - 1].id] : undefined;
-    if (boundary?.exact && below)
-      for (const w of drawnWalls) {
+    if (boundary?.exact)
+      for (const w of [...drawnWalls, ...planWalls]) {
         if (w.shape?.type !== 'run') continue;
         const [a, b] = w.shape.points;
         const mid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-        if (!insideRing(mid, boundary.ring) && ringDistance(mid, boundary.ring) > 0.5 && (insideRing(mid, below) || ringDistance(mid, below) < 0.5)) {
+        const off = ringDistance(mid, boundary.ring);
+        // A drawn wall off this floor but over the floor below stands on a lower wing's roof: a
+        // parapet or low wall, a metre high, not a storey. (Off both, the outline is what's short.)
+        if (below && !insideRing(mid, boundary.ring) && off > 0.5 && (insideRing(mid, below) || ringDistance(mid, below) < 0.5)) {
           w.shape.height = Math.min(w.shape.height, 1.1);
           w.name = 'Parapet or low wall (from the floor plan, off this floor)';
+        } else if (off <= Math.max(0.6, w.shape.thickness)) {
+          // On the floor's outline: the building's outside wall, or (drawn thin, a storefront or
+          // curtain wall's two lines) its glazing.
+          w.trade = 'envelope';
+          w.name = w.shape.thickness <= 0.13 ? 'Glazing (curtain wall or storefront, from the floor plan)' : 'Exterior wall (from the floor plan)';
         }
       }
     if (!boundary) {
@@ -401,6 +409,7 @@ export function addBuilding(model: BuildModel, project: Project, ftf: number) {
           'm²',
         ),
       );
+    built.push({ level: l, ring, area, height, sources: source, glazing: planWalls.length > 0 });
     if (!exact)
       model.issues.push({
         id: `outline:${l.id}`,
@@ -408,6 +417,61 @@ export function addBuilding(model: BuildModel, project: Project, ftf: number) {
         text: `${l.name}: ${Math.round(area)} m² gross area from exterior-wall convex hull. Shell is a planning allowance, not a verified architectural model. Check recesses, slab openings and roof profile.`,
       });
   }
+
+  const context = (id: string, name: string, l: BuildModel['levels'][number], shape: BuildElement['shape'], quantity: number, unit: string, sources: BuildElement['sources'], issue: string): BuildElement => ({
+    id, name, trade: 'envelope', level: l.id, shape, quantity, unit, typeId: `building:${id.split(':').at(-1)}`, typeName: name, division: '', measurementId: '',
+    sheetId: sources[0]?.id ?? '', specs: [], sources, placement: 'assumed', issues: [issue], origin: 'building', status: model.projectType === 'renovation' ? 'existing' : 'new',
+  });
+  for (const [k, f] of built.entries()) {
+    // A floor bigger than the one above has a roof of its own over the rest (a lower wing).
+    const next = built[k + 1];
+    if (next && next.area < f.area * 0.85)
+      model.elements.push(context(`building:${f.level.id}:lowroof`, 'Lower roof (flat outline allowance)', f.level, { type: 'surface', ring: f.ring, holes: [], z: f.level.elevation + f.height + 0.03, thickness: 0.25 }, f.area - next.area, 'm²', f.sources,
+        'Flat roof over the part of this floor the floor above does not cover; slopes and overhangs need review.'));
+    // Where the outside wall drawn on the plan stops along the floor's outline (a storefront, a
+    // curtain wall, an entrance), the gap is glazed: the building view's façade, not a takeoff.
+    if (!f.glazing) continue;
+    const walls = (model.planWalls ?? []).filter((w) => w.level === f.level.id && w.shape?.type === 'run' && !/parapet/i.test(w.name));
+    const perimeter = f.ring.reduce((n, p, j) => n + Math.hypot(f.ring[(j + 1) % f.ring.length][0] - p[0], f.ring[(j + 1) % f.ring.length][1] - p[1]), 0);
+    const gaps: [Pt, Pt][] = [];
+    let covered = 0;
+    for (const [j, a] of f.ring.entries()) {
+      const b = f.ring[(j + 1) % f.ring.length];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (L < 1) continue;
+      const [ux, uy] = [(b[0] - a[0]) / L, (b[1] - a[1]) / L];
+      const spans: [number, number][] = [];
+      for (const w of walls) {
+        if (w.shape?.type !== 'run') continue;
+        const [p, q] = w.shape.points;
+        const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+        if (l < 0.05 || Math.abs(((q[0] - p[0]) / l) * -uy + ((q[1] - p[1]) / l) * ux) > 0.1) continue;
+        const off = (pt: Pt) => Math.abs((pt[0] - a[0]) * -uy + (pt[1] - a[1]) * ux);
+        if (Math.max(off(p), off(q)) > 0.8) continue;
+        const t0 = (p[0] - a[0]) * ux + (p[1] - a[1]) * uy,
+          t1 = (q[0] - a[0]) * ux + (q[1] - a[1]) * uy;
+        spans.push([Math.max(0, Math.min(t0, t1) - 0.1), Math.min(L, Math.max(t0, t1) + 0.1)]);
+      }
+      spans.sort((x, y) => x[0] - y[0]);
+      let at = 0;
+      for (const [s0, s1] of [...spans, [L, L] as [number, number]]) {
+        if (s0 - at >= 0.9) gaps.push([[a[0] + ux * at, a[1] + uy * at], [a[0] + ux * s0, a[1] + uy * s0]]);
+        if (s1 > at) {
+          covered += Math.max(0, s1 - Math.max(at, s0));
+          at = s1;
+        }
+      }
+    }
+    // Only where the drawn walls are most of the outline: otherwise the outline is what's off.
+    if (covered < perimeter * 0.5) continue;
+    for (const [g, [p, q]] of gaps.entries())
+      (model.planWalls ??= []).push({
+        ...context(`shell:glazing:${f.level.id}:${g}`, 'Glazing (opening in the outside wall)', f.level, { type: 'run', points: [p, q], z0: f.level.elevation + 0.05, height: Math.max(2.1, f.height - 0.45), thickness: 0.06 }, 0, 'm', f.sources,
+          'Gap in the outside wall drawn on the floor plan, shown glazed in the building view; not a takeoff.'),
+        origin: 'drawing',
+      });
+  }
+
 }
 
 /** Datum labels paired with adjacent numeric elevations on sections/elevations only. */

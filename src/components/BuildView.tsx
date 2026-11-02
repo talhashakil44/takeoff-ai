@@ -12,7 +12,7 @@ import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Feasibility
 import type { Project } from '../model';
 import type { Place } from '../graph/graph';
 import type { SpecSection } from '../spec/parse';
-import { BuildScene, type ElementState, type ViewCommand } from './BuildScene';
+import { BuildScene, GLASS, type ElementState, type ViewCommand } from './BuildScene';
 import { ElementProperties, GroupProperties, ModelTree, QuantitySchedule, type TreeSel } from './BuildPanels';
 import { Icon } from './Icons';
 
@@ -49,6 +49,9 @@ const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+/** Where the playback is, in weeks (a job under four months) or months: "Week 6 of 14", "Month 3 of 10". */
+const spanLabel = (day: number, total: number) =>
+  total <= 85 ? `Week ${Math.max(1, Math.ceil(day / 5))} of ${Math.ceil(total / 5)}` : `Month ${Math.max(1, Math.ceil(day / 21.7))} of ${Math.ceil(total / 21.7)}`;
 const fmt = (iso: string | null | undefined) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
 
 function Badge({ basis }: { basis: Basis }) {
@@ -72,7 +75,8 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const [hover, setHover] = useState<string | null>(null);
   const [day, setDay] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(10);
+  // Working days a second: a month (21 working days) by default.
+  const [speed, setSpeed] = useState(21);
   const [ghosts, setGhosts] = useState(true);
   const [left, setLeft] = useState<'model' | 'setup'>('setup');
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -89,6 +93,8 @@ export default function BuildView({ project, sections, specText, sheetText, shee
     if (inspectRef.current) inspectRef.current.scrollTop = 0;
   }, [sel?.kind, sel?.id, treeSel?.key]);
   const [workspace, setWorkspace] = useState<'model' | 'sequence'>('model');
+  // The 3D: the building as drawn (walls read from the plans, slabs, roof, glazing), or the takeoff's measured elements.
+  const [view3d, setView3d] = useState<'building' | 'takeoff'>('building');
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [bottom, setBottom] = useState<'schedule' | 'quantities'>('schedule');
@@ -219,7 +225,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const acts = schedule?.activities ?? [];
   const times = schedule?.times ?? {};
   const actById = useMemo(() => new Map(acts.map((a) => [a.id, a])), [acts]);
-  const elById = useMemo(() => new Map([...(model?.elements ?? []), ...(model?.drawingGeometry ?? [])].map((e) => [e.id, e])), [model]);
+  const elById = useMemo(() => new Map([...(model?.elements ?? []), ...(model?.drawingGeometry ?? []), ...(model?.planWalls ?? [])].map((e) => [e.id, e])), [model]);
   const actOfElement = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of acts) for (const id of a.elements) m.set(id, a.id);
@@ -252,17 +258,29 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   }, [playing, speed, end]);
 
   const dayInt = Math.floor(day);
+  // Walls read from the plans and the building's slabs and roof have no takeoff of their own:
+  // they go up with their trade's work on their level.
+  const contextTime = (e: BuildElement) => {
+    const roof = /roof/i.test(e.name) && e.shape?.type === 'surface';
+    const ids = roof
+      ? ['work:envelope:roof-covering', 'work:envelope:roof', `work:envelope:${e.level}`]
+      : e.shape?.type === 'surface'
+        ? [`work:structure:${e.level}`]
+        : [`work:${e.trade}:${e.level}`, `work:partitions:${e.level}`, `work:envelope:${e.level}`, `work:structure:${e.level}`];
+    for (const id of ids) if (times[id]) return times[id];
+    return undefined;
+  };
   const stateOf = (e: BuildElement): ElementState => {
     if (workspace === 'model') return e.status === 'demolished' ? 'gone' : 'done';
     if (e.status === 'existing') return 'existing';
-    const t = times[actOfElement.get(e.id) ?? ''];
+    const t = times[actOfElement.get(e.id) ?? ''] ?? (e.origin === 'drawing' || e.origin === 'building' ? contextTime(e) : undefined);
     if (!t) return 'done';
     const demo = e.trade === 'demolition';
     if (dayInt < t.es) return demo ? 'existing' : 'todo';
     if (dayInt < t.ef) return demo ? 'removing' : 'doing';
     return demo ? 'gone' : 'done';
   };
-  const stateKey = `${workspace}|${colourMode}|${dayInt}|${Object.keys(times).length}|${acts.map((a) => times[a.id]?.es).join(',')}`;
+  const stateKey = `${workspace}|${view3d}|${colourMode}|${dayInt}|${Object.keys(times).length}|${acts.map((a) => times[a.id]?.es).join(',')}`;
 
   const levels = model?.levels ?? [];
   const tradesUsed = useMemo(() => TRADES.filter((t) => model?.elements.some((e) => e.trade === t.key)), [model]);
@@ -272,6 +290,14 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const specMissing = useMemo(() => new Set(sections.filter((s) => s.missing).map((s) => s.key)), [sections]);
   const colourOf = (e: BuildElement): string => {
     if (colourMode === 'material') {
+      if (view3d === 'building') {
+        if (/roof/i.test(e.name) && e.shape?.type === 'surface') return '#3f474f';
+        if (e.opening || /window|glaz|curtain/i.test(e.name)) return GLASS;
+        if (e.shape?.type === 'surface') return '#b9b2a6';
+        if (/parapet/i.test(e.name)) return '#bfb4a3';
+        if (e.trade === 'envelope') return '#cfc3ae';
+        return '#e2ddd3';
+      }
       if (/roof/i.test(e.name) && e.shape?.type === 'surface') return '#586674';
       if (/window|glaz|curtain/i.test(e.name)) return '#91b7c9';
       if (e.shape?.type === 'surface') return e.trade === 'ceilings' ? '#e4e5e0' : '#aeb5b9';
@@ -291,7 +317,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   };
   const tradeOrder = useMemo(() => new Map(TRADES.map((t, i) => [t.key, i])), []);
   const LEGENDS: Record<typeof colourMode, [string, string][]> = {
-    material: [['#d7d4cb','Walls'],['#aeb5b9','Slabs'],['#586674','Roof'],['#91b7c9','Glazing'],['#97b7be','Services']],
+    material: view3d === 'building' ? [['#cfc3ae','Exterior walls'],['#e2ddd3','Interior walls'],['#b9b2a6','Floors'],['#3f474f','Roof'],['#8fb3c7','Glazing']] : [['#d7d4cb','Walls'],['#aeb5b9','Slabs'],['#586674','Roof'],['#91b7c9','Glazing'],['#97b7be','Services']],
     system: tradesUsed.map((t) => [t.colour, t.name]),
     status: [['#3ddc84', 'Has float'], ['#ff9f43', 'Critical path'], ['#ff5f57', 'Can’t make the target']],
     level: levels.map((l, i) => [LEVEL_COLOURS[i % LEVEL_COLOURS.length], l.name]),
@@ -429,15 +455,15 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         )}
         {setupOpen && out && left === 'model' && model && (
           <aside className="bld-left">
-            {(model.drawingGeometry?.length ?? 0) > 0 && <section className="bld-tree" aria-label="Drawing-derived geometry">
-              <strong>From drawings · {model.drawingGeometry!.length}</strong>
-              <p className="dim small">No accepted takeoff · excluded from quantities and schedule</p>
-              {model.drawingGeometry!.map(e => <button key={e.id} className="bld-spec-title" onClick={() => {
+            {(model.drawingGeometry?.length ?? 0) > 0 && <details className="bld-tree" aria-label="Drawing-derived geometry">
+              <summary><strong>From drawings · {model.drawingGeometry!.length}</strong></summary>
+              <p className="dim small">Read from the drawings, not measured · excluded from quantities and schedule</p>
+              {model.drawingGeometry!.slice(0, 300).map(e => <button key={e.id} className="bld-spec-title" onClick={() => {
                 setInspectorOpen(true);
                 setTreeSel(null);
                 setSel({ kind: 'element', id: e.id });
               }}>{e.name}</button>)}
-            </section>}
+            </details>}
             <ModelTree
               model={model}
               hidden={hidden}
@@ -476,6 +502,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
             <>
               <BuildScene
                 model={model}
+                mode={view3d}
                 stateOf={stateOf}
                 stateKey={stateKey}
                 colourOf={colourOf}
@@ -497,6 +524,14 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                 onHover={setHover}
               />
               <div className={`bld-toolbar ${toolsOpen ? "expanded" : ""}`} role="toolbar" aria-label="View">
+                <div className="bld-tg" role="group" aria-label="Show">
+                  <button className={view3d === 'building' ? 'on' : ''} aria-pressed={view3d === 'building'} onClick={() => setView3d('building')} title="The building as drawn: walls read from the floor plans, floors, roof and glazing">
+                    Building
+                  </button>
+                  <button className={view3d === 'takeoff' ? 'on' : ''} aria-pressed={view3d === 'takeoff'} onClick={() => setView3d('takeoff')} title="The takeoff's measured elements, placed in 3D">
+                    Takeoff
+                  </button>
+                </div>
                 <div className="bld-tg" role="group" aria-label="Views">
                   {(
                     [
@@ -564,7 +599,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
               <div className="bld-day">
                 <b>{workspace === 'model' ? 'Building model' : cal ? fmt(cal.date(dayInt)) : ''}</b>
                 <span>
-                  {workspace === 'model' ? `${model.elements.filter(e => e.shape).length.toLocaleString()} represented · ${model.elements.filter(e => !e.shape).length.toLocaleString()} unplaced` : `Day ${dayInt + 1} of ${end} · ${progress}% of work packages complete`}
+                  {workspace === 'model' ? `${model.elements.filter(e => e.shape).length.toLocaleString()} represented · ${model.elements.filter(e => !e.shape).length.toLocaleString()} unplaced` : `${spanLabel(dayInt + 1, end)} · ${progress}% of work packages complete`}
                 </span>
               </div>
               {hoverEl && (
@@ -723,9 +758,10 @@ export default function BuildView({ project, sections, specText, sheetText, shee
               {playing ? '❚❚' : '▶'}
             </button>
             <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))} aria-label="Speed">
-              <option value={5}>5 days/s</option>
-              <option value={10}>10 days/s</option>
-              <option value={25}>25 days/s</option>
+              <option value={5}>1 week / s</option>
+              <option value={10}>2 weeks / s</option>
+              <option value={21}>1 month / s</option>
+              <option value={63}>3 months / s</option>
             </select>
             <input type="range" min={0} max={end} step={1} value={dayInt} onChange={(e) => (setPlaying(false), setDay(Number(e.target.value)))} aria-label="Day" />
             <span className="bld-date">{fmt(cal.date(dayInt))}</span>

@@ -118,6 +118,9 @@ export interface BuildModel {
    * quantity:0, no production, no project type/measurement, and source evidence.
    * Rebuilt from current evidence; never retain stale candidates after withdrawal. */
   drawingGeometry?: BuildElement[];
+  /** Every wall read from the floor plans (measured or not), for the building view: the building
+   * as drawn, apart from the takeoff. Shown only; never counted or scheduled. */
+  planWalls?: BuildElement[];
   /** Model-wide issues: unplaced sheets, levels not found, … */
   issues: Issue[];
   /** Extent of what is drawn, in metres: [minX, minY, maxX, maxY]. */

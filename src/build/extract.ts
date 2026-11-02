@@ -547,6 +547,7 @@ export function extractModel(input: ExtractInput): BuildModel {
   // The walls drawn on each level's floor plan (all of them, measured or not), placed as the
   // plan's takeoffs are: shown and lifted, never counted (see drawnWalls.ts).
   const drawn: BuildElement[] = [];
+  const shell: BuildElement[] = [];
   for (const l of levels) {
     if (l.id === 'roof' || l.id === 'fdn') continue;
     const storeyHeight = (levels.find((x) => x.elevation > l.elevation)?.elevation ?? l.elevation + input.floorToFloor) - l.elevation;
@@ -564,8 +565,7 @@ export function extractModel(input: ExtractInput): BuildModel {
         const a = transform(r.a),
           b = transform(r.b),
           thickness = Math.min(0.6, Math.max(0.1, r.thickness * k));
-        if (measuredOver(a, b, thickness, measuredRuns)) return;
-        drawn.push({
+        const wall: BuildElement = {
           id: `drawing:wall:${sid}:${i}`,
           name: 'Wall (from the floor plan)',
           trade: 'partitions',
@@ -583,7 +583,10 @@ export function extractModel(input: ExtractInput): BuildModel {
           sources: [{ kind: 'sheet', id: sid, page: s.page, label: s.name, box: [Math.min(r.a[0], r.b[0]), Math.min(r.a[1], r.b[1]), Math.max(r.a[0], r.b[0]), Math.max(r.a[1], r.b[1])] }],
           placement: 'inferred',
           issues: ['Read from the floor plan linework (its paired wall faces), at the storey height. Shown in 3D only: not part of the takeoff or the schedule.'],
-        });
+        };
+        // Every wall is in the building view; the takeoff view adds only those not measured.
+        shell.push({ ...wall, id: `shell:wall:${sid}:${i}`, shape: { ...wall.shape!, points: [a, b] } as BuildElement['shape'] });
+        if (!measuredOver(a, b, thickness, measuredRuns)) drawn.push(wall);
       });
     }
   }
@@ -594,7 +597,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     const shift = (p: [number, number]): [number, number] => [p[0] - cx, p[1] - cy];
-    for (const e of [...elements, ...drawn]) {
+    for (const e of [...elements, ...drawn, ...shell]) {
       const sh = e.shape;
       if (!sh) continue;
       if (sh.type === 'run' || sh.type === 'axis') sh.points = sh.points.map(shift);
@@ -646,6 +649,7 @@ export function extractModel(input: ExtractInput): BuildModel {
     issues,
     extent: Number.isFinite(minX) ? [minX, minY, maxX, maxY] : [0, 0, 0, 0],
     ...(drawn.length ? { drawingGeometry: drawn } : {}),
+    ...(shell.length ? { planWalls: shell } : {}),
   };
   addBuilding(model, project, input.floorToFloor);
   quarantineDetachedSheets(model, new Set([...Object.keys(registration), ...[...viewportRegistration.keys()].map((id) => project.measurements.find((m) => m.id === id)!.sheetId)]));
