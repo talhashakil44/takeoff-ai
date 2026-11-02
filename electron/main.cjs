@@ -9,6 +9,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const folder = require('./folder.cjs');
 const mcp = require('./mcp.cjs');
+const agent = require('./agent.cjs');
 
 const DIST = path.join(__dirname, '..', 'dist');
 // Tests run two copies side by side, as two computers, each with its own profile.
@@ -196,13 +197,17 @@ app.whenReady().then(async () => {
   serveApp();
   registerIpc();
   await mcp.setupMcp({ read: readSettings, write: writeSettings });
+  agent.setupAgent(async () => mcp.agentInfo());
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
-app.on('will-quit', () => void mcp.stopMcp());
+app.on('will-quit', () => {
+  agent.stopAgent();
+  void mcp.stopMcp();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

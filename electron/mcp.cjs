@@ -294,4 +294,9 @@ function windowGone() {
   }
 }
 
-module.exports = { setupMcp, stopMcp, windowGone, readPdfFile };
+/** For the agent runner: is the server up, and how its pipe starts. */
+function agentInfo() {
+  return { running: !!server, stdio: stdioCommand() };
+}
+
+module.exports = { setupMcp, stopMcp, windowGone, readPdfFile, agentInfo };

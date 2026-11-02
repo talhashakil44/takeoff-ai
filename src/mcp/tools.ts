@@ -28,6 +28,11 @@ import type { PageText } from '../pageText';
 import type { PDFDocumentProxy, PDFPageProxy } from '../pdf';
 import { measurementVars, primaryOf, primaryUnit, typeTotals } from '../quantities';
 import type { ProjectSummary } from '../storage';
+import type { Segment } from '../fill/vectors';
+import { planWalls } from '../build/drawnWalls';
+import { gridAxes } from '../build/building';
+import { CATEGORIES, MATERIALS, bounds, shapeProblem, type Element3D, type Scene3D, type Shape3D } from '../scene3d/scene';
+import { MODEL_3D_INSTRUCTIONS } from '../scene3d/instructions';
 import { equivalentScale, parseScale } from '../units';
 
 /**
@@ -94,6 +99,12 @@ export interface McpContext {
   drawingGraph?(): Promise<DrawingGraph | null>;
   /** The specification tied to the drawings (sections, and their links to sheets, schedules and tags). */
   projectMap?(): Promise<ProjectMap | null>;
+  /** The linework drawn on a sheet (for reading its walls). */
+  sheetLines?(sheet: Sheet): Promise<Segment[]>;
+  /** A JPEG (base64) of the 3D model from a named view. */
+  snapshot3d?(scene: Scene3D, view: string): Promise<string>;
+  /** Shows the 3D model in Build It. */
+  show3d?(): void;
 }
 
 const text = (t: string, structured?: Record<string, unknown>): ToolResult => ({ content: [{ type: 'text', text: t }], ...(structured ? { structuredContent: structured } : {}) });
@@ -336,6 +347,92 @@ export const TOOL_DEFS: ToolDef[] = [
     description:
       'The project specification read into its sections and tied to the drawings. Links are "written" (one names the other: a section names a sheet or a schedule, a drawing note names a section) or "matched" (about the same thing by their own words: 08100 HOLLOW METAL WORK and the door schedule). Without section: every section (number, title, pages, how many drawing links) plus the gaps: sections listed "To follow" in the table of contents, and drawing items with no spec section. With section (08100 or 22 11 16): its articles, the sections it refers to, and everything on the drawings tied to it with why and where.',
     inputSchema: obj({ section: str('A section number, e.g. 08100 or 22 11 16 (optional)') }),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'model_3d_instructions',
+    title: '3D model: how to build it',
+    description: 'Read this first when asked to build the project\'s 3D model: the workflow, coordinates, shapes, materials and layers the 3D tools use.',
+    inputSchema: obj({}),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'find_walls',
+    title: '3D model: walls and grid on a plan',
+    description:
+      'Reads a floor plan\'s walls (centreline from/to, thickness) from its linework, and its grid bubbles, all in metres from an origin you choose (X east = right on the sheet, Y north = up the sheet). The sheet needs a scale. Check them against get_sheet_image: linework can include furniture or miss walls drawn thin.',
+    inputSchema: obj(
+      {
+        sheet_id: str('A floor plan sheet id'),
+        origin_grid: str('The grid intersection to measure from, e.g. "1/A" (default: the first number and letter grid found)'),
+        origin: { ...point, description: '[x, y] in sheet points to measure from instead of a grid' },
+      },
+      ['sheet_id'],
+    ),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'add_3d_elements',
+    title: '3D model: add elements',
+    description:
+      'Adds elements to the project\'s 3D model (re-using an id replaces that element). Each: {id, name, category, level, material, color?, source, basis, shapes}. Shapes (metres, Z up): {type:"wall", from:[x,y], to:[x,y], thickness, z0, z1, offset?, openings?:[{start, end, sill, head}]}, {type:"slab", polygon:[[x,y],…], z0, z1, slope?:{dzdx, dzdy}}, {type:"box", min:[x,y,z], max:[x,y,z]}, {type:"cylinder", at:[x,y], radius, z0, z1}, {type:"tube", from:[x,y,z], to:[x,y,z], radius}, {type:"cone", at:[x,y], radius, z0, z1}, {type:"sphere", at:[x,y,z], radius}. Send 20–150 per call.',
+    inputSchema: obj(
+      {
+        elements: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            properties: {
+              id: str('Your id'),
+              name: str('What it is'),
+              category: str('Layer', { enum: CATEGORIES.map(([k]) => k) }),
+              level: str('Level name'),
+              material: str('Finish key (see model_3d_instructions) or #rrggbb'),
+              color: str('#rrggbb to override the material colour'),
+              source: str('Sheets it came from'),
+              basis: str('How sure: dimensioned, scaled, assumed: why'),
+              shapes: { type: 'array', minItems: 1, items: { type: 'object' } },
+            },
+            required: ['id', 'name', 'category', 'material', 'shapes'],
+          },
+        },
+      },
+      ['elements'],
+    ),
+  },
+  {
+    name: 'list_3d_model',
+    title: '3D model: list',
+    description: 'The 3D model so far: title, origin, element count by layer and level, extent in metres. With category or level, the elements in it (id, name, material, source).',
+    inputSchema: obj({ category: str('Only this layer'), level: str('Only this level'), with_shapes: { type: 'boolean', description: 'Include each element\'s shapes' } }),
+    annotations: { readOnlyHint: true },
+  },
+  {
+    name: 'remove_3d_elements',
+    title: '3D model: remove elements',
+    description: 'Removes elements from the 3D model by id, or every element whose id starts with prefix.',
+    inputSchema: obj({ ids: { type: 'array', items: { type: 'string' } }, prefix: str('Remove every id starting with this') }),
+    annotations: { destructiveHint: true },
+  },
+  {
+    name: 'clear_3d_model',
+    title: '3D model: start again',
+    description: 'Removes the whole 3D model (the estimator can undo it). The takeoff is not touched.',
+    inputSchema: obj({ confirm: { type: 'boolean', description: 'Must be true' } }, ['confirm']),
+    annotations: { destructiveHint: true },
+  },
+  {
+    name: 'set_3d_model_info',
+    title: '3D model: title and origin',
+    description: 'Names the model and records what its 0,0,0 is on the drawings.',
+    inputSchema: obj({ title: str('e.g. "Dunnville Park Shop"'), origin: str('e.g. "grid 1/A at ground floor FFE 178.30"'), built_by: str('Who built it (e.g. Claude, ChatGPT)') }),
+  },
+  {
+    name: 'view_3d_model',
+    title: '3D model: look at it',
+    description: 'A rendered picture of the 3D model, to check it against the drawings. Views: exterior (south-west), exterior_ne, cutaway (cut 1.8 m above the ground floor), plan (top down, cut), structure, services, site.',
+    inputSchema: obj({ view: str('Which view', { enum: ['exterior', 'exterior_ne', 'cutaway', 'plan', 'structure', 'services', 'site'] }) }),
     annotations: { readOnlyHint: true },
   },
   {
@@ -816,6 +913,173 @@ async function dispatch(ctx: McpContext, name: string, a: Record<string, unknown
         },
       };
       return text(json(out), out);
+    }
+
+    case 'model_3d_instructions':
+      return text(MODEL_3D_INSTRUCTIONS);
+
+    case 'find_walls': {
+      const p = need(ctx);
+      const s = sheetOf(p, a.sheet_id);
+      if (!s.metersPerPoint) throw new ToolError(`${s.name} has no scale yet: set_sheet_scale first.`);
+      if (!ctx.sheetLines) throw new ToolError('This version of the app cannot read linework.');
+      const k = s.metersPerPoint;
+      const lines = await ctx.sheetLines(s);
+      const texts = await ctx.texts(s);
+      const axes = gridAxes(texts.map((t) => ({ str: t.str, cx: t.cx, cy: t.cy, w: t.w, h: t.h, angle: t.angle })), s.width, s.height, undefined, lines);
+      const xs = Object.entries(axes).filter(([, g]) => g.axis === 'x').sort((m, n) => m[1].at - n[1].at);
+      const ys = Object.entries(axes).filter(([, g]) => g.axis === 'y').sort((m, n) => m[1].at - n[1].at);
+      let origin: [number, number] | null = isPoint(a.origin) ? [a.origin[0], a.origin[1]] : null;
+      let originText = origin ? `sheet point [${origin.map((n) => round(n, 1)).join(', ')}]` : '';
+      if (!origin && typeof a.origin_grid === 'string') {
+        const [g1, g2] = a.origin_grid.split(/[/\-, ]+/).map((x) => x.trim().toUpperCase());
+        const gx = axes[g1]?.axis === 'x' ? axes[g1] : axes[g2]?.axis === 'x' ? axes[g2] : null;
+        const gy = axes[g1]?.axis === 'y' ? axes[g1] : axes[g2]?.axis === 'y' ? axes[g2] : null;
+        if (!gx || !gy) throw new ToolError(`Grid ${a.origin_grid} was not found on ${s.name}. Grids found: ${Object.keys(axes).join(', ') || 'none'}.`);
+        origin = [gx.at, gy.at];
+        originText = `grid ${a.origin_grid}`;
+      }
+      if (!origin && xs.length && ys.length) {
+        // The numbered grid nearest the left and the lettered one nearest the bottom, as a plan is usually set out.
+        const vx = xs[0], vy = ys[ys.length - 1];
+        origin = [vx[1].at, vy[1].at];
+        originText = `grid ${vx[0]}/${vy[0]} (the left and bottom grid lines)`;
+      }
+      const focus = p.measurements.filter((m) => m.sheetId === s.id).flatMap((m) => m.points);
+      const runs = planWalls(lines, k, focus);
+      if (!origin) {
+        const all = runs.flatMap((r) => [r.a, r.b]);
+        origin = all.length ? [Math.min(...all.map((q) => q[0])), Math.max(...all.map((q) => q[1]))] : [0, s.height];
+        originText = 'the bottom-left corner of the plan\'s walls (no grid found)';
+      }
+      const toM = (q: [number, number]): [number, number] => [round((q[0] - origin![0]) * k, 3), round(-(q[1] - origin![1]) * k, 3)];
+      const walls = runs.map((r) => ({ from: toM(r.a), to: toM(r.b), thickness: round(Math.min(0.6, Math.max(0.05, r.thickness * k)), 3), length: round(Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]) * k, 2) }));
+      const out = {
+        sheet: s.name,
+        scale: scaleText(s),
+        origin: originText,
+        origin_sheet_point: origin.map((n) => round(n, 1)),
+        metres_per_sheet_point: k,
+        grid_x: Object.fromEntries(xs.map(([lbl, g]) => [lbl, round((g.at - origin![0]) * k, 3)])),
+        grid_y: Object.fromEntries(ys.map(([lbl, g]) => [lbl, round(-(g.at - origin![1]) * k, 3)])),
+        walls,
+        note: 'x east (right on the sheet), y north (up the sheet), metres. Wall from/to are centrelines. Check against get_sheet_image and the printed dimensions.',
+      };
+      return text(json(out), out);
+    }
+
+    case 'add_3d_elements': {
+      need(ctx);
+      const list = Array.isArray(a.elements) ? a.elements : [];
+      if (!list.length) throw new ToolError('elements is required.');
+      const good: Element3D[] = [];
+      const bad: string[] = [];
+      list.forEach((raw, i) => {
+        const e = raw as Record<string, unknown>;
+        const id = typeof e.id === 'string' && e.id.trim() ? e.id.trim() : `el-${Date.now().toString(36)}-${i}`;
+        const shapes = Array.isArray(e.shapes) ? e.shapes : [];
+        const problem = !shapes.length ? 'no shapes' : shapes.map(shapeProblem).find((x) => x);
+        if (problem) return void bad.push(`${id}: ${problem}`);
+        const category = typeof e.category === 'string' && CATEGORIES.some(([k]) => k === e.category) ? e.category : 'interior';
+        const material = typeof e.material === 'string' && (MATERIALS[e.material] || isColor(e.material)) ? e.material : 'concrete';
+        good.push({
+          id,
+          name: typeof e.name === 'string' ? e.name : id,
+          category,
+          level: typeof e.level === 'string' ? e.level : '',
+          material,
+          ...(isColor(e.color) ? { color: e.color } : {}),
+          source: typeof e.source === 'string' ? e.source : '',
+          basis: typeof e.basis === 'string' ? e.basis : '',
+          shapes: shapes as Shape3D[],
+        });
+      });
+      if (good.length) {
+        const ids = new Set(good.map((e) => e.id));
+        const now = new Date().toISOString();
+        ctx.commit((q) => {
+          const prev: Scene3D = q.scene3d ?? { version: 1, title: q.name, origin: '', builtBy: 'AI', updated: now, elements: [] };
+          return { ...q, scene3d: { ...prev, updated: now, elements: [...prev.elements.filter((e) => !ids.has(e.id)), ...good] } };
+        }, '3D model (AI)');
+        ctx.show3d?.();
+      }
+      const total = ctx.project()?.scene3d?.elements.length ?? 0;
+      const msg = `Added ${good.length} element${good.length === 1 ? '' : 's'} (model now ${total}).${bad.length ? `\nNot added (fix and send again):\n${bad.slice(0, 40).join('\n')}${bad.length > 40 ? `\n…and ${bad.length - 40} more` : ''}` : ''}`;
+      return bad.length && !good.length ? fail(msg) : text(msg);
+    }
+
+    case 'list_3d_model': {
+      const p = need(ctx);
+      const m = p.scene3d;
+      if (!m?.elements.length) return text('The 3D model is empty. Read model_3d_instructions, then add_3d_elements.');
+      const pick = m.elements.filter((e) => (!a.category || e.category === a.category) && (!a.level || e.level === a.level));
+      const b = bounds(m.elements);
+      const count = (f: (e: Element3D) => string) => Object.fromEntries([...pick.reduce((acc, e) => acc.set(f(e), (acc.get(f(e)) ?? 0) + 1), new Map<string, number>())]);
+      const out = {
+        title: m.title,
+        origin: m.origin,
+        built_by: m.builtBy,
+        updated: m.updated,
+        elements: m.elements.length,
+        extent_m: b ? { x: [round(b[0]), round(b[3])], y: [round(b[1]), round(b[4])], z: [round(b[2]), round(b[5])] } : null,
+        by_layer: count((e) => e.category),
+        by_level: count((e) => e.level || '(none)'),
+        ...(a.category || a.level
+          ? { list: pick.slice(0, 600).map((e) => ({ id: e.id, name: e.name, material: e.material, level: e.level, source: e.source, ...(a.with_shapes ? { shapes: e.shapes } : {}) })) }
+          : {}),
+      };
+      return text(json(out), out);
+    }
+
+    case 'remove_3d_elements': {
+      const p = need(ctx);
+      const ids = new Set(Array.isArray(a.ids) ? a.ids.filter((x): x is string => typeof x === 'string') : []);
+      const prefix = typeof a.prefix === 'string' && a.prefix ? a.prefix : null;
+      const gone = (e: Element3D) => ids.has(e.id) || (!!prefix && e.id.startsWith(prefix));
+      const n = (p.scene3d?.elements ?? []).filter(gone).length;
+      if (!n) throw new ToolError('No elements with those ids.');
+      ctx.commit((q) => (q.scene3d ? { ...q, scene3d: { ...q.scene3d, updated: new Date().toISOString(), elements: q.scene3d.elements.filter((e) => !gone(e)) } } : q), '3D model (AI)');
+      return text(`Removed ${n} element${n === 1 ? '' : 's'}.`);
+    }
+
+    case 'clear_3d_model': {
+      const p = need(ctx);
+      if (a.confirm !== true) throw new ToolError('Pass confirm: true to remove the whole 3D model.');
+      if (!p.scene3d) return text('There is no 3D model.');
+      ctx.commit((q) => {
+        const { scene3d: _gone, ...rest } = q;
+        return rest;
+      }, '3D model cleared (AI)');
+      return text('The 3D model was removed (undo brings it back).');
+    }
+
+    case 'set_3d_model_info': {
+      need(ctx);
+      const now = new Date().toISOString();
+      ctx.commit((q) => {
+        const prev: Scene3D = q.scene3d ?? { version: 1, title: q.name, origin: '', builtBy: 'AI', updated: now, elements: [] };
+        return {
+          ...q,
+          scene3d: {
+            ...prev,
+            updated: now,
+            ...(typeof a.title === 'string' && a.title.trim() ? { title: a.title.trim() } : {}),
+            ...(typeof a.origin === 'string' ? { origin: a.origin.trim() } : {}),
+            ...(typeof a.built_by === 'string' && a.built_by.trim() ? { builtBy: a.built_by.trim() } : {}),
+          },
+        };
+      }, '3D model (AI)');
+      return text('Saved.');
+    }
+
+    case 'view_3d_model': {
+      const p = need(ctx);
+      if (!p.scene3d?.elements.length) throw new ToolError('The 3D model is empty.');
+      if (!ctx.snapshot3d) throw new ToolError('This version of the app cannot draw the 3D model.');
+      const view = typeof a.view === 'string' ? a.view : 'exterior';
+      ctx.show3d?.();
+      const data = await ctx.snapshot3d(p.scene3d, view);
+      return { content: [{ type: 'image', data, mimeType: 'image/jpeg' }, { type: 'text', text: `${p.scene3d.title}: ${view} view, ${p.scene3d.elements.length} elements.` }] };
     }
 
     case 'undo':

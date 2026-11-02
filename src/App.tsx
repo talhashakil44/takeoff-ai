@@ -67,6 +67,7 @@ import { ChatPanel } from './components/ChatPanel';
 // Build It and its 3D viewer load only when opened.
 const BuildView = lazy(() => import('./components/BuildView'));
 import { runTool, toolList, TOOL_DEFS, type McpContext } from './mcp/tools';
+import type { ModelView } from './scene3d/render';
 import { renderRegion } from './mcp/render';
 import { reviewText, takeOffWholeSet } from './automate/wholeSet';
 import { FolderSync, type PullResult } from './folderSync';
@@ -2765,6 +2766,12 @@ export function App() {
       if (!q) return null;
       return buildProjectMap(g, (q.specs ?? []).flatMap((d) => (d.book ? [d.book] : [])), q.sheets, g?.specRefs ?? [], q.docs);
     },
+    sheetLines: async (s) => {
+      const pdf = pdfsRef.current.get(s.docId);
+      return pdf ? segmentsOf(await pdf.getPage(s.page)) : [];
+    },
+    snapshot3d: async (scene, v) => (await import('./scene3d/render')).snapshot(scene, v as ModelView),
+    show3d: () => setView('build'),
     showTag: (key: string) => {
       const g = graphRef.current?.graph;
       const e = g ? [...entries(g.index).values()].find((x) => x.key === key) : undefined;

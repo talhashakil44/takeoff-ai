@@ -15,6 +15,11 @@ import type { SpecSection } from '../spec/parse';
 import { BuildScene, GLASS, type ElementState, type ViewCommand } from './BuildScene';
 import { ElementProperties, GroupProperties, ModelTree, QuantitySchedule, type TreeSel } from './BuildPanels';
 import { Icon } from './Icons';
+import { ModelScene } from './ModelScene';
+import { AiModelPanel, type AgentRun } from './AiModelPanel';
+import { desktopApi, type AgentKey } from '../desktop';
+import { tradeOf, type Element3D } from '../scene3d/scene';
+import type { ElementState as ModelState } from '../scene3d/render';
 
 /**
  * Build It: the proposed building and the plan to build it, from this project's drawings,
@@ -116,7 +121,26 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   }, [sel?.kind, sel?.id, treeSel?.key]);
   const [workspace, setWorkspace] = useState<'model' | 'sequence'>('model');
   // The 3D: the building as drawn (walls read from the plans, slabs, roof, glazing), or the takeoff's measured elements.
-  const [view3d, setView3d] = useState<'building' | 'takeoff'>('building');
+  const [view3d, setView3d] = useState<'model' | 'building' | 'takeoff'>(project.scene3d?.elements.length ? 'model' : 'building');
+  // Build 3D with AI: a coding agent on the user's own plan builds project.scene3d through the app's tools.
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiRun, setAiRun] = useState<AgentRun>({ agent: null, running: false, log: [] });
+  useEffect(() => {
+    const api = desktopApi?.agent;
+    if (!api) return;
+    void api.running().then((a) => a && setAiRun((r) => ({ ...r, agent: a, running: true })));
+    return api.onEvent((ev) => setAiRun((r) => ({ ...r, running: ev.kind === 'done' ? false : r.running || ev.kind === 'start', log: [...r.log.slice(-400), ev] })));
+  }, []);
+  const startAi = (agent: AgentKey) => {
+    setAiRun({ agent, running: true, log: [] });
+    setView3d('model');
+    void desktopApi?.agent?.start({ agent, projectName: project.name }).catch((e: unknown) => {
+      const text = e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e);
+      setAiRun((r) => ({ ...r, running: false, log: [...r.log, { kind: 'error', text }, { kind: 'done', text: 'Not started.', ok: false }] }));
+    });
+  };
+  const scene3d = project.scene3d?.elements.length || aiRun.running ? project.scene3d ?? { version: 1 as const, title: project.name, origin: '', builtBy: 'AI', updated: '', elements: [] } : null;
+  const showAiModel = view3d === 'model' && !!scene3d;
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [bottom, setBottom] = useState<'schedule' | 'quantities'>('schedule');
@@ -303,6 +327,37 @@ export default function BuildView({ project, sections, specText, sheetText, shee
     return demo ? 'gone' : 'done';
   };
   const stateKey = `${workspace}|${view3d}|${colourMode}|${dayInt}|${Object.keys(times).length}|${acts.map((a) => times[a.id]?.es).join(',')}`;
+
+  // The AI's model in the construction sequence: each element goes up with its trade's work on its level.
+  const stateOf3d = useMemo(() => {
+    if (!out || workspace !== 'sequence') return null;
+    const span = new Map<string, { es: number; ef: number }>();
+    const add = (k: string, t: { es: number; ef: number }) => {
+      const o = span.get(k);
+      span.set(k, o ? { es: Math.min(o.es, t.es), ef: Math.max(o.ef, t.ef) } : { es: t.es, ef: t.ef });
+    };
+    for (const a of acts) {
+      const t = times[a.id];
+      if (!t || a.kind !== 'work' || !a.trade) continue;
+      add(a.trade, t);
+      if (a.level) add(`${a.trade}|${a.level}`, t);
+    }
+    const lv = out.model.levels;
+    const levelId = (name: string) => {
+      const n = name.toLowerCase().trim();
+      if (!n) return null;
+      return lv.find((l) => l.name.toLowerCase() === n || l.id.toLowerCase() === n)?.id ?? lv.find((l) => l.name.toLowerCase().includes(n) || n.includes(l.name.toLowerCase()))?.id ?? null;
+    };
+    return (e: Element3D): ModelState => {
+      if (e.category === 'context') return 'done';
+      const tr = tradeOf(e);
+      const l = e.category === 'foundation' ? 'fdn' : levelId(e.level);
+      const t = (l && span.get(`${tr}|${l}`)) || span.get(tr) || (tr === 'partitions' ? span.get('structure') : undefined);
+      if (!t) return 'done';
+      return dayInt < t.es ? 'todo' : dayInt < t.ef ? 'doing' : 'done';
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [out, workspace, acts, times, dayInt]);
 
   const levels = model?.levels ?? [];
   const tradesUsed = useMemo(() => TRADES.filter((t) => model?.elements.some((e) => e.trade === t.key)), [model]);
@@ -520,11 +575,45 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         )}
 
         <section className="bld-stage">
-          {model ? (
+          {showAiModel && scene3d ? (
+            <>
+              <ModelScene scene={scene3d} stateOf={stateOf3d} stateKey={`${workspace}|${dayInt}`} />
+              <div className="bld-toolbar" role="toolbar" aria-label="View">
+                <div className="bld-tg" role="group" aria-label="Show">
+                  {scene3d && (
+                    <button className={view3d === 'model' ? 'on' : ''} aria-pressed={view3d === 'model'} onClick={() => setView3d('model')} title="The 3D model an AI built from the drawings">
+                      AI model
+                    </button>
+                  )}
+                  {model && (
+                    <>
+                      <button onClick={() => setView3d('building')} title="The building as drawn: walls read from the floor plans, floors, roof and glazing">
+                        Building
+                      </button>
+                      <button onClick={() => setView3d('takeoff')} title="The takeoff's measured elements, placed in 3D">
+                        Takeoff
+                      </button>
+                    </>
+                  )}
+                </div>
+                <div className="bld-tg">
+                  <button className={aiRun.running ? 'on' : ''} onClick={() => setAiOpen(true)} title="Build or carry on the 3D model with Claude or ChatGPT">
+                    {aiRun.running ? 'AI building…' : 'Build 3D with AI'}
+                  </button>
+                </div>
+              </div>
+              {out && workspace === 'sequence' && cal && (
+                <div className="bld-day">
+                  <b>{fmt(cal.date(dayInt))}</b>
+                  <span>{spanLabel(dayInt + 1, end)}</span>
+                </div>
+              )}
+            </>
+          ) : model ? (
             <>
               <BuildScene
                 model={model}
-                mode={view3d}
+                mode={view3d === 'model' ? 'building' : view3d}
                 stateOf={stateOf}
                 stateKey={stateKey}
                 colourOf={colourOf}
@@ -547,11 +636,19 @@ export default function BuildView({ project, sections, specText, sheetText, shee
               />
               <div className={`bld-toolbar ${toolsOpen ? "expanded" : ""}`} role="toolbar" aria-label="View">
                 <div className="bld-tg" role="group" aria-label="Show">
+                  {scene3d && (
+                    <button className={view3d === 'model' ? 'on' : ''} aria-pressed={view3d === 'model'} onClick={() => setView3d('model')} title="The 3D model an AI built from the drawings">
+                      AI model
+                    </button>
+                  )}
                   <button className={view3d === 'building' ? 'on' : ''} aria-pressed={view3d === 'building'} onClick={() => setView3d('building')} title="The building as drawn: walls read from the floor plans, floors, roof and glazing">
                     Building
                   </button>
                   <button className={view3d === 'takeoff' ? 'on' : ''} aria-pressed={view3d === 'takeoff'} onClick={() => setView3d('takeoff')} title="The takeoff's measured elements, placed in 3D">
                     Takeoff
+                  </button>
+                  <button className={aiRun.running ? 'on' : ''} onClick={() => setAiOpen(true)} title="Have Claude or ChatGPT build a detailed 3D model from the drawings">
+                    {aiRun.running ? 'AI building…' : '3D with AI'}
                   </button>
                 </div>
                 <div className="bld-tg" role="group" aria-label="Views">
@@ -644,8 +741,24 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                 {busy ?? (!ready ? (reading ? `Reading the drawings… ${reading.done} of ${reading.of}` : 'Reading the documents…') : 'Build it')}
               </button>
               {!project.measurements.length && <p className="dim">There is no takeoff yet: take off the drawings first.</p>}
+              <p className="dim">
+                Or have an AI build a detailed 3D model straight from the drawings:{' '}
+                <button className="link-button" onClick={() => setAiOpen(true)}>
+                  Build 3D with AI
+                </button>
+              </p>
               {error && <p className="bld-error">{error}</p>}
             </div>
+          )}
+          {aiOpen && (
+            <AiModelPanel
+              projectName={project.name}
+              elements={project.scene3d?.elements.length ?? 0}
+              run={aiRun}
+              onStart={startAi}
+              onStop={() => void desktopApi?.agent?.stop()}
+              onClose={() => setAiOpen(false)}
+            />
           )}
         </section>
 

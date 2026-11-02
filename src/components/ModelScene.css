@@ -1,0 +1,313 @@
+/* The AI-built 3D model: a full-bleed canvas with quiet glass controls over it. */
+.mdl {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #dfe6e8;
+}
+.mdl canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.mdl-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #42505c;
+  font-size: 14px;
+  pointer-events: none;
+}
+.mdl-views,
+.mdl-layers,
+.mdl-inspect {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  background: rgba(250, 250, 247, 0.84);
+  backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: 0 10px 30px rgba(20, 30, 40, 0.18);
+  color: #1d2226;
+  font: 500 12px/1.4 Inter, -apple-system, 'Segoe UI', sans-serif;
+}
+.mdl-views {
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.mdl button {
+  font: inherit;
+  cursor: pointer;
+}
+.mdl-views button {
+  min-height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #36414a;
+}
+.mdl-views button:hover {
+  background: rgba(30, 50, 70, 0.08);
+}
+.mdl-views button.on {
+  background: #1d2226;
+  color: #fff;
+}
+.mdl-cut {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  padding: 0 8px 0 10px;
+  border-left: 1px solid rgba(30, 50, 70, 0.15);
+  color: #55626c;
+}
+.mdl-cut input {
+  width: 96px;
+  accent-color: #e2611b;
+}
+.mdl-cut em,
+.mdl-layers em {
+  font-style: normal;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  color: #6b7780;
+}
+.mdl-cut em {
+  min-width: 48px;
+}
+.mdl-layers {
+  right: 12px;
+  top: 64px;
+  min-width: 150px;
+  max-height: calc(100% - 150px);
+  overflow: auto;
+}
+.mdl-layers-head {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-weight: 600 !important;
+}
+.mdl-layers ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 6px 6px;
+}
+.mdl-layers label {
+  display: grid;
+  grid-template-columns: auto 10px 1fr auto;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.mdl-layers label:hover {
+  background: rgba(30, 50, 70, 0.06);
+}
+.mdl-layers i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.mdl-inspect {
+  right: 12px;
+  bottom: 64px;
+  width: min(320px, calc(100% - 24px));
+  padding: 12px 14px;
+}
+.mdl-inspect h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.mdl-inspect dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0 0 10px;
+}
+.mdl-inspect dt {
+  color: #6b7780;
+}
+.mdl-inspect dd {
+  margin: 0;
+}
+.mdl-inspect button {
+  padding: 5px 12px;
+  border: 1px solid rgba(30, 50, 70, 0.2);
+  border-radius: 7px;
+  background: #fff;
+}
+.mdl-credit {
+  position: absolute;
+  left: 12px;
+  bottom: 18px;
+  max-width: calc(50% - 350px);
+  color: rgba(29, 34, 38, 0.6);
+  font: 500 10.5px Inter, sans-serif;
+  pointer-events: none;
+}
+@media (max-width: 1400px) {
+  .mdl-credit {
+    display: none;
+  }
+}
+
+/* Build 3D with AI */
+.ai3d {
+  position: absolute;
+  top: 60px;
+  right: 12px;
+  z-index: 5;
+  width: min(380px, calc(100% - 24px));
+  max-height: calc(100% - 80px);
+  overflow: auto;
+  border: 1px solid rgba(140, 170, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(14, 19, 30, 0.94);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  color: #dfe5fb;
+  font: 400 12.5px/1.5 Inter, -apple-system, 'Segoe UI', sans-serif;
+}
+.ai3d header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 4px;
+  font-size: 14px;
+}
+.ai3d section {
+  padding: 4px 14px 14px;
+}
+.ai3d p {
+  margin: 6px 0 10px;
+  color: #b9c3e3;
+}
+.ai3d button {
+  padding: 6px 12px;
+  border: 1px solid rgba(140, 170, 255, 0.25);
+  border-radius: 8px;
+  background: rgba(140, 170, 255, 0.08);
+  color: #e8edff;
+  font: 600 12px Inter, sans-serif;
+  cursor: pointer;
+}
+.ai3d button.primary {
+  background: #e2611b;
+  border-color: #e2611b;
+  color: #fff;
+}
+.ai3d button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ai3d .ai3d-x {
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  font-size: 18px;
+}
+.ai3d-agents {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.ai3d-agent {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(140, 170, 255, 0.14);
+  border-radius: 10px;
+}
+.ai3d-agent > div {
+  display: grid;
+}
+.ai3d-agent span {
+  color: #8fa0cc;
+  font-size: 11.5px;
+}
+.ai3d details summary {
+  cursor: pointer;
+  color: #9cc8ff;
+}
+.ai3d code {
+  display: block;
+  margin: 4px 0;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  font: 11px 'JetBrains Mono', ui-monospace, monospace;
+  user-select: all;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.ai3d textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #dfe5fb;
+  font: 11.5px/1.45 Inter, sans-serif;
+}
+.ai3d-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff !important;
+  font-weight: 600;
+}
+.ai3d-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3ddc84;
+  animation: ai3d-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ai3d-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai3d-dot {
+    animation: none;
+  }
+}
+.ai3d-said {
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.ai3d-err {
+  color: #ff9b8f !important;
+}
+.ai3d-log {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  color: #8fa0cc;
+  font: 11px 'JetBrains Mono', ui-monospace, monospace;
+}
+.ai3d-log em {
+  font-style: normal;
+  color: #6f80aa;
+}

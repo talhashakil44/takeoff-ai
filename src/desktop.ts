@@ -19,6 +19,30 @@ export interface DesktopApi extends FolderApi {
   embed?(url: string, key: string, body: unknown): Promise<{ status: number; body: string }>;
   /** The MCP server AI apps connect to (electron/mcp.cjs); absent in older builds. */
   mcp?: McpBridge;
+  /** Coding agents on the user's own plan, run by the app; absent in older builds. */
+  agent?: AgentBridge;
+}
+
+export type AgentKey = 'claude' | 'codex';
+export interface AgentFound {
+  label: string;
+  plan: string;
+  install: string;
+  installed: boolean;
+  path: string | null;
+}
+export interface AgentEvent {
+  kind: 'start' | 'text' | 'tool' | 'error' | 'result' | 'done';
+  text: string;
+  detail?: string;
+  ok?: boolean;
+}
+export interface AgentBridge {
+  detect(): Promise<Record<AgentKey, AgentFound>>;
+  start(opts: { agent: AgentKey; projectName: string }): Promise<boolean>;
+  stop(): Promise<boolean>;
+  running(): Promise<AgentKey | null>;
+  onEvent(fn: (ev: AgentEvent) => void): () => void;
 }
 
 export interface McpInfo {
