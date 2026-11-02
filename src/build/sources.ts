@@ -7,6 +7,7 @@ import type { PageText } from '../pageText';
 import type { Segment } from '../fill/vectors';
 import type { DrawingText, DrawingTexts } from './building';
 import type { DrawingLines } from './roof';
+import { isFloorPlan } from './drawnWalls';
 
 /**
  * The drawing evidence Build It reads (sheet text and elevation linework): which sheets it
@@ -55,9 +56,10 @@ export function structuralSheets(project: Pick<Project, 'sheets' | 'measurements
   );
 }
 
-/** Measured plans whose linework the model reads: door plans and structural plans. */
+/** Plans whose linework the model reads: door plans, structural plans and floor plans. */
 export function linePlans(project: Pick<Project, 'sheets' | 'measurements'> & { types?: Project['types'] }): Set<string> {
-  return new Set([...doorSheets(project), ...structuralSheets(project)]);
+  // And every architectural floor plan: its walls are read for the model (drawnWalls.ts).
+  return new Set([...doorSheets(project), ...structuralSheets(project), ...project.sheets.filter((s) => !s.superseded && isFloorPlan(s)).map((s) => s.id)]);
 }
 
 /**

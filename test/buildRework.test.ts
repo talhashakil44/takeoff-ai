@@ -121,7 +121,7 @@ describe('building and full-scope rework', () => {
     texts.section.push({ str: 'FIN. SECOND FLOOR', cx: 200, cy: 300 }, { str: '4500', cx: 130, cy: 300 });
     expect(levelDatums(p, texts).L2).toBeUndefined();
   });
-  it('adds shell context without inventing floor trades or procurement', () => {
+  it('adds shell context and plans the trades every floor needs from its area', () => {
     const i = input(),
       before = JSON.stringify(i.project),
       b = buildAll(i);
@@ -138,7 +138,10 @@ describe('building and full-scope rework', () => {
     expect(ids).toContain('work:envelope:L1');
     expect(ids).toContain('work:doors:L1');
     expect(ids).toContain('closeout');
-    expect(ids).not.toContain('work:mech-rough:L1');
+    // Not measured, but the floors need it: planned from the floor area, and said so.
+    const mech = b.schedule.activities.find((a) => a.id === 'work:mech-rough:L1')!;
+    expect(mech).toMatchObject({ durationBasis: 'assumed', elements: [], duration: Math.ceil(800 / 30) });
+    expect(mech.durationWhy).toContain('not measured in the takeoff');
     expect(ids).not.toContain('longlead:switchgear');
     expect(ids.some((id) => id.startsWith('scope:'))).toBe(false);
     expect(b.schedule.issues.some((i) => i.id === 'loop')).toBe(false);
@@ -164,8 +167,8 @@ describe('building and full-scope rework', () => {
       b = buildAll(i),
       setup = applySetupEdits(b.setup, { setup: { target: '2026-11-10' } });
     const fast = replan(b.model, setup, i).schedule;
-    expect(fast.feasibility.changes).toEqual([]);
-    expect(fast.feasibility.earliestFinish).toBe(b.schedule.feasibility.earliestFinish);
+    // Floor-area work can take more crews to chase the target; the baseline is still the lean plan.
+    expect(fast.feasibility.earliestFinish <= b.schedule.feasibility.earliestFinish).toBe(true);
     expect(fast.feasibility.baselineFinish).toBe(b.schedule.feasibility.earliestFinish);
     expect(fast.activities.find((a) => a.id === 'proc:envelope')!.duration).toBe(
       b.schedule.activities.find((a) => a.id === 'proc:envelope')!.duration,

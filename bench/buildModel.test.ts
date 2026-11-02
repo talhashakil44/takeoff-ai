@@ -66,14 +66,30 @@ it.skipIf(!root)(
         expect(out.schedule.activities.find((a) => a.id === 'work:envelope:roof-covering')).toMatchObject({ duration: 14, durationBasis: 'inferred' });
         expect(out.scopeSuggestions.some((s) => s.key === 'envelope')).toBe(false);
         const withoutDerivedRoof = replan({ ...out.model, roofPlan: undefined }, out.setup, input).schedule;
-        expect(withoutDerivedRoof.feasibility.earliestFinish).toBe('2027-09-01');
-        expect(out.schedule.feasibility.earliestFinish).toBe('2027-09-21');
+        expect(withoutDerivedRoof.feasibility.earliestFinish).toBe('2027-10-07');
+        expect(out.schedule.feasibility.earliestFinish).toBe('2027-10-27');
         const slabs = out.model.elements
           .filter((e) => e.origin === 'building' && e.id.endsWith(':slab'))
           .map((e) => e.shape)
           .filter((s) => s?.type === 'surface');
         const mid = (r: [number, number][]) => [0, 1].map((i) => (Math.min(...r.map((p) => p[i])) + Math.max(...r.map((p) => p[i]))) / 2);
-        expect(Math.hypot(...mid(slabs[0]!.ring).map((n, i) => n - mid(slabs[1]!.ring)[i]))).toBeLessThan(1);
+        // The two floors stand over each other (the second floor's plan is the smaller one; its
+        // mechanical deck reaches a few metres past the ground floor's wall).
+        expect(Math.hypot(...mid(slabs[0]!.ring).map((n, i) => n - mid(slabs[1]!.ring)[i]))).toBeLessThan(2);
+        const span = (r: [number, number][], i: number) => [Math.min(...r.map((p) => p[i])), Math.max(...r.map((p) => p[i]))];
+        for (const i of [0, 1]) {
+          const [lo0, hi0] = span(slabs[0]!.ring, i), [lo1, hi1] = span(slabs[1]!.ring, i);
+          expect(lo1).toBeGreaterThan(lo0 - 3.5);
+          expect(hi1).toBeLessThan(hi0 + 3.5);
+        }
+        // The ground floor is square to its walls: no edge leans off the building's axes.
+        for (const [k, p] of slabs[0]!.ring.entries()) {
+          const q = slabs[0]!.ring[(k + 1) % slabs[0]!.ring.length];
+          const lean = (Math.atan2(q[1] - p[1], q[0] - p[0]) * 180) / Math.PI;
+          if (Math.hypot(q[0] - p[0], q[1] - p[1]) > 3) expect(Math.abs(((lean % 90) + 90) % 90 - 45)).toBeGreaterThan(40);
+        }
+        // The walls drawn on the floor plans are in the model, as drawing geometry.
+        expect(out.model.drawingGeometry?.filter((e) => e.id.startsWith('drawing:wall:')).length).toBeGreaterThan(20);
         const roof = out.model.elements.find((e) => e.id.endsWith(':roof'))!.shape;
         expect(roof?.type === 'surface' && roof.slope).toBeTruthy();
         if (roof?.type === 'surface')

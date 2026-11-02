@@ -2,6 +2,11 @@ import { geometryOf } from '../build/sceneGeometry';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { BuildElement, BuildModel } from '../build/types';
 
 /**
@@ -14,6 +19,8 @@ import type { BuildElement, BuildModel } from '../build/types';
  */
 
 type RenderState = ElementState | 'source';
+/** The colour that draws as glass. */
+export const GLASS = '#8fb3c7';
 export type ElementState = | 'todo' | 'doing' | 'done' | 'existing' | 'removing' | 'gone';
 /**
  * Where the camera goes to show a box filling the view, looking along -dir: far enough that
@@ -56,6 +63,8 @@ export type ViewCommand = { kind: 'iso' | 'top' | 'front' | 'side' | 'frame'; n:
 
 interface Props {
   model: BuildModel;
+  /** The building as drawn (walls read from the plans, floors, roof, glazing), or the takeoff's elements. */
+  mode?: 'building' | 'takeoff';
   /** Each element's state on the day shown. */
   stateOf: (e: BuildElement) => ElementState;
   /** Each element's colour in the current colour mode. */
@@ -84,6 +93,7 @@ interface Props {
 
 interface Item {
   mesh: THREE.Mesh;
+  edges?: THREE.LineSegments;
   el: BuildElement;
   state?: RenderState;
   colour?: string;
@@ -124,59 +134,81 @@ export function BuildScene(props: Props) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 0.92;
     el.appendChild(renderer.domElement);
     const s = new THREE.Scene();
-    // A studio sky: dark at the top, a lift at the horizon.
+    // Daylight: a soft sky, bright at the horizon.
     const sky = document.createElement('canvas');
     sky.width = 2;
     sky.height = 256;
     const sx = sky.getContext('2d')!;
     const grad = sx.createLinearGradient(0, 0, 0, 256);
-    grad.addColorStop(0, '#202b36');
-    grad.addColorStop(0.65, '#293642');
-    grad.addColorStop(1, '#3a4854');
+    grad.addColorStop(0, '#6f93b6');
+    grad.addColorStop(0.6, '#b9cad8');
+    grad.addColorStop(1, '#e3e5e1');
     sx.fillStyle = grad;
     sx.fillRect(0, 0, 2, 256);
-    s.background = new THREE.CanvasTexture(sky);
+    const skyTexture = new THREE.CanvasTexture(sky);
+    skyTexture.colorSpace = THREE.SRGBColorSpace;
+    s.background = skyTexture;
+    // Soft reflections and fill from a studio environment.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    s.environment = environment;
+    s.environmentIntensity = 0.3;
     const [x0, y0, x1, y1] = model.extent;
     const span = Math.max(20, x1 - x0, y1 - y0);
     const centerX = (x0 + x1) / 2, centerY = (y0 + y1) / 2;
-    s.fog = new THREE.Fog('#293642', span * 3, span * 9);
-    const camera = new THREE.PerspectiveCamera(38, el.clientWidth / el.clientHeight, 0.3, span * 20);
+    s.fog = new THREE.Fog('#dfe3e3', span * 4, span * 12);
+    const camera = new THREE.PerspectiveCamera(35, el.clientWidth / el.clientHeight, 0.3, span * 30);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.screenSpacePanning = true;
     controls.maxPolarAngle = Math.PI * 0.495;
-    s.add(new THREE.HemisphereLight('#e6eeff', '#1c2233', 0.9));
-    const sun = new THREE.DirectionalLight('#fff4e6', 1.8);
-    sun.position.set(centerX + span * 0.6, span * 1.2, centerY + span * 0.4);
+    s.add(new THREE.HemisphereLight('#dfe8f5', '#8f8676', 0.45));
+    // The sun, low enough from the south-west to model the walls, its shadows fitted to the building.
+    const sun = new THREE.DirectionalLight('#ffe9cc', 2.4);
+    sun.position.set(centerX - span * 0.75, span * 0.85, centerY + span * 0.3);
     sun.target.position.set(centerX, 0, centerY);
     s.add(sun.target);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(4096, 4096);
     const sc = sun.shadow.camera as THREE.OrthographicCamera;
-    sc.left = -span;
-    sc.right = span;
-    sc.top = span;
-    sc.bottom = -span;
+    sc.left = -span * 0.9;
+    sc.right = span * 0.9;
+    sc.top = span * 0.9;
+    sc.bottom = -span * 0.9;
+    sc.near = 0.5;
     sc.far = span * 4;
-    sun.shadow.bias = -0.0005;
+    sun.shadow.bias = -0.0002;
+    sun.shadow.normalBias = 0.03;
+    sun.shadow.radius = 3;
     s.add(sun);
-    const fill = new THREE.DirectionalLight('#9fb8ff', 0.5);
-    fill.position.set(-span, span * 0.5, -span * 0.6);
-    s.add(fill);
-    // Ground: a shadow catcher and a fine grid.
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(span * 6, span * 6), new THREE.ShadowMaterial({ opacity: 0.35 }));
+    // Ground: a light site, catching the shadows, with a faint metre grid.
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(span * 8, 64), new THREE.MeshStandardMaterial({ color: '#bdb8ab', roughness: 1, metalness: 0 }));
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(centerX, -0.03, centerY);
+    ground.position.set(centerX, -0.05, centerY);
     ground.receiveShadow = true;
     s.add(ground);
-    const grid = new THREE.GridHelper(Math.ceil(span * 3), Math.ceil((span * 3) / 2), '#45515c', '#303d48');
+    const grid = new THREE.GridHelper(Math.ceil(span * 3), Math.ceil(span * 3), '#a49e90', '#aea89a');
     grid.position.set(centerX, -0.04, centerY);
-    for (const material of Array.isArray(grid.material) ? grid.material : [grid.material]) { material.transparent=true; material.opacity=.18; }
+    for (const material of Array.isArray(grid.material) ? grid.material : [grid.material]) { material.transparent=true; material.opacity=.22; }
     s.add(grid);
+    // Ambient occlusion: the corners and the meeting of wall and floor read as a model does.
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(s, camera));
+    let gtao: GTAOPass | null = null;
+    try {
+      gtao = new GTAOPass(s, camera, el.clientWidth, el.clientHeight);
+      gtao.blendIntensity = 1;
+      gtao.updateGtaoMaterial({ radius: Math.max(0.6, span * 0.012), distanceExponent: 1.5, thickness: 1, scale: 1 });
+      composer.addPass(gtao);
+    } catch {
+      gtao = null;
+    }
+    composer.addPass(new OutputPass());
+    composer.setSize(el.clientWidth, el.clientHeight);
 
     // The section plane (keeps what is below it) and its materials.
     const plane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
@@ -186,11 +218,12 @@ export function BuildScene(props: Props) {
       let m = cache.get(k);
       if (m) return m;
       const c = new THREE.Color(colour);
-      if (st === 'todo') m = new THREE.MeshBasicMaterial({ color: '#8fa3d6', transparent: true, opacity: 0.05, depthWrite: false });
+      if (st === 'todo') m = new THREE.MeshBasicMaterial({ color: '#6f86a6', transparent: true, opacity: 0.07, depthWrite: false });
+      else if (colour === GLASS && st !== 'removing') m = new THREE.MeshPhysicalMaterial({ color: '#a9cbe0', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.5, envMapIntensity: 1.4, depthWrite: false });
       else if (st === 'doing') m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.55, roughness: 0.45 });
       else if (st === 'existing') m = new THREE.MeshStandardMaterial({ color: "#aeb5bf", transparent: true, opacity: 1, roughness: 0.9, depthWrite: true });
       else if (st === 'removing') m = new THREE.MeshStandardMaterial({ color: '#ff6b6b', emissive: '#ff3b30', emissiveIntensity: 0.7, transparent: true, opacity: 0.85 });
-      else m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.72, metalness: 0.04 });
+      else m = new THREE.MeshStandardMaterial({ color: c, roughness: c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.4 ? 0.55 : 0.88, metalness: c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.4 ? 0.15 : 0 });
       m.clippingPlanes = [plane];
       m.side = THREE.DoubleSide;
       cache.set(k, m);
@@ -210,15 +243,23 @@ export function BuildScene(props: Props) {
     // The elements.
     items.current.clear();
     const levelIndex = new Map(model.levels.map((l, i) => [l.id, i]));
-    for (const e of [...new Map([...model.elements, ...(model.drawingGeometry ?? [])].map(e => [e.id, e])).values()]) {
+    // Fine dark edges on walls and floors, as an architect's model is drawn.
+    const edgeMat = new THREE.LineBasicMaterial({ color: '#2a2d31', transparent: true, opacity: 0.45, clippingPlanes: [plane] });
+    for (const e of [...new Map([...model.elements, ...(model.drawingGeometry ?? []), ...(model.planWalls ?? [])].map(e => [e.id, e])).values()]) {
       const g = geometryOf(e);
       if (!g) continue;
       const mesh = new THREE.Mesh(g, mat('#8fa3d6', 'todo'));
       mesh.userData.id = e.id;
       mesh.castShadow = e.shape?.type !== 'point';
       mesh.receiveShadow = true;
+      let edges: THREE.LineSegments | undefined;
+      if (e.shape?.type === 'run' || e.shape?.type === 'surface') {
+        edges = new THREE.LineSegments(new THREE.EdgesGeometry(g, 25), edgeMat);
+        edges.raycast = () => {};
+        mesh.add(edges);
+      }
       s.add(mesh);
-      items.current.set(e.id, { mesh, el: e, level: levelIndex.get(e.level ?? '') ?? 0 });
+      items.current.set(e.id, { mesh, edges, el: e, level: levelIndex.get(e.level ?? '') ?? 0 });
     }
     const top = Math.max(3, ...model.levels.map((l) => l.elevation + 4));
     scene.current = { s, mat, outline, renderer, camera, controls, plane, cutCap, levelLabels, span, top, invalidate: () => {} };
@@ -252,7 +293,8 @@ export function BuildScene(props: Props) {
       if (controls.update()) dirty = true;
       if (dirty) {
         dirty = false;
-        renderer.render(s, camera);
+        if (gtao) composer.render();
+        else renderer.render(s, camera);
         // The compass: which way the sheets' up is on the screen now.
         const c = compass.current;
         if (c) c.style.setProperty('--az', `${Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z)}rad`);
@@ -262,6 +304,7 @@ export function BuildScene(props: Props) {
     raf = requestAnimationFrame(frame);
     const ro = new ResizeObserver(() => {
       renderer.setSize(el.clientWidth, el.clientHeight);
+      composer.setSize(el.clientWidth, el.clientHeight);
       camera.aspect = el.clientWidth / Math.max(1, el.clientHeight);
       camera.updateProjectionMatrix();
       dirty = true;
@@ -321,6 +364,10 @@ export function BuildScene(props: Props) {
       for (const geometry of geometries) geometry.dispose();
       for (const material of materials) material.dispose();
       if (s.background instanceof THREE.Texture) s.background.dispose();
+      environment.dispose();
+      pmrem.dispose();
+      edgeMat.dispose();
+      composer.dispose();
       sun.shadow.dispose();
       items.current.clear();
       renderer.dispose();
@@ -363,12 +410,28 @@ export function BuildScene(props: Props) {
     const { stateOf, colourOf, tradeOrder } = cb.current;
     const lift = explode * Math.max(6, sc.span * 0.22);
     const layer = explodeSystems ? explode * 2.2 : 0;
+    const building = (cb.current.mode ?? 'building') === 'building';
+    // The building view: the walls read from the plans on each level that has them (the measured
+    // walls stand in on a level without), the floors, roof and glazing. No takeoff clutter.
+    const drawnLevels = new Set((model.planWalls ?? []).map((e) => e.level));
+    const inView = (e: BuildElement) => {
+      const plan = e.id.startsWith('shell:');
+      if (!building) return !plan;
+      if (plan) return true;
+      if (e.origin === 'drawing') return false;
+      if (e.origin === 'building') return !(e.shape?.type === 'run' && drawnLevels.has(e.level));
+      if (e.opening) return true;
+      return !drawnLevels.has(e.level) && e.shape?.type === 'run' && ['partitions', 'envelope', 'structure'].includes(e.trade) && e.status !== 'demolished';
+    };
     for (const x of items.current.values()) {
-      // Source-only geometry has no accepted construction activity or date state.
-      const st: RenderState = x.el.origin === 'drawing' ? 'source' : stateOf(x.el);
-      const colour = x.el.origin === 'drawing' ? '#a99a80' : colourOf(x.el);
-      const shown = !hidden.has(x.el.id) && (!isolate || isolate.has(x.el.id)) && st !== 'gone' && (showGhosts || st !== 'todo');
+      // Source-only geometry has no accepted construction activity or date state (walls in the
+      // building view go up with their trade's work on their level).
+      const plan = x.el.id.startsWith('shell:');
+      const st: RenderState = x.el.origin === 'drawing' && !plan ? 'source' : stateOf(x.el);
+      const colour = x.el.origin === 'drawing' && !plan ? '#a99a80' : colourOf(x.el);
+      const shown = inView(x.el) && !hidden.has(x.el.id) && (!isolate || isolate.has(x.el.id)) && st !== 'gone' && (showGhosts || st !== 'todo');
       x.mesh.visible = shown;
+      if (x.edges) x.edges.visible = st !== 'todo' && colour !== GLASS;
       if (st !== x.state || colour !== x.colour) {
         x.state = st;
         x.colour = colour;
@@ -409,7 +472,7 @@ export function BuildScene(props: Props) {
     if (!sc.outline.children.some(c => (c as THREE.LineSegments).material === selMat)) selMat.dispose();
     sc.invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateKey, selected, highlight, isolate, hidden, showGhosts, explode, explodeSystems, cut, model]);
+  }, [stateKey, selected, highlight, isolate, hidden, showGhosts, explode, explodeSystems, cut, model, props.mode]);
 
   const toTop = () => {
     const sc = scene.current;

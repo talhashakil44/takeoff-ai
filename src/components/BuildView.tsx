@@ -12,7 +12,7 @@ import type { Activity, Assumption, Basis, BuildEdits, BuildElement, Feasibility
 import type { Project } from '../model';
 import type { Place } from '../graph/graph';
 import type { SpecSection } from '../spec/parse';
-import { BuildScene, type ElementState, type ViewCommand } from './BuildScene';
+import { BuildScene, GLASS, type ElementState, type ViewCommand } from './BuildScene';
 import { ElementProperties, GroupProperties, ModelTree, QuantitySchedule, type TreeSel } from './BuildPanels';
 import { Icon } from './Icons';
 
@@ -49,6 +49,31 @@ const today = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+/**
+ * A number box for setup: typing is free (an empty box, a half-typed decimal), and the value is
+ * applied when it reads as a number; it follows the plan's value again once the box is left.
+ */
+function NumberField({ value, min, step, onCommit }: { value: number; min?: number; step?: number; onCommit: (v: number) => void }) {
+  const [text, setText] = useState<string | null>(null);
+  return (
+    <input
+      type="number"
+      min={min}
+      step={step ?? 1}
+      value={text ?? String(value)}
+      onChange={(e) => {
+        setText(e.target.value);
+        const v = Number(e.target.value);
+        if (e.target.value.trim() !== '' && Number.isFinite(v) && (min === undefined || v >= min)) onCommit(v);
+      }}
+      onBlur={() => setText(null)}
+    />
+  );
+}
+
+/** Where the playback is, in weeks (a job under four months) or months: "Week 6 of 14", "Month 3 of 10". */
+const spanLabel = (day: number, total: number) =>
+  total <= 85 ? `Week ${Math.max(1, Math.ceil(day / 5))} of ${Math.ceil(total / 5)}` : `Month ${Math.max(1, Math.ceil(day / 21.7))} of ${Math.ceil(total / 21.7)}`;
 const fmt = (iso: string | null | undefined) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
 
 function Badge({ basis }: { basis: Basis }) {
@@ -72,7 +97,8 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const [hover, setHover] = useState<string | null>(null);
   const [day, setDay] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(10);
+  // Working days a second: a month (21 working days) by default.
+  const [speed, setSpeed] = useState(21);
   const [ghosts, setGhosts] = useState(true);
   const [left, setLeft] = useState<'model' | 'setup'>('setup');
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -89,6 +115,8 @@ export default function BuildView({ project, sections, specText, sheetText, shee
     if (inspectRef.current) inspectRef.current.scrollTop = 0;
   }, [sel?.kind, sel?.id, treeSel?.key]);
   const [workspace, setWorkspace] = useState<'model' | 'sequence'>('model');
+  // The 3D: the building as drawn (walls read from the plans, slabs, roof, glazing), or the takeoff's measured elements.
+  const [view3d, setView3d] = useState<'building' | 'takeoff'>('building');
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [bottom, setBottom] = useState<'schedule' | 'quantities'>('schedule');
@@ -219,7 +247,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const acts = schedule?.activities ?? [];
   const times = schedule?.times ?? {};
   const actById = useMemo(() => new Map(acts.map((a) => [a.id, a])), [acts]);
-  const elById = useMemo(() => new Map([...(model?.elements ?? []), ...(model?.drawingGeometry ?? [])].map((e) => [e.id, e])), [model]);
+  const elById = useMemo(() => new Map([...(model?.elements ?? []), ...(model?.drawingGeometry ?? []), ...(model?.planWalls ?? [])].map((e) => [e.id, e])), [model]);
   const actOfElement = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of acts) for (const id of a.elements) m.set(id, a.id);
@@ -252,17 +280,29 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   }, [playing, speed, end]);
 
   const dayInt = Math.floor(day);
+  // Walls read from the plans and the building's slabs and roof have no takeoff of their own:
+  // they go up with their trade's work on their level.
+  const contextTime = (e: BuildElement) => {
+    const roof = /roof/i.test(e.name) && e.shape?.type === 'surface';
+    const ids = roof
+      ? ['work:envelope:roof-covering', 'work:envelope:roof', `work:envelope:${e.level}`]
+      : e.shape?.type === 'surface'
+        ? [`work:structure:${e.level}`]
+        : [`work:${e.trade}:${e.level}`, `work:partitions:${e.level}`, `work:envelope:${e.level}`, `work:structure:${e.level}`];
+    for (const id of ids) if (times[id]) return times[id];
+    return undefined;
+  };
   const stateOf = (e: BuildElement): ElementState => {
     if (workspace === 'model') return e.status === 'demolished' ? 'gone' : 'done';
     if (e.status === 'existing') return 'existing';
-    const t = times[actOfElement.get(e.id) ?? ''];
+    const t = times[actOfElement.get(e.id) ?? ''] ?? (e.origin === 'drawing' || e.origin === 'building' ? contextTime(e) : undefined);
     if (!t) return 'done';
     const demo = e.trade === 'demolition';
     if (dayInt < t.es) return demo ? 'existing' : 'todo';
     if (dayInt < t.ef) return demo ? 'removing' : 'doing';
     return demo ? 'gone' : 'done';
   };
-  const stateKey = `${workspace}|${colourMode}|${dayInt}|${Object.keys(times).length}|${acts.map((a) => times[a.id]?.es).join(',')}`;
+  const stateKey = `${workspace}|${view3d}|${colourMode}|${dayInt}|${Object.keys(times).length}|${acts.map((a) => times[a.id]?.es).join(',')}`;
 
   const levels = model?.levels ?? [];
   const tradesUsed = useMemo(() => TRADES.filter((t) => model?.elements.some((e) => e.trade === t.key)), [model]);
@@ -272,6 +312,14 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const specMissing = useMemo(() => new Set(sections.filter((s) => s.missing).map((s) => s.key)), [sections]);
   const colourOf = (e: BuildElement): string => {
     if (colourMode === 'material') {
+      if (view3d === 'building') {
+        if (/roof/i.test(e.name) && e.shape?.type === 'surface') return '#3f474f';
+        if (e.opening || /window|glaz|curtain/i.test(e.name)) return GLASS;
+        if (e.shape?.type === 'surface') return '#b9b2a6';
+        if (/parapet/i.test(e.name)) return '#bfb4a3';
+        if (e.trade === 'envelope') return '#cfc3ae';
+        return '#e2ddd3';
+      }
       if (/roof/i.test(e.name) && e.shape?.type === 'surface') return '#586674';
       if (/window|glaz|curtain/i.test(e.name)) return '#91b7c9';
       if (e.shape?.type === 'surface') return e.trade === 'ceilings' ? '#e4e5e0' : '#aeb5b9';
@@ -291,7 +339,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   };
   const tradeOrder = useMemo(() => new Map(TRADES.map((t, i) => [t.key, i])), []);
   const LEGENDS: Record<typeof colourMode, [string, string][]> = {
-    material: [['#d7d4cb','Walls'],['#aeb5b9','Slabs'],['#586674','Roof'],['#91b7c9','Glazing'],['#97b7be','Services']],
+    material: view3d === 'building' ? [['#cfc3ae','Exterior walls'],['#e2ddd3','Interior walls'],['#b9b2a6','Floors'],['#3f474f','Roof'],['#8fb3c7','Glazing']] : [['#d7d4cb','Walls'],['#aeb5b9','Slabs'],['#586674','Roof'],['#91b7c9','Glazing'],['#97b7be','Services']],
     system: tradesUsed.map((t) => [t.colour, t.name]),
     status: [['#3ddc84', 'Has float'], ['#ff9f43', 'Critical path'], ['#ff5f57', 'Can’t make the target']],
     level: levels.map((l, i) => [LEVEL_COLOURS[i % LEVEL_COLOURS.length], l.name]),
@@ -429,15 +477,15 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         )}
         {setupOpen && out && left === 'model' && model && (
           <aside className="bld-left">
-            {(model.drawingGeometry?.length ?? 0) > 0 && <section className="bld-tree" aria-label="Drawing-derived geometry">
-              <strong>From drawings · {model.drawingGeometry!.length}</strong>
-              <p className="dim small">No accepted takeoff · excluded from quantities and schedule</p>
-              {model.drawingGeometry!.map(e => <button key={e.id} className="bld-spec-title" onClick={() => {
+            {(model.drawingGeometry?.length ?? 0) > 0 && <details className="bld-tree" aria-label="Drawing-derived geometry">
+              <summary><strong>From drawings · {model.drawingGeometry!.length}</strong></summary>
+              <p className="dim small">Read from the drawings, not measured · excluded from quantities and schedule</p>
+              {model.drawingGeometry!.slice(0, 300).map(e => <button key={e.id} className="bld-spec-title" onClick={() => {
                 setInspectorOpen(true);
                 setTreeSel(null);
                 setSel({ kind: 'element', id: e.id });
               }}>{e.name}</button>)}
-            </section>}
+            </details>}
             <ModelTree
               model={model}
               hidden={hidden}
@@ -476,6 +524,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
             <>
               <BuildScene
                 model={model}
+                mode={view3d}
                 stateOf={stateOf}
                 stateKey={stateKey}
                 colourOf={colourOf}
@@ -497,6 +546,14 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                 onHover={setHover}
               />
               <div className={`bld-toolbar ${toolsOpen ? "expanded" : ""}`} role="toolbar" aria-label="View">
+                <div className="bld-tg" role="group" aria-label="Show">
+                  <button className={view3d === 'building' ? 'on' : ''} aria-pressed={view3d === 'building'} onClick={() => setView3d('building')} title="The building as drawn: walls read from the floor plans, floors, roof and glazing">
+                    Building
+                  </button>
+                  <button className={view3d === 'takeoff' ? 'on' : ''} aria-pressed={view3d === 'takeoff'} onClick={() => setView3d('takeoff')} title="The takeoff's measured elements, placed in 3D">
+                    Takeoff
+                  </button>
+                </div>
                 <div className="bld-tg" role="group" aria-label="Views">
                   {(
                     [
@@ -564,7 +621,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
               <div className="bld-day">
                 <b>{workspace === 'model' ? 'Building model' : cal ? fmt(cal.date(dayInt)) : ''}</b>
                 <span>
-                  {workspace === 'model' ? `${model.elements.filter(e => e.shape).length.toLocaleString()} represented · ${model.elements.filter(e => !e.shape).length.toLocaleString()} unplaced` : `Day ${dayInt + 1} of ${end} · ${progress}% of work packages complete`}
+                  {workspace === 'model' ? `${model.elements.filter(e => e.shape).length.toLocaleString()} represented · ${model.elements.filter(e => !e.shape).length.toLocaleString()} unplaced` : `${spanLabel(dayInt + 1, end)} · ${progress}% of work packages complete`}
                 </span>
               </div>
               {hoverEl && (
@@ -723,9 +780,10 @@ export default function BuildView({ project, sections, specText, sheetText, shee
               {playing ? '❚❚' : '▶'}
             </button>
             <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))} aria-label="Speed">
-              <option value={5}>5 days/s</option>
-              <option value={10}>10 days/s</option>
-              <option value={25}>25 days/s</option>
+              <option value={5}>1 week / s</option>
+              <option value={10}>2 weeks / s</option>
+              <option value={21}>1 month / s</option>
+              <option value={63}>3 months / s</option>
             </select>
             <input type="range" min={0} max={end} step={1} value={dayInt} onChange={(e) => (setPlaying(false), setDay(Number(e.target.value)))} aria-label="Day" />
             <span className="bld-date">{fmt(cal.date(dayInt))}</span>
@@ -850,11 +908,11 @@ function AllowancesForm(props: {
             </b>
             <div>
               <label>
-                <input type="number" min={0} value={a.quantity} onChange={(e) => put(k, { ...a, quantity: Math.max(0, Number(e.target.value) || 0) })} />
+                <NumberField min={0} value={a.quantity} onCommit={(v) => put(k, { ...a, quantity: Math.max(0, v) })} />
                 <input type="text" className="bld-unit" value={a.unit} onChange={(e) => put(k, { ...a, unit: e.target.value })} />
               </label>
               <label>
-                <input type="number" min={0} value={a.rate} onChange={(e) => put(k, { ...a, rate: Math.max(0, Number(e.target.value) || 0) })} /> {a.unit || 'units'}/crew-day
+                <NumberField min={0} value={a.rate} onCommit={(v) => put(k, { ...a, rate: Math.max(0, v) })} /> {a.unit || 'units'}/crew-day
               </label>
               <label className="check">
                 <input type="checkbox" checked={a.provisional} onChange={(e) => put(k, { ...a, provisional: e.target.checked })} /> provisional
@@ -905,12 +963,14 @@ function SetupPanel(props: {
   const basisOf = (k: keyof PlanSetup): Assumption<unknown> | undefined => (setup ? (setup as unknown as Record<string, Assumption<unknown>>)[k] : undefined);
   const set = (k: string, v: unknown, rebuild = false) => onEdit({ ...edits, setup: { ...ed, [k]: v } }, rebuild);
   const fact = (k: SpecFact['key']) => facts?.find((f) => f.key === k);
-  const Row = ({ k, label, unit, rebuild }: { k: keyof PlanSetup; label: string; unit: string; rebuild?: boolean }) => {
+  // A plain function, not a component made here: one made in render is a new type each time,
+  // so its input was remounted (and lost focus) on every keystroke.
+  const row = ({ k, label, unit, rebuild }: { k: keyof PlanSetup; label: string; unit: string; rebuild?: boolean }) => {
     const b = basisOf(k);
     return (
-      <label className="bld-field">
+      <label className="bld-field" key={k}>
         <span>{label}</span>
-        <input type="number" min={0} step={k === 'floorToFloor' ? 0.1 : 1} value={val<number>(k, 0)} onChange={(e) => set(k, Number(e.target.value), rebuild)} />
+        <NumberField min={0} step={k === 'floorToFloor' ? 0.1 : 1} value={val<number>(k, 0)} onCommit={(v) => set(k, v, rebuild)} />
         <em>{unit}</em>
         {b && <Badge basis={(ed as Record<string, unknown>)[k] !== undefined ? 'assumed' : b.basis} />}
         {b?.source && (
@@ -967,17 +1027,17 @@ function SetupPanel(props: {
             <input type="text" placeholder="2026-12-25, 2027-01-01" defaultValue={val<string[]>('holidays', []).join(', ')} onBlur={(e) => set('holidays', e.target.value.split(/[,\s]+/).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)))} />
           </label>
           <h4>Submittals and reviews</h4>
-          <Row k="submittalPrepDays" label="Preparing submittals" unit="days" />
-          <Row k="reviewDays" label="Consultant review" unit="days" />
+          {row({ k: 'submittalPrepDays', label: 'Preparing submittals', unit: 'days' })}
+          {row({ k: 'reviewDays', label: 'Consultant review', unit: 'days' })}
           {!fact('reviewDays') && facts !== null && <p className="dim small">The specification doesn’t give a review period: this is an assumption.</p>}
-          <Row k="resubmitRounds" label="Resubmissions" unit="rounds" />
-          <Row k="resubmitReviewDays" label="Re-review" unit="days" />
+          {row({ k: 'resubmitRounds', label: 'Resubmissions', unit: 'rounds' })}
+          {row({ k: 'resubmitReviewDays', label: 'Re-review', unit: 'days' })}
           <h4>Site and finish</h4>
-          <Row k="mobilizeDays" label="Mobilization" unit="days" />
-          <Row k="testingDays" label="Testing per trade" unit="days" />
-          <Row k="commissioningDays" label="Commissioning" unit="days" />
-          <Row k="closeoutDays" label="Closeout" unit="days" />
-          <Row k="floorToFloor" label="Floor to floor" unit={metric ? 'm' : 'ft'} rebuild />
+          {row({ k: 'mobilizeDays', label: 'Mobilization', unit: 'days' })}
+          {row({ k: 'testingDays', label: 'Testing per trade', unit: 'days' })}
+          {row({ k: 'commissioningDays', label: 'Commissioning', unit: 'days' })}
+          {row({ k: 'closeoutDays', label: 'Closeout', unit: 'days' })}
+          {row({ k: 'floorToFloor', label: 'Floor to floor', unit: metric ? 'm' : 'ft', rebuild: true })}
           <label className="bld-field check">
             <input type="checkbox" checked={val<boolean>('levelsInParallel', false)} onChange={(e) => set('levelsInParallel', e.target.checked)} />
             <span>A trade may work on more than one level at a time</span>
@@ -1007,14 +1067,14 @@ function SetupPanel(props: {
                     <div>
                       {Object.entries(cur.rates).map(([u, r]) => (
                         <label key={u}>
-                          <input type="number" min={0} value={mine.rates?.[u] ?? r} onChange={(e) => setT({ rates: { ...(mine.rates ?? {}), [u]: Number(e.target.value) } })} /> {u}/day
+                          <NumberField min={0} value={mine.rates?.[u] ?? r} onCommit={(v) => setT({ rates: { ...(mine.rates ?? {}), [u]: v } })} /> {u}/day
                         </label>
                       ))}
                       <label>
-                        <input type="number" min={1} value={mine.crews ?? cur.crews} onChange={(e) => setT({ crews: Math.max(1, Number(e.target.value)) })} /> crews
+                        <NumberField min={1} value={mine.crews ?? cur.crews} onCommit={(v) => setT({ crews: Math.max(1, Math.round(v)) })} /> crews
                       </label>
                       <label>
-                        <input type="number" min={0} value={mine.leadDays ?? cur.leadDays} onChange={(e) => setT({ leadDays: Number(e.target.value) })} /> days lead
+                        <NumberField min={0} value={mine.leadDays ?? cur.leadDays} onCommit={(v) => setT({ leadDays: Math.round(v) })} /> days lead
                       </label>
                     </div>
                   </div>
@@ -1029,7 +1089,7 @@ function SetupPanel(props: {
           {props.levels.map((l) => (
             <label key={l.id} className="bld-field">
               <span>{l.name}</span>
-              <input type="number" step={0.1} value={edits.elevations?.[l.id] ?? Math.round(l.elevation * 100) / 100} onChange={(e) => onEdit({ ...edits, elevations: { ...(edits.elevations ?? {}), [l.id]: Number(e.target.value) } }, true)} />
+              <NumberField step={0.1} value={edits.elevations?.[l.id] ?? Math.round(l.elevation * 100) / 100} onCommit={(v) => onEdit({ ...edits, elevations: { ...(edits.elevations ?? {}), [l.id]: v } }, true)} />
               <em>m elevation</em>
             </label>
           ))}
@@ -1121,11 +1181,11 @@ function ActivityCard(props: {
       <p>{a.durationWhy}</p>
       <div className="bld-edit">
         <label>
-          Days <input type="number" min={0} value={mine.duration ?? a.duration} onChange={(e) => setA({ duration: Number(e.target.value) })} />
+          Days <NumberField min={0} value={mine.duration ?? a.duration} onCommit={(v) => setA({ duration: Math.round(v) })} />
         </label>
         {a.kind === 'work' && (
           <label>
-            Crews <input type="number" min={1} value={mine.crews ?? a.crews ?? 1} onChange={(e) => setA({ crews: Math.max(1, Number(e.target.value)) })} />
+            Crews <NumberField min={1} value={mine.crews ?? a.crews ?? 1} onCommit={(v) => setA({ crews: Math.max(1, Math.round(v)) })} />
           </label>
         )}
         {a.edited && (

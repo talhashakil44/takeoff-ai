@@ -53,6 +53,23 @@ const AFTER: Record<string, string[]> = {
   'fire-heads': ['ceilings'],
 };
 
+/**
+ * Floor area one crew covers in a working day, per trade, in m² of floor (planning norms). A level
+ * takes at least this long for each trade even when the takeoff measures only part of its work, and
+ * trades the takeoff doesn't measure at all are planned from the floor area: a building is never
+ * planned in less time than its floors take to build.
+ */
+const AREA_RATE: Record<string, number> = {
+  structure: 40, envelope: 35, 'mech-rough': 30, 'elec-rough': 40, 'fire-rough': 80, partitions: 25,
+  ceilings: 60, doors: 100, painting: 70, flooring: 60, finishes: 80, specialties: 150, 'mech-trim': 80, 'elec-trim': 90, 'fire-heads': 150,
+};
+/** Trades a renovation's floors need whatever the takeoff measured (no new structure or shell). */
+const RENOVATION_AREA_TRADES = new Set(['mech-rough', 'elec-rough', 'partitions', 'ceilings', 'doors', 'painting', 'flooring', 'mech-trim', 'elec-trim']);
+/** The rate a trade's floor-area planning reads from its setup: floor area per crew-day. */
+export const FLOOR_UNIT = { metric: 'm² of floor', imperial: 'SF of floor' } as const;
+/** Foundations: footprint (lowest floor's area) per crew-day. */
+const FOUNDATION_AREA_RATE = 30;
+
 const a = <T>(value: T, basis: Basis, why: string, source?: SourceRef): Assumption<T> => ({ value, basis, why, ...(source ? { source } : {}) });
 
 export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string): PlanSetup {
@@ -71,6 +88,8 @@ export function defaultSetup(model: BuildModel, facts: SpecFact[], today: string
     const rates: Record<string, number> = metric ? { m: Math.round(d.LF * 0.3048), 'm²': Math.round(d.SF * 0.0929), ea: d.ea } : { ft: d.LF, SF: d.SF, ea: d.ea };
     if (t.key === 'structure') rates[metric ? 'm³' : 'CY'] = metric ? 8 : 10;
     if (t.key === 'site') rates[metric ? 'm³' : 'CY'] = metric ? 50 : 65;
+    // Floor area a crew covers a day: the least time a floor takes this trade (see AREA_RATE).
+    if (AREA_RATE[t.key]) rates[FLOOR_UNIT[metric ? 'metric' : 'imperial']] = metric ? AREA_RATE[t.key] : Math.round(AREA_RATE[t.key] / 0.09290304);
     trades[t.key] = a({ rates, crews: d.crews, leadDays: d.lead }, 'assumed', t.key === 'structure'
       ? 'Planning allowances: 10 members or 8 m³ of foundation concrete per metric crew-day (10 CY imperial); confirm member complexity, forming, reinforcement and crew size with the trade'
       : t.key === 'elec-rough'
@@ -144,7 +163,26 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
     e.origin === 'takeoff' && e.status !== 'existing' && !e.planningExcluded && e.measurementSource === 'etags' &&
     e.trade === 'elec-trim' && e.unit === 'ea' && Number.isFinite(e.quantity) && e.quantity > 0);
   const workId = (t: string, l: string | null) => `work:${t}:${l ?? (t === 'site' ? 'site' : 'unplaced')}`;
-  const tradesUsed = TRADES.filter((t) => [...byTL.keys()].some((key) => key.startsWith(`${t.key}|`)) || (t.key === 'elec-rough' && taggedRough.length > 0));
+  // Floor-area planning (see AREA_RATE): the floors' areas, and the trades each floor needs.
+  // A trade the user entered an allowance for is planned from that instead.
+  const allowanceKeys = new Set(activeAllowances(setup).map(([key]) => key));
+  const renovation = model.projectType === 'renovation';
+  const floorArea = (l: string | null) => (l && l !== 'roof' && l !== 'fdn' ? model.floorAreas?.[l] ?? 0 : 0);
+  const lowest = model.levels.filter((l) => floorArea(l.id) > 0).sort((x, y) => x.elevation - y.elevation)[0];
+  const areaOf = (trade: string, l: string | null): number => {
+    if (allowanceKeys.has(trade) || (renovation && !RENOVATION_AREA_TRADES.has(trade))) return 0;
+    if (trade === 'structure' && l === 'fdn') return !renovation && lowest && model.levels.some((x) => x.id === 'fdn') ? floorArea(lowest.id) : 0;
+    return AREA_RATE[trade] ? floorArea(l) : 0;
+  };
+  const floorUnit = FLOOR_UNIT[model.units === 'metric' ? 'metric' : 'imperial'];
+  // The trade's floor rate as set up (m² a crew-day), or the norm.
+  const areaRate = (trade: string, l: string | null) => {
+    if (trade === 'structure' && l === 'fdn') return FOUNDATION_AREA_RATE;
+    const set = setup.trades[trade]?.value.rates[floorUnit];
+    return set && set > 0 ? (model.units === 'metric' ? set : set * 0.09290304) : AREA_RATE[trade];
+  };
+  const sqm = (m2: number) => (model.units === 'metric' ? `${Math.round(m2).toLocaleString()} m²` : `${Math.round(m2 / 0.09290304).toLocaleString()} SF`);
+  const tradesUsed = TRADES.filter((t) => [...byTL.keys()].some((key) => key.startsWith(`${t.key}|`)) || (t.key === 'elec-rough' && taggedRough.length > 0) || model.levels.some((l) => areaOf(t.key, l.id) > 0));
   const levelName = (l: string | null) => (l ? model.levels.find((x) => x.id === l)?.name ?? l : 'Unplaced (level not known)');
   for (const t of tradesUsed) {
     const setupT = setup.trades[t.key]?.value ?? { rates: {}, crews: 1, leadDays: 0 };
@@ -195,7 +233,8 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
       ] : [{ id: workId(t.key, l), name: `${t.name} — ${levelName(l)}`, els: all }];
       for (const { id, name, els } of groups) {
         const tags = t.key === 'elec-rough' && !els.length ? proxyTags : [];
-        if (!els.length && !tags.length) continue;
+        const area = id === 'work:site:earthwork' ? 0 : areaOf(t.key, l);
+        if (!els.length && !tags.length && !area) continue;
         const workElements = tags.length ? tags : els;
         const quantities: Record<string, number> = {};
         for (const e of workElements) {
@@ -209,12 +248,16 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
         let crewDays = 0;
         const missing: string[] = [];
         for (const [u, q] of Object.entries(quantities)) {
-          const r = rates[u];
+          const r = u === floorUnit ? 0 : rates[u];
           if (r && r > 0) crewDays += q / r;
           else if (q > 0) missing.push(u);
         }
-        const duration = Math.max(1, Math.ceil(crewDays / crews));
+        const measuredDays = workElements.length ? Math.max(1, Math.ceil(crewDays / crews)) : 0;
+        const areaDays = area ? Math.max(1, Math.ceil(area / areaRate(t.key, l) / crews)) : 0;
+        const byArea = areaDays > measuredDays;
+        const duration = Math.max(measuredDays, areaDays);
         const qty = Object.entries(quantities).map(([u, q]) => `${Math.round(q).toLocaleString()} ${u}`).join(' + ');
+        const areaWhy = `${l === 'fdn' ? 'footprint' : 'floor area'} ${sqm(area)} at ${Math.round(areaRate(t.key, l) * 10) / 10} m² of floor per crew-day (planning rate: Crews & rates), ${crews} crew${crews === 1 ? '' : 's'}${workElements.length ? ` · the takeoff measures ${qty}, ${measuredDays} day${measuredDays === 1 ? '' : 's'} of it: part of this trade's work` : ' · not measured in the takeoff'}; set the trade's rate or an allowance in Build setup to change it`;
         const earthwork = id === 'work:site:earthwork';
         const deps: Dependency[] = earthwork
           ? [dep('mobilize', 'Excavation after mobilization')]
@@ -232,8 +275,10 @@ export function planActivities(model: BuildModel, setup: PlanSetup, sections: Sp
           rates,
           crews,
           duration,
-          durationBasis: tags.length ? 'assumed' : 'inferred',
-          durationWhy: `${tags.length ? 'Rough-in proxy from measured electrical device tags: ' : ''}${qty} at ${Object.entries(rates)
+          // The floor's crew-days stay the work's least effort when crews are added (replanTarget.ts).
+          ...(area ? { allowanceCrewDays: area / areaRate(t.key, l) } : {}),
+          durationBasis: byArea || tags.length ? 'assumed' : 'inferred',
+          durationWhy: byArea ? `Planned from the ${areaWhy}` : `${tags.length ? 'Rough-in proxy from measured electrical device tags: ' : ''}${qty} at ${Object.entries(rates)
             .filter(([u]) => quantities[u])
             .map(([u, r]) => `${r} ${u}`)
             .join(' / ')} per crew-day, ${crews} crew${crews === 1 ? '' : 's'}${tags.length ? ' · rate and device-to-rough-in equivalence assumed; confirm with electrical trade' : ''}${missing.length ? ` · no rate for ${missing.join(', ')}` : ''}`,

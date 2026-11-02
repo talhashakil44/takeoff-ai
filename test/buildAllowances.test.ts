@@ -47,12 +47,16 @@ describe('Build It unmeasured scope allowances', () => {
     const rough1 = acts.find((a) => a.id === 'work:elec-rough:L1')!;
     const rough2 = acts.find((a) => a.id === 'work:elec-rough:L2')!;
     expect(rough1).toMatchObject({ level: 'L1', quantities: { ea: 65 }, rates: { ea: 30 }, duration: 3, durationBasis: 'assumed' });
-    expect(rough2).toMatchObject({ level: 'L2', quantities: { ea: 15 }, duration: 1 });
+    // 15 tags are a day's rough-in, but Level 2's 200 m² floor takes five (floor-area planning).
+    expect(rough2).toMatchObject({ level: 'L2', quantities: { ea: 15 }, duration: 5, allowanceCrewDays: 5 });
+    expect(rough2.durationWhy).toContain('Planned from the floor area');
     expect(rough1.elements).toHaveLength(65);
     expect(rough1.durationWhy).toContain('device-to-rough-in equivalence assumed');
     expect(rough2.deps.map((d) => d.from)).toContain(rough1.id);
     expect(acts.find((a) => a.id === 'work:ceilings:L1')?.deps.map((d) => d.from)).toContain(rough1.id);
-    expect(acts.find((a) => a.id === 'work:elec-trim:L2')?.deps.map((d) => d.from)).toContain(rough2.id);
+    // Level 2's ceilings (planned from its floor area) come between its rough-in and its devices.
+    expect(acts.find((a) => a.id === 'work:ceilings:L2')?.deps.map((d) => d.from)).toContain(rough2.id);
+    expect(acts.find((a) => a.id === 'work:elec-trim:L2')?.deps.map((d) => d.from)).toContain('work:ceilings:L2');
     expect(suggestScopeAllowances(m, setup).some((s) => s.key === 'elec-rough')).toBe(false);
     expect(schedule(acts, setup).issues.some((i) => i.id === 'loop')).toBe(false);
     expect(replan(m, setup, { sections: [], facts: [], today: '2026-11-02' }).schedule.issues.map((i) => i.id)).toContain('electrical-rough-in-tag-proxy');
