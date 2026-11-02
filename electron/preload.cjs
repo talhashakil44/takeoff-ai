@@ -43,6 +43,18 @@ contextBridge.exposeInMainWorld('takeoffDesktop', {
     setEnabled: (on) => ipcRenderer.invoke('mcp:setEnabled', on),
     newToken: () => ipcRenderer.invoke('mcp:newToken'),
   },
+  /** Coding agents on the user's own plan (electron/agent.cjs). */
+  agent: {
+    detect: () => ipcRenderer.invoke('agent:detect'),
+    start: (opts) => ipcRenderer.invoke('agent:start', opts),
+    stop: () => ipcRenderer.invoke('agent:stop'),
+    running: () => ipcRenderer.invoke('agent:running'),
+    onEvent: (fn) => {
+      const h = (_e, ev) => fn(ev);
+      ipcRenderer.on('agent:event', h);
+      return () => ipcRenderer.removeListener('agent:event', h);
+    },
+  },
   /** Called when the window is closing: finish writing, then the window closes. */
   onFlush: (finish) => {
     ipcRenderer.on('app:flush', async () => {
