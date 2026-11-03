@@ -2,7 +2,7 @@
 // ChatGPT plan) to build the open project's 3D model. The agent reaches the app only through
 // its MCP server (the same tools Claude Desktop gets), in an empty working folder, with every
 // built-in tool that could touch the computer turned off. Its progress streams to the window.
-const { app, ipcMain } = require('electron');
+const { app, ipcMain, shell } = require('electron');
 const { spawn, execFile } = require('node:child_process');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
@@ -17,14 +17,17 @@ const AGENTS = {
 let running = null; // { child, agent, sender, stopped }
 let shellPath = null;
 
-/** The PATH a terminal would have (apps opened from the Dock get a bare one). */
+/**
+ * The system's PATH (apps opened from the Dock get a bare one). Read from macOS's path_helper,
+ * not by starting the user's shell: a shell runs their startup files, which can touch folders
+ * like Documents and Desktop and make macOS ask for access to each.
+ */
 function loginPath() {
   if (shellPath !== null) return Promise.resolve(shellPath);
-  if (process.platform === 'win32') return Promise.resolve((shellPath = process.env.PATH || ''));
-  const shell = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash');
+  if (process.platform !== 'darwin') return Promise.resolve((shellPath = process.env.PATH || ''));
   return new Promise((resolve) => {
-    execFile(shell, ['-lic', 'echo __PATH__$PATH__PATH__'], { timeout: 6000, env: { ...process.env, TERM: 'dumb' } }, (_err, out) => {
-      const m = /__PATH__(.*?)__PATH__/.exec(String(out || ''));
+    execFile('/usr/libexec/path_helper', ['-s'], { timeout: 4000, env: { PATH: '/usr/bin:/bin' } }, (_err, out) => {
+      const m = /PATH="([^"]*)"/.exec(String(out || ''));
       shellPath = m ? m[1] : '';
       resolve(shellPath);
     });
@@ -164,6 +167,13 @@ async function start(sender, { agent, projectName, mcp }) {
     if (!sender.isDestroyed()) sender.send('agent:event', ev);
   };
   send({ kind: 'start', text: `${found.label} started` });
+  // Signed out (never signed in here, or the sign-in ran out): the panel offers to sign in.
+  let login = false;
+  const loggedOut = (t) => /not logged in|please run \/login|invalid api key|oauth token (has )?expired|authentication_error|sign in|log ?in again/i.test(t || '');
+  const relay = (ev) => {
+    if (loggedOut(ev.text)) login = true;
+    send(ev);
+  };
   let buf = '';
   child.stdout.on('data', (d) => {
     buf += d.toString();
@@ -171,7 +181,7 @@ async function start(sender, { agent, projectName, mcp }) {
     while ((i = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, i);
       buf = buf.slice(i + 1);
-      for (const ev of summarise(agent, line)) send(ev);
+      for (const ev of summarise(agent, line)) relay(ev);
     }
   });
   let err = '';
@@ -182,12 +192,39 @@ async function start(sender, { agent, projectName, mcp }) {
     send({ kind: 'error', text: e.message });
   });
   child.on('close', (code) => {
-    if (buf.trim()) for (const ev of summarise(agent, buf)) send(ev);
+    if (buf.trim()) for (const ev of summarise(agent, buf)) relay(ev);
     const stopped = running?.stopped;
     running = null;
-    const hint = /log ?in|auth|credential|api key|unauthor/i.test(err) ? ` Sign in first: run "${agent}" in Terminal once and log in with your ${AGENTS[agent].plan} account.` : '';
-    send({ kind: 'done', ok: code === 0 && !stopped, text: stopped ? 'Stopped.' : code === 0 ? 'Finished.' : `${AGENTS[agent].label} stopped (code ${code}).${hint}${err.trim() ? `\n${err.trim().split('\n').slice(-6).join('\n')}` : ''}` });
+    if (loggedOut(err)) login = true;
+    const text = stopped
+      ? 'Stopped.'
+      : login
+        ? `${AGENTS[agent].label} isn't signed in on this computer. Click Sign in, sign in with your ${AGENTS[agent].plan} account in the Terminal window that opens, then click Build again.`
+        : code === 0
+          ? 'Finished.'
+          : `${AGENTS[agent].label} stopped (code ${code}).${err.trim() ? `\n${err.trim().split('\n').slice(-6).join('\n')}` : ''}`;
+    send({ kind: 'done', ok: code === 0 && !stopped && !login, login, text });
   });
+  return true;
+}
+
+/** Opens a Terminal window running the agent, which walks the user through signing in. */
+async function signIn(agent) {
+  const found = (await detect())[agent];
+  if (!found?.installed) throw new Error(`${AGENTS[agent]?.label ?? agent} is not installed.`);
+  const dir = path.join(app.getPath('userData'), 'agent-workspace');
+  await fs.mkdir(dir, { recursive: true });
+  // Claude Code signs in on its first run (or with /login); Codex with `codex login`.
+  const args = agent === 'codex' ? ['login'] : ['/login'];
+  if (process.platform === 'win32') {
+    spawn('cmd.exe', ['/c', 'start', '""', found.path, ...args], { cwd: dir, detached: true, stdio: 'ignore' }).unref();
+    return true;
+  }
+  const q = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
+  const file = path.join(dir, `sign-in-${agent}.command`);
+  await fs.writeFile(file, `#!/bin/zsh\ncd ${q(dir)}\nclear\necho "Sign in to ${AGENTS[agent].label} with your ${AGENTS[agent].plan} account, then go back to Takeoff AI and click Build."\necho\n${q(found.path)} ${args.join(' ')}\n`, { mode: 0o755 });
+  const err = await shell.openPath(file);
+  if (err) throw new Error(err);
   return true;
 }
 
@@ -207,6 +244,7 @@ function setupAgent(mcpInfo) {
   ipcMain.handle('agent:detect', () => detect());
   ipcMain.handle('agent:start', async (e, opts) => start(e.sender, { ...opts, mcp: await mcpInfo() }));
   ipcMain.handle('agent:stop', () => stop());
+  ipcMain.handle('agent:signIn', (_e, agent) => signIn(agent));
   ipcMain.handle('agent:running', () => (running ? running.agent : null));
 }
 

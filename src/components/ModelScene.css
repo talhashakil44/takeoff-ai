@@ -311,3 +311,7 @@
   font-style: normal;
   color: #6f80aa;
 }
+.ai3d-row {
+  display: flex;
+  gap: 8px;
+}
