@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CATEGORIES, type Element3D, type Scene3D } from '../scene3d/scene';
@@ -15,9 +15,45 @@ interface Props {
   /** Each element's construction state on the day shown (null: all built). */
   stateOf?: ((e: Element3D) => ElementState) | null;
   stateKey?: string;
+  /** The guided tour (the sample project): shown when true. */
+  tour?: boolean;
+  onTourEnd?: () => void;
 }
 
-export function ModelScene({ scene, stateOf, stateKey }: Props) {
+/** The order a building goes up in, by layer: for the build sequence when no schedule is playing. */
+const PHASES: { label: string; of: (e: Element3D) => boolean }[] = [
+  { label: 'Site works & foundations', of: (e) => ['civil', 'foundation'].includes(e.category) },
+  { label: 'Slab & structural steel', of: (e) => ['structure', 'stairs'].includes(e.category) || (e.category === 'floor' && !FINISH.has(e.material)) },
+  { label: 'Walls & roof', of: (e) => ['envelope', 'roof'].includes(e.category) },
+  { label: 'Doors & glazing', of: (e) => ['doors', 'glazing'].includes(e.category) },
+  { label: 'Interior walls', of: (e) => e.category === 'interior' },
+  { label: 'Mechanical, electrical & plumbing', of: (e) => ['mechanical', 'electrical', 'plumbing'].includes(e.category) },
+  { label: 'Ceilings, fixtures & finishes', of: (e) => ['ceiling', 'fixtures', 'furniture'].includes(e.category) || (e.category === 'floor' && FINISH.has(e.material)) },
+  { label: 'Paving & landscaping', of: (e) => e.category === 'paving' },
+];
+const FINISH = new Set(['epoxy', 'vinyl', 'carpet', 'tile', 'sealed_concrete']);
+const phaseOf = (e: Element3D) => {
+  const i = PHASES.findIndex((p) => p.of(e));
+  return i < 0 ? -1 : i; // -1: there before the work starts (the ground, the neighbours)
+};
+
+/** The guided tour of the sample model: what to look at, and what each step shows. */
+interface TourStep {
+  target: string | null;
+  title: string;
+  text: string;
+}
+const TOUR: TourStep[] = [
+  { target: null, title: 'A model built by AI', text: 'Claude built this shop from its tender drawings: 575 walls, doors, roofs, beams, fixtures and site pieces, each tied to the sheet it came from. Here is a quick look around.' },
+  { target: '.mdl-views', title: 'Views', text: 'Jump between the exterior, the rear, a cutaway, the structure, the services, a plan and the whole site. Drag to orbit, scroll to zoom, right-drag to pan.' },
+  { target: '.mdl-cut', title: 'Cut it open', text: 'The section cut hides everything above a height, so you can look into the rooms and check the layout against the plans.' },
+  { target: '.mdl-layers', title: 'Layers', text: 'Turn trades on and off: envelope, roof, steel, interior walls, mechanical, electrical, the site.' },
+  { target: '.mdl-inspect', title: 'Where it came from', text: 'Click anything in the model to see what it is, its finish, the sheet it was read from and how sure the AI was.' },
+  { target: '.mdl-seq', title: 'Watch it go up', text: 'Play the build sequence to see the job go up in construction order, trade by trade.' },
+  { target: '[data-tour="ai"]', title: 'Your own drawings', text: 'Open your own project and click Build 3D with AI. Claude or ChatGPT reads your drawing set and builds the model on your own plan. It is in beta and takes 20 to 60 minutes.' },
+];
+
+export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const r = useRef<{ m: ModelRenderer; controls: OrbitControls; invalidate: () => void; fly: (to: THREE.Vector3, target: THREE.Vector3) => void; fitted: boolean } | null>(null);
@@ -27,6 +63,11 @@ export function ModelScene({ scene, stateOf, stateKey }: Props) {
   const [focus, setFocus] = useState<Set<string> | null>(null);
   const [picked, setPicked] = useState<Element3D | null>(null);
   const [layersOpen, setLayersOpen] = useState(false);
+  // The build sequence (when no schedule is playing): the phase reached, or null for the finished building.
+  const [seq, setSeq] = useState<number | null>(null);
+  const [seqPlaying, setSeqPlaying] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  const [tourBox, setTourBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const counts = useMemo(() => scene.elements.reduce((m, e) => m.set(e.category, (m.get(e.category) ?? 0) + 1), new Map<string, number>()), [scene]);
   const top = useMemo(() => Math.max(3, ...scene.elements.flatMap((e) => e.shapes.map((s) => ('z1' in s ? s.z1 : 'max' in s ? s.max[2] : 'to' in s && s.to.length === 3 ? s.to[2] : 0)))), [scene]);
 
@@ -135,10 +176,76 @@ export function ModelScene({ scene, stateOf, stateKey }: Props) {
   useEffect(() => {
     const x = r.current;
     if (!x) return;
-    x.m.setStates(stateOf ?? null);
+    const s = seq;
+    x.m.setStates(stateOf ?? (s === null ? null : (e) => { const p = phaseOf(e); return p < s ? 'done' : p === s ? 'doing' : 'todo'; }));
     x.invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateKey]);
+  }, [stateKey, seq, scene]);
+
+  // Playing the sequence: a phase every 1.6 s, then the finished building.
+  useEffect(() => {
+    if (!seqPlaying) return;
+    const t = setTimeout(() => {
+      if (seq === null || seq >= PHASES.length - 1) {
+        setSeq(null);
+        setSeqPlaying(false);
+      } else setSeq(seq + 1);
+    }, seq === null ? 0 : 1600);
+    return () => clearTimeout(t);
+  }, [seqPlaying, seq]);
+  const playSeq = () => {
+    if (seqPlaying) {
+      setSeqPlaying(false);
+      setSeq(null);
+      return;
+    }
+    setSeq(0);
+    setSeqPlaying(true);
+  };
+
+  // The tour: each step sets the model up to show what it talks about, then rings its control.
+  const step = tour ? TOUR[tourStep] : null;
+  useEffect(() => {
+    if (!tour) return;
+    const x = r.current;
+    if (tourStep === 1) go('exterior');
+    if (tourStep === 2) go('cutaway');
+    if (tourStep === 3) setLayersOpen(true);
+    if (tourStep === 4 && x) {
+      setLayersOpen(false);
+      go('exterior');
+      const it = x.m.items.find((i) => i.el.category === 'doors' && /overhead/i.test(i.el.name)) ?? x.m.items.find((i) => i.el.category === 'doors');
+      if (it) {
+        x.m.selected = it;
+        x.m.apply();
+        x.invalidate();
+        setPicked(it.el);
+      }
+    }
+    if (tourStep === 5 && x) {
+      x.m.selected = null;
+      x.m.apply();
+      setPicked(null);
+      if (!seqPlaying) playSeq();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tour, tourStep]);
+  useEffect(() => {
+    if (!step) return;
+    const place = () => {
+      const h = host.current?.getBoundingClientRect();
+      const el = step.target ? document.querySelector(step.target) : null;
+      const b = el?.getBoundingClientRect();
+      setTourBox(h && b ? { x: b.left - h.left, y: b.top - h.top, w: b.width, h: b.height } : null);
+    };
+    place();
+    const t = setInterval(place, 300);
+    return () => clearInterval(t);
+  }, [step, picked, layersOpen]);
+  const endTour = () => {
+    setTourStep(0);
+    onTourEnd?.();
+  };
 
   useEffect(() => {
     const x = r.current;
@@ -233,9 +340,62 @@ export function ModelScene({ scene, stateOf, stateKey }: Props) {
           </button>
         </div>
       )}
+      {!stateOf && scene.elements.length > 0 && (
+        <div className="mdl-seq">
+          <button onClick={playSeq} aria-pressed={seqPlaying} title="Show the building going up in construction order">
+            {seqPlaying ? '■ Stop' : '▶ Build sequence'}
+          </button>
+          {seq !== null && (
+            <span>
+              <em>
+                {seq + 1}/{PHASES.length}
+              </em>{' '}
+              {PHASES[seq].label}
+            </span>
+          )}
+        </div>
+      )}
+      {step && (
+        <>
+          {tourBox && <div className="mdl-ring" style={{ left: tourBox.x - 6, top: tourBox.y - 6, width: tourBox.w + 12, height: tourBox.h + 12 }} aria-hidden="true" />}
+          <div className={`mdl-tour ${tourBox ? '' : 'center'}`} role="dialog" aria-label={step.title} style={tourCardPos(tourBox, host.current)}>
+            <small>
+              Tour · {tourStep + 1} of {TOUR.length}
+            </small>
+            <h3>{step.title}</h3>
+            <p>{step.text}</p>
+            <div className="mdl-tour-btns">
+              <button className="ghost" onClick={endTour}>
+                {tourStep === TOUR.length - 1 ? 'Close' : 'Skip tour'}
+              </button>
+              {tourStep > 0 && <button onClick={() => setTourStep((n) => n - 1)}>Back</button>}
+              {tourStep < TOUR.length - 1 ? (
+                <button className="primary" onClick={() => setTourStep((n) => n + 1)}>
+                  Next
+                </button>
+              ) : (
+                <button className="primary" onClick={endTour}>
+                  Done
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
       <div className="mdl-credit">
         {scene.title} · built by {scene.builtBy} from the drawings · not a coordinated BIM model
       </div>
     </div>
   );
+}
+
+/** Where the tour card goes: beside the ringed control, inside the model, or in the middle. */
+function tourCardPos(box: { x: number; y: number; w: number; h: number } | null, host: HTMLElement | null): CSSProperties {
+  if (!box || !host) return {};
+  const W = host.clientWidth, H = host.clientHeight, cw = Math.min(340, W - 24), ch = 190;
+  const below = box.y + box.h + 16;
+  const above = box.y - ch - 16;
+  const top = below + ch < H ? below : above > 8 ? above : Math.max(8, Math.min(H - ch - 8, box.y));
+  const left = Math.max(12, Math.min(W - cw - 12, box.x + box.w / 2 - cw / 2));
+  return { top, left, width: cw };
 }

@@ -45,6 +45,8 @@ interface Props {
   /** A region of a sheet as an image (with its takeoffs drawn): the drawing blow-ups. */
   renderSheet: (sheetId: string, box: [number, number, number, number], scale: number) => Promise<string>;
   onClose: () => void;
+  /** Opens the sample project (a finished AI model, with a tour). */
+  onOpenSample?: () => void;
 }
 
 const BASIS_LABEL: Record<Basis, string> = { documented: 'Documented', inferred: 'Inferred', assumed: 'Assumption', unknown: 'Unknown' };
@@ -85,7 +87,7 @@ function Badge({ basis }: { basis: Basis }) {
   return <span className={`bld-badge ${basis}`}>{BASIS_LABEL[basis]}</span>;
 }
 
-export default function BuildView({ project, sections, specText, sheetText, sheetLines, revisions, onEdits, onOpenSpec, onOpenDrawing, onSave, renderSheet, onClose }: Props) {
+export default function BuildView({ project, sections, specText, sheetText, sheetLines, revisions, onEdits, onOpenSpec, onOpenDrawing, onSave, renderSheet, onClose, onOpenSample }: Props) {
   const edits = useMemo(() => project.build ?? {}, [project.build]);
   const [out, setOut] = useState<BuildOutput | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -141,6 +143,23 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   };
   const scene3d = project.scene3d?.elements.length || aiRun.running ? project.scene3d ?? { version: 1 as const, title: project.name, origin: '', builtBy: 'AI', updated: '', elements: [] } : null;
   const showAiModel = view3d === 'model' && !!scene3d;
+  // The sample project opens on the guided tour, once; the Tour button brings it back.
+  const [tourOn, setTourOn] = useState(() => {
+    if (!project.sample) return false;
+    try {
+      return localStorage.getItem('takeoff.tour3d') !== 'done';
+    } catch {
+      return true;
+    }
+  });
+  const endTour = () => {
+    setTourOn(false);
+    try {
+      localStorage.setItem('takeoff.tour3d', 'done');
+    } catch {
+      // the tour shows again next time
+    }
+  };
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [bottom, setBottom] = useState<'schedule' | 'quantities'>('schedule');
@@ -577,7 +596,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         <section className="bld-stage">
           {showAiModel && scene3d ? (
             <>
-              <ModelScene scene={scene3d} stateOf={stateOf3d} stateKey={`${workspace}|${dayInt}`} />
+              <ModelScene scene={scene3d} stateOf={stateOf3d} stateKey={`${workspace}|${dayInt}`} tour={tourOn} onTourEnd={endTour} />
               <div className="bld-toolbar" role="toolbar" aria-label="View">
                 <div className="bld-tg" role="group" aria-label="Show">
                   {scene3d && (
@@ -587,8 +606,9 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                   )}
                   {model && (
                     <>
-                      <button onClick={() => setView3d('building')} title="The building as drawn: walls read from the floor plans, floors, roof and glazing">
+                      <button onClick={() => setView3d('building')} title="The building as drawn: walls read from the floor plans, floors, roof and glazing (experimental)">
                         Building
+                        <span className="beta">BETA</span>
                       </button>
                       <button onClick={() => setView3d('takeoff')} title="The takeoff's measured elements, placed in 3D">
                         Takeoff
@@ -597,8 +617,14 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                   )}
                 </div>
                 <div className="bld-tg">
-                  <button className={aiRun.running ? 'on' : ''} onClick={() => setAiOpen(true)} title="Build or carry on the 3D model with Claude or ChatGPT">
+                  {project.sample && (
+                    <button className={tourOn ? 'on' : ''} onClick={() => setTourOn(true)} title="A quick tour of the model view">
+                      Tour
+                    </button>
+                  )}
+                  <button data-tour="ai" className={aiRun.running ? 'on' : ''} onClick={() => setAiOpen(true)} title="Build or carry on the 3D model with Claude or ChatGPT">
                     {aiRun.running ? 'AI building…' : 'Build 3D with AI'}
+                    <span className="beta">BETA</span>
                   </button>
                 </div>
               </div>
@@ -641,14 +667,16 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                       AI model
                     </button>
                   )}
-                  <button className={view3d === 'building' ? 'on' : ''} aria-pressed={view3d === 'building'} onClick={() => setView3d('building')} title="The building as drawn: walls read from the floor plans, floors, roof and glazing">
+                  <button className={view3d === 'building' ? 'on' : ''} aria-pressed={view3d === 'building'} onClick={() => setView3d('building')} title="The building as drawn: walls read from the floor plans, floors, roof and glazing (experimental)">
                     Building
+                    <span className="beta">BETA</span>
                   </button>
                   <button className={view3d === 'takeoff' ? 'on' : ''} aria-pressed={view3d === 'takeoff'} onClick={() => setView3d('takeoff')} title="The takeoff's measured elements, placed in 3D">
                     Takeoff
                   </button>
                   <button className={aiRun.running ? 'on' : ''} onClick={() => setAiOpen(true)} title="Have Claude or ChatGPT build a detailed 3D model from the drawings">
                     {aiRun.running ? 'AI building…' : '3D with AI'}
+                    <span className="beta">BETA</span>
                   </button>
                 </div>
                 <div className="bld-tg" role="group" aria-label="Views">
@@ -758,6 +786,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
               onStart={startAi}
               onStop={() => void desktopApi?.agent?.stop()}
               onClose={() => setAiOpen(false)}
+              onOpenSample={project.sample ? undefined : onOpenSample}
             />
           )}
         </section>

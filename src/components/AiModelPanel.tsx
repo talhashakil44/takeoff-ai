@@ -23,9 +23,11 @@ interface Props {
   onStart: (agent: AgentKey) => void;
   onStop: () => void;
   onClose: () => void;
+  /** Opens the sample project, to see a finished model first. */
+  onOpenSample?: () => void;
 }
 
-export function AiModelPanel({ projectName, elements, run, onStart, onStop, onClose }: Props) {
+export function AiModelPanel({ projectName, elements, run, onStart, onStop, onClose, onOpenSample }: Props) {
   const [found, setFound] = useState<Record<AgentKey, AgentFound> | null>(null);
   const [copied, setCopied] = useState(false);
   const api = desktopApi?.agent;
@@ -122,6 +124,14 @@ export function AiModelPanel({ projectName, elements, run, onStart, onStop, onCl
               ))}
             </div>
           ) : null}
+          {onOpenSample && (
+            <p>
+              <button className="link" onClick={onOpenSample}>
+                See a finished example first
+              </button>{' '}
+              (a sample project with a model Claude built, and a short tour).
+            </p>
+          )}
           <details className="ai3d-manual" open={!api}>
             <summary>Or use Claude Desktop</summary>
             <p>With Takeoff AI connected (Connect AI → Add to Claude Desktop), paste this into a new chat:</p>
