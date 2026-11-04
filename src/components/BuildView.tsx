@@ -175,7 +175,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   };
   const scene3d = project.scene3d?.elements.length || aiRun.running ? project.scene3d ?? { version: 1 as const, title: project.name, origin: '', builtBy: 'AI', updated: '', elements: [] } : null;
   const showAiModel = view3d === 'model' && !!scene3d;
-  // The sample project opens on the guided tour, once; the Tour button brings it back.
+  // The sample project opens on the guided help tour, once; the Help button brings it back.
   const [tourOn, setTourOn] = useState(() => {
     if (!project.sample) return false;
     try {
@@ -700,8 +700,8 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                 </div>
                 <div className="bld-tg">
                   {project.sample && (
-                    <button className={tourOn ? 'on' : ''} onClick={() => setTourOn(true)} title="A quick tour of the model view">
-                      Tour
+                    <button className={tourOn ? 'on' : ''} onClick={() => setTourOn(true)} title="How to use the model view">
+                      Help
                     </button>
                   )}
                   <button data-tour="ai" className={aiRun.running ? 'on' : ''} onClick={() => setAiOpen(true)} title="Build or carry on the 3D model with Claude or ChatGPT">
