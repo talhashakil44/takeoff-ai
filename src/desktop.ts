@@ -20,6 +20,8 @@ export interface DesktopApi extends FolderApi {
   embed?(url: string, key: string, body: unknown): Promise<{ status: number; body: string }>;
   /** The MCP server AI apps connect to (electron/mcp.cjs); absent in older builds. */
   mcp?: McpBridge;
+  /** Downloads a sample project file (.takeoff) from the app's release; absent in older builds. */
+  fetchSample?(file: string): Promise<ArrayBuffer>;
   /** Coding agents on the user's own plan, run by the app; absent in older builds. */
   agent?: AgentBridge;
   /** Projects opened from another folder (shared or local); absent in older builds. */

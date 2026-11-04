@@ -1683,24 +1683,48 @@ export function App() {
     setToast({ text: `Copied ${types.length} type${types.length === 1 ? '' : 's'} from ${from.name}`, undo: true });
   }
 
-  /** The sample projects: finished 3D models Claude built from public tender sets (names taken off). */
+  /** The sample projects: drawings (names taken off), their takeoffs and the 3D model Claude built. */
   const SAMPLES = [
-    { name: 'Sample project #1: ski lodge', was: [] as string[], load: () => import('./scene3d/sampleLodge') },
-    { name: 'Sample project #2: maintenance shop', was: ['Sample project: maintenance shop'], load: () => import('./scene3d/sample') },
+    { name: 'Sample project #1: ski lodge', file: 'sample-1-ski-lodge.takeoff', was: [] as string[], load: () => import('./scene3d/sampleLodge') },
+    { name: 'Sample project #2: maintenance shop', file: 'sample-2-maintenance-shop.takeoff', was: ['Sample project: maintenance shop'], load: () => import('./scene3d/sample') },
   ];
-  /** Opens a sample project holding a finished 3D model Claude built, on its guided tour. */
+  /** Opens a sample project: the full one (drawings, takeoffs, 3D) in the desktop app, else just its 3D model. */
   async function openSampleModel(n: 1 | 2 = 1) {
     const sample = SAMPLES[n - 1];
     setBusy('Opening the sample project…');
     try {
-      // Opened before: open that one again rather than making another.
-      const had = (await listProjects()).find((x) => x.name === sample.name || sample.was.includes(x.name));
-      const existing = had ? await loadProjectById(had.id) : undefined;
-      if (existing?.sample && existing.scene3d) {
+      // Opened before: open that one again rather than making another (the full one if there is one).
+      const list = (await listProjects()).filter((x) => x.name === sample.name || sample.was.includes(x.name));
+      const opened = (await Promise.all(list.map((x) => loadProjectById(x.id)))).filter((p): p is Project => !!p?.sample);
+      const full = opened.find((p) => p.docs.length);
+      const existing = full ?? (desktopApi?.fetchSample ? undefined : opened.find((p) => p.scene3d));
+      if (existing) {
         await switchProject(existing.id!);
         if (existing.name !== sample.name) commit((p) => ({ ...p, name: sample.name }), 'Rename project');
         setView('build');
         return;
+      }
+      if (desktopApi?.fetchSample) {
+        setBusy('Downloading the sample project…');
+        const got = await desktopApi.fetchSample(sample.file).catch(() => null);
+        if (got) {
+          let last: Project | null = null;
+          await readProjectFiles(got, async (o) => {
+            o.project = { ...o.project, name: sample.name, sample: true };
+            for (const [id, data] of o.pdfs) await savePdf(id, data);
+            await saveProject(o.project);
+            if (o.project.id) await saveActivity(o.project.id, o.activity);
+            last = o.project;
+          });
+          // A 3D-only copy from an older version steps aside for the full one.
+          for (const p of opened) if (!p.docs.length && !p.measurements.length) await saveProject({ ...p, name: `${sample.name} (3D only)` });
+          if (last) {
+            await openProjectState(last);
+            setView('build');
+            return;
+          }
+        }
+        setToast({ text: 'The full sample could not be downloaded, so this is its 3D model only.', undo: false });
       }
       const { default: model } = await sample.load();
       await createProjectNamed(sample.name, 'metric');

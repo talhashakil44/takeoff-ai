@@ -57,6 +57,8 @@ contextBridge.exposeInMainWorld('takeoffDesktop', {
     setEnabled: (on) => ipcRenderer.invoke('mcp:setEnabled', on),
     newToken: () => ipcRenderer.invoke('mcp:newToken'),
   },
+  /** Downloads a sample project file (.takeoff) from the app's release. */
+  fetchSample: (file) => ipcRenderer.invoke('samples:fetch', file),
   /** Coding agents on the user's own plan (electron/agent.cjs). */
   agent: {
     detect: () => ipcRenderer.invoke('agent:detect'),
