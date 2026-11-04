@@ -267,7 +267,9 @@ export class ModelRenderer {
     this.ground.position.set(c.x, Math.min(0, this.all.min.y < -0.5 ? -0.02 : this.all.min.y) - 0.03, c.z);
     this.ground.receiveShadow = true;
     this.scene.add(this.ground);
-    this.scene.fog = new THREE.Fog('#dfe5e6', span * 5, span * 16);
+    // Haze only past the whole site, so the Site view stays clear.
+    const reach = Math.max(span * 5, this.all.getSize(new THREE.Vector3()).length() * 1.6);
+    this.scene.fog = new THREE.Fog('#dfe5e6', reach, reach * 3.2);
     this.camera.far = span * 40;
     this.camera.updateProjectionMatrix();
     // The sun from the south-west, its shadow fitted to the building and its near site.
