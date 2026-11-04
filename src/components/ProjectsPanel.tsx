@@ -15,6 +15,10 @@ interface Props {
   onSaveFile: () => void;
   onOpenFile: () => void;
   onBackupAll: () => void;
+  /** Opens the sample project (a finished 3D model and a tour). */
+  onSample?: () => void;
+  /** Desktop app: opens a project from a shared or local folder. */
+  onOpenFolder?: () => void;
 }
 
 const when = (iso: string) => {
@@ -29,7 +33,7 @@ const size = (bytes: number) =>
   bytes > 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : bytes > 1e6 ? `${Math.round(bytes / 1e6)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 
 /** Every project saved in this browser, with new, open, delete and project files. */
-export function ProjectsPanel({ currentId, persisted, folder, onOpen, onNew, onDelete, onDuplicate, onSaveFile, onOpenFile, onBackupAll }: Props) {
+export function ProjectsPanel({ currentId, persisted, folder, onOpen, onNew, onDelete, onDuplicate, onSaveFile, onOpenFile, onBackupAll, onSample, onOpenFolder }: Props) {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
   const [space, setSpace] = useState<{ usage: number; quota: number } | null>(null);
   useEffect(() => {
@@ -83,6 +87,20 @@ export function ProjectsPanel({ currentId, persisted, folder, onOpen, onNew, onD
             <Icon name="plus" size={14} /> Duplicate this project
           </button>
         </div>
+        {onSample && (
+          <div className="button-row">
+            <button onClick={onSample} title="A finished 3D model Claude built from a tender drawing set, with a short tour">
+              Open the sample project
+            </button>
+          </div>
+        )}
+        {onOpenFolder && (
+          <div className="button-row">
+            <button onClick={onOpenFolder} title="Open a project from a shared folder (OneDrive, Dropbox, Google Drive, a network drive) or anywhere on this computer">
+              Open a project from a folder…
+            </button>
+          </div>
+        )}
       </div>
       <div className="pop-section">
         <div className="pop-label">Project files</div>

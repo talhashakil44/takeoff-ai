@@ -1683,12 +1683,21 @@ export function App() {
     setToast({ text: `Copied ${types.length} type${types.length === 1 ? '' : 's'} from ${from.name}`, undo: true });
   }
 
-  /** Opens a new sample project holding a finished 3D model Claude built, on its guided tour. */
+  const SAMPLE_NAME = 'Sample project: maintenance shop';
+  /** Opens the sample project holding a finished 3D model Claude built, on its guided tour. */
   async function openSampleModel() {
     setBusy('Opening the sample project…');
     try {
+      // Opened before: open that one again rather than making another.
+      const had = (await listProjects()).find((x) => x.name === SAMPLE_NAME);
+      const existing = had ? await loadProjectById(had.id) : undefined;
+      if (existing?.sample && existing.scene3d) {
+        await switchProject(existing.id!);
+        setView('build');
+        return;
+      }
       const { default: model } = await import('./scene3d/sample');
-      await createProjectNamed('Sample project: maintenance shop', 'metric');
+      await createProjectNamed(SAMPLE_NAME, 'metric');
       commit((p) => ({ ...p, sample: true, scene3d: model }), 'Sample project');
       setView('build');
     } catch (e) {
@@ -3668,6 +3677,7 @@ export function App() {
         <div className="view-pane build-pane">
           <Suspense fallback={<div className="bld-loading">Opening Build It…</div>}>
             <BuildView
+              key={project.id}
               project={project}
               sections={buildSections}
               specText={specTextOf}
@@ -3843,6 +3853,18 @@ export function App() {
               setPopover(null);
               void duplicateProject();
             }}
+            onSample={() => {
+              setPopover(null);
+              void openSampleModel();
+            }}
+            onOpenFolder={
+              desktopApi?.linked && syncFolder
+                ? () => {
+                    setPopover(null);
+                    void openFromFolder();
+                  }
+                : undefined
+            }
             onSaveFile={() => {
               setPopover(null);
               void saveProjectFile();
