@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CATEGORIES, type Element3D, type Scene3D } from '../scene3d/scene';
 import { MODEL_VIEWS, ModelRenderer, layerColour, type ElementState, type ModelView } from '../scene3d/render';
+import { TourPlayer, Walker, tourShots, type Nav } from '../scene3d/walk';
+import { walkPlan, type WalkPlan } from '../scene3d/walkplan';
 import './ModelScene.css';
 
 /**
@@ -56,7 +58,17 @@ const TOUR: TourStep[] = [
 export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const r = useRef<{ m: ModelRenderer; controls: OrbitControls; invalidate: () => void; fly: (to: THREE.Vector3, target: THREE.Vector3) => void; fitted: boolean } | null>(null);
+  const r = useRef<{ m: ModelRenderer; controls: OrbitControls; invalidate: () => void; fly: (to: THREE.Vector3, target: THREE.Vector3) => void; fitted: boolean; drive: (n: Nav | null) => void } | null>(null);
+  // Walking and the fly-through tour: what drives the camera instead of the orbit controls.
+  const [mode, setMode] = useState<'orbit' | 'walk' | 'tour'>('orbit');
+  const walker = useRef<Walker | null>(null);
+  const player = useRef<TourPlayer | null>(null);
+  const plan = useRef<{ scene: Scene3D; plan: WalkPlan } | null>(null);
+  const orbit = useRef<{ position: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const [walkLevel, setWalkLevel] = useState('');
+  const [shot, setShot] = useState<{ i: number; n: number; title: string; text: string } | null>(null);
+  const [touring, setTouring] = useState(true);
+  const navFailed = useRef<() => void>(() => {});
   const [view, setView] = useState<ModelView>('exterior');
   const [layers, setLayers] = useState<Set<string>>(() => new Set(CATEGORIES.map(([k]) => k).filter((k) => k !== 'ceiling')));
   const [cut, setCut] = useState<number | null>(null);
@@ -92,16 +104,31 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
     const ro = new ResizeObserver(size);
     ro.observe(el);
     let raf = 0;
+    let last = performance.now();
+    // Walking or touring drives the camera; the orbit controls rest.
+    let nav: Nav | null = null;
     const frame = (now: number) => {
-      if (flying) {
-        const t = Math.min(1, (now - flying.t0) / 850);
-        const k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        m.camera.position.lerpVectors(flying.from, flying.to, k);
-        controls.target.lerpVectors(flying.tf, flying.tt, k);
-        if (t >= 1) flying = null;
-        dirty = true;
+      const dt = Math.max(0, (now - last) / 1000);
+      last = now;
+      if (nav) {
+        try {
+          if (nav.update(now, dt)) dirty = true;
+        } catch (err) {
+          // Never freeze the view: back to orbiting.
+          console.error(err);
+          navFailed.current();
+        }
+      } else {
+        if (flying) {
+          const t = Math.min(1, (now - flying.t0) / 850);
+          const k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+          m.camera.position.lerpVectors(flying.from, flying.to, k);
+          controls.target.lerpVectors(flying.tf, flying.tt, k);
+          if (t >= 1) flying = null;
+          dirty = true;
+        }
+        if (controls.update()) dirty = true;
       }
-      if (controls.update()) dirty = true;
       if (dirty) {
         dirty = false;
         m.render();
@@ -124,12 +151,32 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
         }
         flying = { from: m.camera.position.clone(), to, tf: controls.target.clone(), tt: target, t0: performance.now() };
       },
+      drive: (n) => {
+        nav = n;
+        flying = null;
+        controls.enabled = !n;
+        dirty = true;
+      },
     };
-    // Picking: a click (not a drag).
+    // Picking: a click (not a drag). Walking, a drag looks round.
     const ray = new THREE.Raycaster();
     let down: [number, number] | null = null;
-    const onDown = (e: PointerEvent) => (down = [e.clientX, e.clientY]);
+    let drag: [number, number] | null = null;
+    const onDown = (e: PointerEvent) => {
+      down = [e.clientX, e.clientY];
+      if (nav?.look) {
+        drag = [e.clientX, e.clientY];
+        cv.setPointerCapture?.(e.pointerId);
+      }
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!drag || !nav?.look) return;
+      nav.look(e.clientX - drag[0], e.clientY - drag[1]);
+      drag = [e.clientX, e.clientY];
+    };
+    const onEnd = () => (drag = null);
     const onUp = (e: PointerEvent) => {
+      drag = null;
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
       const b = cv.getBoundingClientRect();
       ray.setFromCamera(new THREE.Vector2(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), m.camera);
@@ -143,12 +190,18 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
     };
     if (import.meta.env.DEV) Object.assign(window, { __model: { m, controls } });
     cv.addEventListener('pointerdown', onDown);
+    cv.addEventListener('pointermove', onMove);
     cv.addEventListener('pointerup', onUp);
+    cv.addEventListener('pointercancel', onEnd);
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
       cv.removeEventListener('pointerdown', onDown);
+      cv.removeEventListener('pointermove', onMove);
       cv.removeEventListener('pointerup', onUp);
+      cv.removeEventListener('pointercancel', onEnd);
+      walker.current = null;
+      player.current = null;
       controls.dispose();
       m.dispose();
       r.current = null;
@@ -255,9 +308,157 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
     x.invalidate();
   }, [layers, cut, focus]);
 
+  // ------------------------------------------------------------------ walking and the tour
+
+  /** The walk plan for this model, worked out once per model when first needed. */
+  const planOf = () => {
+    if (plan.current?.scene !== scene) plan.current = { scene, plan: walkPlan(scene) };
+    return plan.current.plan;
+  };
+  /** Takes the camera from the orbit controls, remembering where it was. */
+  const takeCamera = () => {
+    const x = r.current;
+    if (!x) return null;
+    if (mode === 'orbit') orbit.current = { position: x.m.camera.position.clone(), target: x.controls.target.clone() };
+    walker.current = null;
+    player.current = null;
+    setPicked(null);
+    x.m.selected = null;
+    x.m.apply();
+    setFocus(null);
+    setCut(null);
+    x.m.eye(true);
+    // Keys go to walking, not to the button just pressed (Space would press it again).
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    return x;
+  };
+  /** Back to orbiting: from where the estimator left it, unless a view is about to fly somewhere. */
+  const leave = (flyBack = true) => {
+    const x = r.current;
+    walker.current = null;
+    player.current = null;
+    setShot(null);
+    setMode('orbit');
+    setCut(null);
+    if (!x) return;
+    x.drive(null);
+    x.m.eye(false);
+    const o = orbit.current;
+    if (flyBack && o) x.fly(o.position.clone(), o.target.clone());
+    x.invalidate();
+  };
+  navFailed.current = () => leave(false);
+  const startWalk = () => {
+    if (!scene.elements.length) return;
+    // From inside the tour, walk on from where it stopped; otherwise start outside the front door.
+    const t = player.current;
+    const inside = t && t.i > 0 && t.i < t.shots.length - 1 ? t.shots[t.i] : null;
+    const x = takeCamera();
+    if (!x) return;
+    const p = planOf();
+    const w = new Walker(x.m, p);
+    w.onLevel = (i) => setWalkLevel(p.levels[i]?.name ?? '');
+    const model = (v: THREE.Vector3): [number, number, number] => [v.x, -v.z, v.y];
+    if (inside) w.begin(model(inside.pos), model(inside.look));
+    else w.begin();
+    walker.current = w;
+    x.drive(w);
+    if (import.meta.env.DEV) Object.assign(window, { __walk: w });
+    setShot(null);
+    setMode('walk');
+  };
+  const startTour = () => {
+    if (!scene.elements.length) return;
+    const x = takeCamera();
+    if (!x) return;
+    const shots = tourShots(x.m, planOf());
+    const t = new TourPlayer(x.m, shots);
+    t.onShot = (i) => {
+      setShot({ i, n: shots.length, title: shots[i].title, text: shots[i].text });
+      setCut(shots[i].cut);
+    };
+    t.onEnd = () => setTouring(false);
+    player.current = t;
+    x.drive(t);
+    if (import.meta.env.DEV) Object.assign(window, { __tour: t });
+    setTouring(true);
+    setMode('tour');
+    t.go(0);
+  };
+  const playPause = () => {
+    const t = player.current;
+    if (!t) return;
+    // At the end, Play starts again from the top.
+    if (!t.playing && t.i === t.shots.length - 1) t.go(0);
+    t.play(!t.playing);
+    setTouring(t.playing);
+  };
+
+  // The keys while walking or touring.
+  useEffect(() => {
+    if (mode === 'orbit') return;
+    const typing = (e: KeyboardEvent) => e.target instanceof HTMLElement && (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable);
+    const MOVE = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+    const onDown = (e: KeyboardEvent) => {
+      if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        leave();
+        return;
+      }
+      const w = walker.current, t = player.current;
+      if (w) {
+        w.run = e.shiftKey;
+        if (MOVE.has(e.code)) {
+          w.keys.add(e.code);
+          e.preventDefault();
+        } else if (e.code === 'KeyE' || e.code === 'PageUp') {
+          w.changeLevel(1);
+          e.preventDefault();
+        } else if (e.code === 'KeyQ' || e.code === 'PageDown') {
+          w.changeLevel(-1);
+          e.preventDefault();
+        }
+      } else if (t) {
+        if (e.code === 'ArrowRight') t.next();
+        else if (e.code === 'ArrowLeft') t.back();
+        else if (e.code === 'Space') playPause();
+        else return;
+        e.preventDefault();
+      }
+    };
+    const onUp = (e: KeyboardEvent) => {
+      const w = walker.current;
+      if (!w) return;
+      w.run = e.shiftKey;
+      w.keys.delete(e.code);
+    };
+    const onBlur = () => walker.current?.keys.clear();
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onDown);
+      window.removeEventListener('keyup', onUp);
+      window.removeEventListener('blur', onBlur);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+  /** An on-screen arrow: held down, it holds its key. */
+  const hold = (code: string) => ({
+    onPointerDown: (e: ReactPointerEvent) => {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      walker.current?.keys.add(code);
+    },
+    onPointerUp: () => walker.current?.keys.delete(code),
+    onPointerCancel: () => walker.current?.keys.delete(code),
+    onLostPointerCapture: () => walker.current?.keys.delete(code),
+  });
+
   const go = (v: ModelView) => {
     const x = r.current;
     if (!x) return;
+    if (mode !== 'orbit') leave(false);
     setView(v);
     const to = x.m.viewOf(v);
     setFocus(to.view.focus);
@@ -277,16 +478,86 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
       {!scene.elements.length && <div className="mdl-empty">The model is empty so far.</div>}
       <div className="mdl-views" role="group" aria-label="Views">
         {MODEL_VIEWS.map((v) => (
-          <button key={v.id} className={view === v.id ? 'on' : ''} aria-pressed={view === v.id} onClick={() => go(v.id)} title={v.sub}>
+          <button key={v.id} className={mode === 'orbit' && view === v.id ? 'on' : ''} aria-pressed={mode === 'orbit' && view === v.id} onClick={() => go(v.id)} title={v.sub}>
             {v.label}
           </button>
         ))}
+        <span className="mdl-go">
+          <button className={mode === 'walk' ? 'on' : ''} aria-pressed={mode === 'walk'} disabled={!scene.elements.length} onClick={() => (mode === 'walk' ? leave() : startWalk())} title="Walk inside at eye height: W A S D or the arrows to move, drag to look">
+            Walk
+          </button>
+          <button className={mode === 'tour' ? 'on' : ''} aria-pressed={mode === 'tour'} disabled={!scene.elements.length} onClick={() => (mode === 'tour' ? leave() : startTour())} title="A guided fly-through: the approach, the front door, each floor, then a cutaway">
+            Tour
+          </button>
+        </span>
         <label className="mdl-cut" title="Section cut: hide everything above this height">
           <span>Cut</span>
           <input type="range" min={-1} max={top + 0.5} step={0.05} value={cut ?? top + 0.5} onChange={(e) => setCut(Number(e.target.value) >= top + 0.45 ? null : Number(e.target.value))} />
           <em>{cut === null ? 'off' : `${cut.toFixed(2)} m`}</em>
         </label>
       </div>
+      {mode === 'walk' && (
+        <div className="mdl-walk" role="region" aria-label="Walking">
+          <div className="mdl-walk-head">
+            <strong>Walking</strong>
+            <em>{walkLevel}</em>
+            <span className="mdl-walk-lv">
+              <button onClick={() => walker.current?.changeLevel(-1)} title="Down a level (Q or Page Down)" aria-label="Down a level">
+                ▼
+              </button>
+              <button onClick={() => walker.current?.changeLevel(1)} title="Up a level (E or Page Up)" aria-label="Up a level">
+                ▲
+              </button>
+            </span>
+            <button className="mdl-walk-x" onClick={() => leave()}>
+              Exit
+            </button>
+          </div>
+          <p>
+            <kbd>W A S D</kbd> or arrows to move · drag to look · <kbd>Shift</kbd> runs · <kbd>Q</kbd>/<kbd>E</kbd> change level · <kbd>Esc</kbd> exits
+          </p>
+          <div className="mdl-pad" aria-label="Move">
+            <button {...hold('ArrowUp')} aria-label="Forward" className="up">
+              ▲
+            </button>
+            <button {...hold('ArrowLeft')} aria-label="Turn left" className="lt">
+              ◀
+            </button>
+            <button {...hold('ArrowDown')} aria-label="Back" className="dn">
+              ▼
+            </button>
+            <button {...hold('ArrowRight')} aria-label="Turn right" className="rt">
+              ▶
+            </button>
+          </div>
+        </div>
+      )}
+      {mode === 'tour' && shot && (
+        <div className="mdl-trip" role="region" aria-label="Tour" aria-live="polite">
+          <small>
+            Tour · {shot.i + 1} of {shot.n}
+          </small>
+          <h3>{shot.title}</h3>
+          <p>{shot.text}</p>
+          <div className="mdl-trip-bar" aria-hidden="true">
+            <i style={{ width: `${((shot.i + 1) / shot.n) * 100}%` }} />
+          </div>
+          <div className="mdl-tour-btns">
+            <button className="ghost" onClick={() => leave()}>
+              Exit
+            </button>
+            <button onClick={() => player.current?.back()} disabled={shot.i === 0}>
+              Back
+            </button>
+            <button onClick={playPause} aria-pressed={touring}>
+              {touring ? 'Pause' : shot.i === shot.n - 1 ? 'Replay' : 'Play'}
+            </button>
+            <button className="primary" onClick={() => (shot.i === shot.n - 1 ? leave() : player.current?.next())}>
+              {shot.i === shot.n - 1 ? 'Done' : 'Next'}
+            </button>
+          </div>
+        </div>
+      )}
       <div className={`mdl-layers ${layersOpen ? 'open' : ''}`}>
         <button className="mdl-layers-head" aria-expanded={layersOpen} onClick={() => setLayersOpen((o) => !o)}>
           Layers <em>{scene.elements.length}</em>

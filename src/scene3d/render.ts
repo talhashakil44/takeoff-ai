@@ -175,6 +175,10 @@ export class ModelRenderer {
   all = new THREE.Box3();
   view: ViewState = { layers: new Set(CATEGORIES.map(([k]) => k).filter((k) => k !== 'ceiling')), cut: null, focus: null };
   selected: Item | null = null;
+  /** Goes up whenever the meshes or what is shown change (walking keeps its lists by it). */
+  version = 0;
+  /** A lamp at the eye while walking, so rooms under the roof aren't dark. Off (0) otherwise. */
+  private lamp = new THREE.PointLight('#fff2df', 0, 26, 1.1);
 
   constructor(canvas?: HTMLCanvasElement, opts: { preserve?: boolean } = {}) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: !!opts.preserve });
@@ -210,6 +214,7 @@ export class ModelRenderer {
     this.sun.shadow.normalBias = 0.03;
     this.sun.shadow.radius = 3;
     s.add(this.sun, this.sun.target);
+    s.add(this.lamp);
     this.composer = new EffectComposer(r);
     this.composer.addPass(new RenderPass(s, this.camera));
     try {
@@ -292,6 +297,20 @@ export class ModelRenderer {
       it.mesh.castShadow = !faint && !['site', 'paving', 'glazing'].includes(it.el.category) && it.el.material !== 'glass';
     }
     this.finishes.clip.constant = cut ?? 1e5;
+    this.version++;
+  }
+
+  /** The ground under everything (for walking on). */
+  get groundMesh() {
+    return this.ground;
+  }
+
+  /** A person's eye for walking and touring: a wider lens, a near plane close enough for doorways, a lamp. */
+  eye(on: boolean) {
+    this.camera.fov = on ? 62 : 36;
+    this.camera.near = on ? 0.05 : 0.2;
+    this.camera.updateProjectionMatrix();
+    this.lamp.intensity = on ? 9 : 0;
   }
 
   /** Each element's construction state (from the schedule); null = all built. */
@@ -339,6 +358,8 @@ export class ModelRenderer {
   }
 
   render() {
+    // Over the head, so its shine on glass ahead sits high rather than dead centre.
+    if (this.lamp.intensity) this.lamp.position.copy(this.camera.position).y += 1.2;
     this.composer.render();
   }
 
