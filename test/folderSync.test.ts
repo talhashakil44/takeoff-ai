@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { FolderSync, type FolderApi, type LocalStore } from '../src/folderSync';
+import { FolderRouter, type LinkedBridge, type LinkedEntry } from '../src/linkedFolders';
 import type { ActivityEvent } from '../src/activity';
 import { newProject, type Project } from '../src/model';
 import { summarize, type ProjectSummary, type SyncMark } from '../src/storage';
@@ -198,5 +199,96 @@ describe('shared projects folder', () => {
     expect(() => folder.inside('/tmp/projects', '../elsewhere')).toThrow();
     expect(() => folder.dirFor('x', '../../etc')).toThrow();
     expect(folder.dirFor('A/B: "plans"', 'abcdefgh123')).toBe('A B plans (abcdefgh)');
+  });
+});
+
+/** One computer's opened folders, on disk, as electron/main.cjs serves them. */
+function linkedBridge(picks: { open?: string; share?: string }): LinkedBridge & { linked: { root: string; dir: string; id: string }[] } {
+  const linked: { root: string; dir: string; id: string }[] = [];
+  const ok = (root: string, dir: string) => {
+    if (!linked.some((l) => l.root === root && l.dir === dir)) throw new Error('not opened');
+    return root;
+  };
+  return {
+    linked,
+    open: async () => {
+      const r = picks.open!;
+      const found = await folder.list(r);
+      for (const e of found) if (!linked.some((l) => l.root === r && l.dir === e.dir)) linked.push({ root: r, dir: e.dir, id: e.id });
+      return { picked: r, inMain: false, found: found.map((e) => ({ id: e.id, name: e.name })) };
+    },
+    shareTo: async (id, name) => {
+      const dir = folder.dirFor(name, id);
+      linked.push({ root: picks.share!, dir, id });
+      return { root: picks.share!, dir };
+    },
+    list: async () => {
+      const out: LinkedEntry[] = [];
+      for (const l of linked) {
+        const m = (await folder.list(l.root)).find((e) => e.dir === l.dir);
+        out.push({ root: l.root, dir: l.dir, id: m?.id ?? l.id, name: m?.name ?? l.dir, savedAt: m?.savedAt ?? null, missing: false });
+      }
+      return out;
+    },
+    remove: async (id) => void linked.splice(linked.findIndex((l) => l.id === id), 1),
+    read: (r, d) => folder.readProject(ok(r, d), d),
+    write: (r, d, json, meta) => folder.writeProject(ok(r, d), d, json, meta),
+    hasPdf: (r, d, id) => folder.hasPdf(ok(r, d), d, id),
+    readPdf: async (r, d, id) => {
+      const b = await folder.readPdf(ok(r, d), d, id);
+      return b ? (b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer) : null;
+    },
+    writePdf: (r, d, id, data) => folder.writePdf(ok(r, d), d, id, data),
+    writeExport: async () => '',
+    reveal: async () => undefined,
+  };
+}
+
+describe('projects opened from a shared folder', () => {
+  it('moves a project into a shared folder, opens it on a colleague\'s computer, and carries edits both ways', async () => {
+    const mine = await mkdtemp(path.join(tmpdir(), 'takeoff-mine-'));
+    const theirs = await mkdtemp(path.join(tmpdir(), 'takeoff-theirs-'));
+    const shared = await mkdtemp(path.join(tmpdir(), 'takeoff-shared-'));
+    let t = 0;
+    const clock = () => new Date(Date.UTC(2026, 10, 4, 12, 0, t++)).toISOString();
+    const a = computer(clock), b = computer(clock);
+    const pa = linkedBridge({ share: shared }), pb = linkedBridge({ open: shared });
+    const ra = new FolderRouter(diskApi(mine), a, pa), rb = new FolderRouter(diskApi(theirs), b, pb);
+
+    // A bid on my computer, in my own projects folder.
+    const bid = project('Kelso lodge');
+    await a.edit(bid);
+    await a.savePdf('doc1', new Uint8Array([1, 2, 3]).buffer);
+    await ra.push(bid.id!);
+    expect((await folder.list(mine)).map((e) => e.id)).toEqual([bid.id]);
+
+    // Shared: it now lives in the shared folder, with its drawings, and stays out of mine from now on.
+    await ra.shareTo(bid.id!, bid.name);
+    expect((await folder.list(shared)).map((e) => e.id)).toEqual([bid.id]);
+    expect(await folder.hasPdf(shared, (await folder.list(shared))[0].dir, 'doc1')).toBe(true);
+
+    // A colleague opens the shared folder: the project arrives, drawings and all.
+    const opened = await rb.openFromFolder();
+    expect(opened?.ids).toEqual([bid.id]);
+    expect(b.projects.get(bid.id!)?.name).toBe('Kelso lodge');
+    expect(await b.loadPdf('doc1')).toBeTruthy();
+    // ...and it is not copied into their own projects folder.
+    await rb.pull();
+    expect(await folder.list(theirs)).toEqual([]);
+
+    // They add a takeoff; it reaches me through the shared folder.
+    const theirsEdit = { ...b.projects.get(bid.id!)!, name: 'Kelso lodge (rev 1)' };
+    await b.edit(theirsEdit);
+    await rb.push(bid.id!);
+    const back = await ra.pull();
+    expect(back.updated).toContain(bid.id);
+    expect(a.projects.get(bid.id!)?.name).toBe('Kelso lodge (rev 1)');
+    // The shared folder keeps its name (it isn't renamed under the others).
+    expect((await folder.list(shared))[0].dir).toBe(folder.dirFor('Kelso lodge', bid.id!));
+
+    // Deleting it on their computer lets go of the folder; it stays shared for me.
+    await rb.remove(bid.id!);
+    expect(pb.linked).toEqual([]);
+    expect((await folder.list(shared)).map((e) => e.id)).toEqual([bid.id]);
   });
 });

@@ -70,7 +70,8 @@ import { runTool, toolList, TOOL_DEFS, type McpContext } from './mcp/tools';
 import type { ModelView } from './scene3d/render';
 import { renderRegion } from './mcp/render';
 import { reviewText, takeOffWholeSet } from './automate/wholeSet';
-import { FolderSync, type PullResult } from './folderSync';
+import type { PullResult } from './folderSync';
+import { FolderRouter } from './linkedFolders';
 import { linesIn, onSheet, readNumber, readTitle, relativeBox, type Box } from './sheetNumbers';
 import { SheetNumbersDialog, type SheetNumberRow } from './components/SheetNumbersDialog';
 import { SymbolCountDialog, type SymbolChoice } from './components/SymbolCountDialog';
@@ -249,7 +250,9 @@ export function App() {
   const [persisted, setPersisted] = useState(false);
   /** Desktop app: the shared projects folder (iCloud Drive), and its sync. */
   const [syncFolder, setSyncFolder] = useState<string | null>(null);
-  const folderSync = useRef<FolderSync | null>(null);
+  const folderSync = useRef<FolderRouter | null>(null);
+  /** Projects opened from another folder (shared or local), by id: that folder, to say so. */
+  const [linkedFolders, setLinkedFolders] = useState<Map<string, string>>(new Map());
   /** MCP: the app as the AI's tools see it (set each render), and the calls waiting their turn. */
   const mcpCtxRef = useRef<McpContext | null>(null);
   const mcpQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -259,8 +262,9 @@ export function App() {
   const flushAllRef = useRef<() => Promise<void>>(async () => undefined);
   /** From now on, keeps projects in `folder` too: each save is sent there, each delete trashed there. */
   function startFolderSync(folder: string) {
-    const sync = new FolderSync(desktopApi!, { listProjects, loadProjectById, saveProject, loadActivity, saveActivity, loadPdf, savePdf, getSyncMark, setSyncMark });
+    const sync = new FolderRouter(desktopApi!, { listProjects, loadProjectById, saveProject, loadActivity, saveActivity, loadPdf, savePdf, getSyncMark, setSyncMark }, desktopApi!.linked ?? null);
     folderSync.current = sync;
+    void sync.refresh().then((list) => setLinkedFolders(new Map(list.map((e) => [e.id, e.root])))).catch(() => undefined);
     setSyncFolder(folder);
     setStorageHooks({ saved: (id) => sync.pushSoon(id), deleted: (id) => void sync.remove(id) });
   }
@@ -1335,8 +1339,50 @@ export function App() {
     const id = projectRef.current?.id;
     if (!sync || !id || !desktopApi) return;
     await flushAllRef.current();
-    const dir = (await sync.dirOf(id)) ?? (await sync.push(id).then(() => sync.dirOf(id)));
-    if (dir) await desktopApi.revealProject(dir);
+    const at = await sync.whereIs(id);
+    if (at && 'root' in at) await desktopApi.linked?.reveal(at.root, at.dir);
+    else if (at) await desktopApi.revealProject(at.dir);
+  }
+
+  /** Desktop app: opens projects from a folder anyone with access can open (shared or local); they're saved back there. */
+  async function openFromFolder() {
+    const sync = folderSync.current;
+    if (!sync) return;
+    await flushAllRef.current();
+    try {
+      const res = await sync.openFromFolder();
+      if (!res) return;
+      if (!res.ids.length) {
+        setToast({ text: `No Takeoff AI projects in ${folderLabel(res.picked)}. Pick a project's folder (it holds project.json), or the folder above it.`, undo: false });
+        return;
+      }
+      setLinkedFolders(new Map((await sync.refresh()).map((e) => [e.id, e.root])));
+      await switchProject(res.ids[0]);
+      setToast({
+        text: res.inMain
+          ? `Opened ${res.names[0]} from your projects folder`
+          : `Opened ${res.names.length === 1 ? res.names[0] : `${res.names.length} projects`} from ${folderLabel(res.picked)}. Changes save back there, so everyone with that folder sees them.`,
+        undo: false,
+      });
+    } catch (e) {
+      setToast({ text: `That folder couldn’t be opened: ${e instanceof Error ? e.message : String(e)}`, undo: false });
+    }
+  }
+
+  /** Desktop app: moves the open project into a shared folder of the user's choosing, so others can open it. */
+  async function shareProjectFolder() {
+    const sync = folderSync.current;
+    const p = projectRef.current;
+    if (!sync || !p?.id) return;
+    await flushAllRef.current();
+    try {
+      const root = await sync.shareTo(p.id, p.name);
+      if (!root) return;
+      setLinkedFolders(new Map((await sync.refresh()).map((e) => [e.id, e.root])));
+      setToast({ text: `${p.name} is now kept in ${folderLabel(root)}. Anyone with that folder can open it: More › Open a project from a folder.`, undo: false, sticky: true });
+    } catch (e) {
+      setToast({ text: `The project couldn’t be moved there: ${e instanceof Error ? e.message : String(e)}`, undo: false });
+    }
   }
 
   /**
@@ -1571,21 +1617,22 @@ export function App() {
     setToast({ text: `Removed ${doc?.name ?? 'drawings'}`, undo: true });
   }
 
-  /** Desktop app: the open project's folder name in the projects folder (written first if needed). */
-  async function projectDir(): Promise<string | null> {
+  /** Desktop app: where the open project is kept (written first if needed). */
+  async function projectDir(): Promise<{ dir: string } | { root: string; dir: string } | null> {
     const sync = folderSync.current;
     const id = projectRef.current?.id;
     if (!sync || !id) return null;
     await flushAllRef.current();
-    return (await sync.dirOf(id)) ?? (await sync.push(id).then(() => sync.dirOf(id)));
+    return sync.whereIs(id);
   }
 
   /** Desktop app: saves an export in the open project's Exports folder; null when it has no folder (the browser). */
   async function saveToProject(filename: string, blob: Blob): Promise<string | null> {
     if (!desktopApi?.writeExport) return null;
-    const dir = await projectDir().catch(() => null);
-    if (!dir) return null;
-    return desktopApi.writeExport(dir, filename, await blob.arrayBuffer());
+    const at = await projectDir().catch(() => null);
+    if (!at) return null;
+    if ('root' in at) return desktopApi.linked ? desktopApi.linked.writeExport(at.root, at.dir, filename, await blob.arrayBuffer()) : null;
+    return desktopApi.writeExport(at.dir, filename, await blob.arrayBuffer());
   }
 
   /** Saves an export: in the project's own folder on the desktop app, as a download in the browser. */
@@ -1634,6 +1681,21 @@ export function App() {
     }
     commit((q) => ({ ...q, types: [...q.types, ...types] }), 'Import types');
     setToast({ text: `Copied ${types.length} type${types.length === 1 ? '' : 's'} from ${from.name}`, undo: true });
+  }
+
+  /** Opens a new sample project holding a finished 3D model Claude built, on its guided tour. */
+  async function openSampleModel() {
+    setBusy('Opening the sample project…');
+    try {
+      const { default: model } = await import('./scene3d/sample');
+      await createProjectNamed('Sample project: maintenance shop', 'metric');
+      commit((p) => ({ ...p, sample: true, scene3d: model }), 'Sample project');
+      setView('build');
+    } catch (e) {
+      setToast({ text: `Something went wrong: ${e instanceof Error ? e.message : String(e)}`, undo: false });
+    } finally {
+      setBusy(null);
+    }
   }
 
   /** Adds a small generated floor plan to try the tools on. */
@@ -2752,9 +2814,11 @@ export function App() {
     },
     showSheet: (id) => setSheetId(id),
     projectFolder: async () => {
-      const dir = await projectDir().catch(() => null);
-      if (!dir || !syncFolder) return null;
-      return `${syncFolder}${desktopApi?.platform === 'win32' ? '\\' : '/'}${dir}`;
+      const at = await projectDir().catch(() => null);
+      const sep = desktopApi?.platform === 'win32' ? '\\' : '/';
+      if (at && 'root' in at) return `${at.root}${sep}${at.dir}`;
+      if (!at || !syncFolder) return null;
+      return `${syncFolder}${sep}${at.dir}`;
     },
     maxOpening: () => maxOpening,
     wholeSet: (watch?: boolean) => takeOffEverything(!!watch),
@@ -3398,6 +3462,9 @@ export function App() {
               <button className="link-button try-sample" onClick={() => void openSample()}>
                 No drawings handy? Try a sample plan
               </button>
+              <button className="link-button try-sample" onClick={() => void openSampleModel()}>
+                Or tour a sample project with a 3D model built by AI
+              </button>
               <div className="welcome-units">
                 <span>Measure in</span>
                 <div className="segmented small" role="radiogroup" aria-label="Units">
@@ -3617,6 +3684,7 @@ export function App() {
                 follow(to, label);
               }}
               onSave={(name, data) => void saveFile(name, data)}
+              onOpenSample={() => void openSampleModel()}
               renderSheet={renderSheetRegion}
               onClose={() => setView('drawings')}
             />
@@ -4037,6 +4105,14 @@ export function App() {
                       { label: 'Show this project’s folder', hint: 'Drawings and takeoffs', onSelect: () => void revealProjectFolder() },
                       { label: 'Show projects folder', hint: folderLabel(syncFolder), onSelect: () => void desktopApi!.revealFolder() },
                       { label: 'Change projects folder…', onSelect: () => void chooseProjectsFolder() },
+                      ...(desktopApi.linked
+                        ? [
+                            { label: 'Open a project from a folder…', hint: 'Shared or local', onSelect: () => void openFromFolder() },
+                            ...(linkedFolders.has(project.id ?? '')
+                              ? []
+                              : [{ label: 'Share this project through a folder…', hint: 'OneDrive, Dropbox…', onSelect: () => void shareProjectFolder() }]),
+                          ]
+                        : []),
                     ]
                   : [{ label: 'Keep projects in iCloud Drive…', hint: 'Other computer', onSelect: () => void chooseProjectsFolder() }]
                 : []),

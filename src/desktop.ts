@@ -1,4 +1,5 @@
 import type { FolderApi } from './folderSync';
+import type { LinkedBridge } from './linkedFolders';
 
 /** The desktop app's extras (electron/preload.cjs). */
 export interface DesktopApi extends FolderApi {
@@ -21,6 +22,8 @@ export interface DesktopApi extends FolderApi {
   mcp?: McpBridge;
   /** Coding agents on the user's own plan, run by the app; absent in older builds. */
   agent?: AgentBridge;
+  /** Projects opened from another folder (shared or local); absent in older builds. */
+  linked?: LinkedBridge;
 }
 
 export type AgentKey = 'claude' | 'codex';

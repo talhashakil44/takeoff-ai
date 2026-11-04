@@ -124,6 +124,76 @@ function registerIpc() {
     return { status: res.status, body: await res.text() };
   });
   ipcMain.handle('folder:writeExport', (_e, dir, filename, data) => folder.writeExport(requireRoot(), dir, filename, data));
+
+  // Projects opened from another folder (a shared OneDrive, Dropbox, Google Drive or network
+  // folder, or anywhere on this computer): each stays in its own folder and is saved back
+  // there, so everyone with access to that folder works on the same project. Only folders the
+  // user picked are ever read or written.
+  const linkedOf = async () => (await readSettings()).linkedProjects ?? [];
+  const saveLinked = async (list) => writeSettings({ ...(await readSettings()), linkedProjects: list });
+  const same = (a, b) => path.resolve(a) === path.resolve(b);
+  async function requireLinked(r, dir) {
+    if (!(await linkedOf()).some((l) => same(l.root, r) && l.dir === dir)) throw new Error('Not a project folder opened in Takeoff AI');
+    return r;
+  }
+  ipcMain.handle('linked:open', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Open a project from a folder',
+      message: 'Pick a Takeoff AI project folder, or a folder holding several, in iCloud Drive, OneDrive, Dropbox, Google Drive, a network drive or this computer.',
+      defaultPath: root ?? iCloudDrive() ?? app.getPath('documents'),
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const picked = result.filePaths[0];
+    const isProject = fsSync.existsSync(path.join(picked, 'meta.json'));
+    const r = isProject ? path.dirname(picked) : picked;
+    const found = (await folder.list(r)).filter((e) => !isProject || e.dir === path.basename(picked));
+    // Projects already in this computer's projects folder sync with it as they are.
+    const inMain = !!root && same(r, root);
+    if (found.length && !inMain) {
+      const list = await linkedOf();
+      for (const e of found) if (!list.some((l) => same(l.root, r) && l.dir === e.dir)) list.push({ root: r, dir: e.dir, id: e.id });
+      await saveLinked(list);
+    }
+    return { picked, inMain, found: found.map((e) => ({ id: e.id, name: e.name })) };
+  });
+  ipcMain.handle('linked:shareTo', async (event, id, name) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Keep this project in a shared folder',
+      message: 'Pick a folder the others can open (a shared OneDrive, Dropbox, Google Drive or network folder). The project gets its own folder inside it.',
+      defaultPath: iCloudDrive() ?? app.getPath('documents'),
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const r = result.filePaths[0];
+    if (root && same(r, root)) throw new Error('That is already your projects folder: pick a shared folder instead.');
+    const dir = folder.dirFor(name, id);
+    const list = (await linkedOf()).filter((l) => l.id !== id);
+    list.push({ root: r, dir, id });
+    await saveLinked(list);
+    return { root: r, dir };
+  });
+  ipcMain.handle('linked:list', async () => {
+    const out = [];
+    for (const l of await linkedOf()) {
+      const meta = (await folder.list(l.root)).find((e) => e.dir === l.dir);
+      out.push({ root: l.root, dir: l.dir, id: meta?.id ?? l.id, name: meta?.name ?? l.dir, savedAt: meta?.savedAt ?? null, missing: !fsSync.existsSync(l.root) });
+    }
+    return out;
+  });
+  ipcMain.handle('linked:remove', async (_e, id) => saveLinked((await linkedOf()).filter((l) => l.id !== id)));
+  ipcMain.handle('linked:read', async (_e, r, dir) => folder.readProject(await requireLinked(r, dir), dir));
+  ipcMain.handle('linked:write', async (_e, r, dir, json, meta) => folder.writeProject(await requireLinked(r, dir), dir, json, meta));
+  ipcMain.handle('linked:hasPdf', async (_e, r, dir, docId) => folder.hasPdf(await requireLinked(r, dir), dir, docId));
+  ipcMain.handle('linked:readPdf', async (_e, r, dir, docId) => {
+    const data = await folder.readPdf(await requireLinked(r, dir), dir, docId);
+    return data ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) : null;
+  });
+  ipcMain.handle('linked:writePdf', async (_e, r, dir, docId, data) => folder.writePdf(await requireLinked(r, dir), dir, docId, data));
+  ipcMain.handle('linked:writeExport', async (_e, r, dir, filename, data) => folder.writeExport(await requireLinked(r, dir), dir, filename, data));
+  ipcMain.handle('linked:reveal', async (_e, r, dir) => shell.openPath(folder.inside(await requireLinked(r, dir), dir)));
 }
 
 function serveApp() {

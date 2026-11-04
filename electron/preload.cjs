@@ -21,6 +21,20 @@ contextBridge.exposeInMainWorld('takeoffDesktop', {
   useDefaultFolder: () => ipcRenderer.invoke('folder:useDefault'),
   getMissingFolder: () => ipcRenderer.invoke('folder:missing'),
   writeExport: (dir, filename, data) => ipcRenderer.invoke('folder:writeExport', dir, filename, data),
+  /** Projects opened from another folder (shared or local), saved back to it. */
+  linked: {
+    open: () => ipcRenderer.invoke('linked:open'),
+    shareTo: (id, name) => ipcRenderer.invoke('linked:shareTo', id, name),
+    list: () => ipcRenderer.invoke('linked:list'),
+    remove: (id) => ipcRenderer.invoke('linked:remove', id),
+    read: (root, dir) => ipcRenderer.invoke('linked:read', root, dir),
+    write: (root, dir, json, meta) => ipcRenderer.invoke('linked:write', root, dir, json, meta),
+    hasPdf: (root, dir, docId) => ipcRenderer.invoke('linked:hasPdf', root, dir, docId),
+    readPdf: (root, dir, docId) => ipcRenderer.invoke('linked:readPdf', root, dir, docId),
+    writePdf: (root, dir, docId, data) => ipcRenderer.invoke('linked:writePdf', root, dir, docId, data),
+    writeExport: (root, dir, filename, data) => ipcRenderer.invoke('linked:writeExport', root, dir, filename, data),
+    reveal: (root, dir) => ipcRenderer.invoke('linked:reveal', root, dir),
+  },
   showFile: (file) => ipcRenderer.invoke('shell:showFile', file),
   /** Posts to an embeddings service with the user's key (OpenAI, Voyage). */
   embed: (url, key, body) => ipcRenderer.invoke('ai:embed', url, key, body),

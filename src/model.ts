@@ -205,6 +205,8 @@ export interface Project {
   build?: import('./build/types').BuildEdits;
   /** The 3D model an AI built from the drawings (Build It shows it); never part of the takeoff. */
   scene3d?: import('./scene3d/scene').Scene3D;
+  /** The app's sample project (Build It opens it on the guided tour). */
+  sample?: boolean;
 }
 
 /** A specification file: its PDF is kept like a drawing's, its reading with the project. */
