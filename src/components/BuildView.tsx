@@ -20,6 +20,9 @@ import { AiModelPanel, type AgentRun } from './AiModelPanel';
 import { desktopApi, type AgentKey } from '../desktop';
 import { tradeOf, type Element3D } from '../scene3d/scene';
 import type { ElementState as ModelState } from '../scene3d/render';
+import { activeUserSchedule, elementTimes, isUserActivity, scheduleGroups, scheduleUser } from '../build/userSchedule';
+import type { ScheduleEdits } from '../build/types';
+import { ImportScheduleButton, PickBar, ScheduleSourcePicker, ScheduleTable, UserActivityCard } from './ScheduleTools';
 
 /**
  * Build It: the proposed building and the plan to build it, from this project's drawings,
@@ -98,6 +101,35 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const [revisionSheets, setRevisionSheets] = useState<RevisionSheet[]>([]);
   const [hints, setHints] = useState<Record<string, string> | null>(null);
   const [setupOpen, setSetupOpen] = useState(true);
+  const [sideW, setSideW] = useState(() => {
+    try {
+      return Math.min(720, Math.max(240, Number(localStorage.getItem('takeoff.buildSideW')) || 320));
+    } catch {
+      return 320;
+    }
+  });
+  /** Drags the side panel's edge to make it wider or narrower. */
+  const dragSide = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const x0 = e.clientX;
+    const w0 = sideW;
+    let w = w0;
+    const move = (ev: PointerEvent) => {
+      w = Math.min(Math.max(240, w0 + ev.clientX - x0), Math.min(720, window.innerWidth * 0.6));
+      setSideW(w);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      try {
+        localStorage.setItem('takeoff.buildSideW', String(Math.round(w)));
+      } catch {
+        /* not kept: fine */
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [issueFilter,setIssueFilter] = useState<'all'|'conflict'|'warning'>('all');
   const [sel, setSel] = useState<{ kind: 'element' | 'activity'; id: string } | null>(null);
@@ -143,7 +175,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   };
   const scene3d = project.scene3d?.elements.length || aiRun.running ? project.scene3d ?? { version: 1 as const, title: project.name, origin: '', builtBy: 'AI', updated: '', elements: [] } : null;
   const showAiModel = view3d === 'model' && !!scene3d;
-  // The sample project opens on the guided tour, once; the Tour button brings it back.
+  // The sample project opens on the guided help tour, once; the Help button brings it back.
   const [tourOn, setTourOn] = useState(() => {
     if (!project.sample) return false;
     try {
@@ -162,7 +194,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   };
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [bottom, setBottom] = useState<'schedule' | 'quantities'>('schedule');
+  const [bottom, setBottom] = useState<'schedule' | 'activities' | 'quantities'>('schedule');
   const go = (kind: ViewCommand['kind']) => setView({ kind, n: Date.now() });
   const [zoom, setZoom] = useState(9);
 
@@ -284,9 +316,18 @@ export default function BuildView({ project, sections, specText, sheetText, shee
       .finally(()=>{if(request===requestVersion.current)setBusy(null);});
   };
 
+  // The schedule the timeline plays: the generated plan, or one the user imported or built.
+  const userSched = activeUserSchedule(edits.schedules);
+  const userView = useMemo(() => (userSched && out ? scheduleUser(userSched, out.setup) : null), [userSched, out]);
+  const setSchedules = (next: ScheduleEdits) => onEdits({ ...edits, schedules: next });
+  const [scheduleNote, setScheduleNote] = useState<string | null>(null);
+  // Selecting elements on the model to link to an activity of the user's schedule.
+  const [picking, setPicking] = useState(false);
+  const [picks, setPicks] = useState<Set<string>>(new Set());
+
   const model = out?.model ?? null;
-  const schedule = out?.schedule ?? null;
-  const setup = out?.setup ?? null;
+  const schedule = userView?.schedule ?? out?.schedule ?? null;
+  const setup = userView?.setup ?? out?.setup ?? null;
   const acts = schedule?.activities ?? [];
   const times = schedule?.times ?? {};
   const actById = useMemo(() => new Map(acts.map((a) => [a.id, a])), [acts]);
@@ -299,6 +340,20 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const end = useMemo(() => Math.max(1, ...Object.values(times).map((t) => t.ef)), [times]);
   const cal = useMemo(() => (setup ? new Calendar(setup.start.value, setup.workDays.value, setup.holidays.value) : null), [setup]);
   const targetIdx = useMemo(() => (cal && setup?.target.value ? cal.workingDaysTo(setup.target.value) : null), [cal, setup]);
+  const userTimeOf = useMemo(() => (userView ? elementTimes(acts, times) : null), [userView, acts, times]);
+  const userActOf = (id: string | undefined) => (id && isUserActivity(id) ? userSched?.activities.find((a) => a.id === id) : undefined);
+  const linkPicks = (id: string) => {
+    if (!userSched || !picks.size) return;
+    const key = edits.schedules!.use as 'imported' | 'own';
+    setSchedules({ ...edits.schedules!, [key]: { ...userSched, activities: userSched.activities.map((a) => (a.id === id ? { ...a, elements: [...new Set([...a.elements, ...picks])], linked: 'picked' as const } : a)) } });
+    setPicks(new Set());
+  };
+  const startPicking = (on: boolean) => {
+    setPicking(on);
+    if (!on) setPicks(new Set());
+    // The AI's model can't be picked from: the takeoff's elements can.
+    else if (view3d === 'model' && model) setView3d('takeoff');
+  };
 
   // Playback: the day moves; the model follows the schedule.
   useEffect(() => {
@@ -338,8 +393,9 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const stateOf = (e: BuildElement): ElementState => {
     if (workspace === 'model') return e.status === 'demolished' ? 'gone' : 'done';
     if (e.status === 'existing') return 'existing';
-    const t = times[actOfElement.get(e.id) ?? ''] ?? (e.origin === 'drawing' || e.origin === 'building' ? contextTime(e) : undefined);
-    if (!t) return 'done';
+    const t = userTimeOf ? userTimeOf(e) : times[actOfElement.get(e.id) ?? ''] ?? (e.origin === 'drawing' || e.origin === 'building' ? contextTime(e) : undefined);
+    // In the user's schedule, measured work it doesn't cover stays a ghost: nothing builds it yet.
+    if (!t) return userTimeOf && e.origin !== 'drawing' && e.origin !== 'building' ? 'todo' : 'done';
     const demo = e.trade === 'demolition';
     if (dayInt < t.es) return demo ? 'existing' : 'todo';
     if (dayInt < t.ef) return demo ? 'removing' : 'doing';
@@ -380,7 +436,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
 
   const levels = model?.levels ?? [];
   const tradesUsed = useMemo(() => TRADES.filter((t) => model?.elements.some((e) => e.trade === t.key)), [model]);
-  const highlight = useMemo(() => (sel?.kind === 'activity' ? new Set(actById.get(sel.id)?.elements ?? []) : treeSel && !sel ? new Set(treeSel.ids) : null), [sel, actById, treeSel]);
+  const highlight = useMemo(() => (picking ? picks : sel?.kind === 'activity' ? new Set(actById.get(sel.id)?.elements ?? []) : treeSel && !sel ? new Set(treeSel.ids) : null), [sel, actById, treeSel, picking, picks]);
   // Colour by a parameter, like a BIM viewer's filters.
   const LEVEL_COLOURS = ['#5b9cff', '#ff9f43', '#5be3b0', '#c58cff', '#ffd35b', '#ff5fa2', '#5bd6ff'];
   const specMissing = useMemo(() => new Set(sections.filter((s) => s.missing).map((s) => s.key)), [sections]);
@@ -463,6 +519,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
 
   // Gantt rows: preconstruction, each level, then testing, commissioning and closeout.
   const groups = useMemo(() => {
+    if (userSched) return scheduleGroups(userSched, acts);
     const g: { title: string; items: Activity[] }[] = [];
     const pre = acts.filter((a) => ['milestone', 'mobilize', 'submittal', 'review', 'resubmittal', 'procurement'].includes(a.kind) && a.id !== 'ms:substantial' && a.id !== 'ms:finish');
     g.push({ title: 'Start, submittals and procurement', items: pre });
@@ -472,9 +529,10 @@ export default function BuildView({ project, sections, specText, sheetText, shee
     }
     g.push({ title: 'Testing, commissioning and closeout', items: acts.filter((a) => ['testing', 'commissioning', 'closeout'].includes(a.kind) || a.id === 'ms:substantial' || a.id === 'ms:finish') });
     return g.filter((x) => x.items.length);
-  }, [acts, levels]);
+  }, [acts, levels, userSched]);
 
-  const selAct = sel?.kind === 'activity' ? actById.get(sel.id) : undefined;
+  // With the user's schedule shown, its start and finish markers have nothing to edit.
+  const selAct = sel?.kind === 'activity' && (!userSched || isUserActivity(sel.id)) ? actById.get(sel.id) : undefined;
   const selEl = sel?.kind === 'element' ? elById.get(sel.id) : undefined;
   const hoverEl = hover ? elById.get(hover) : undefined;
 
@@ -505,7 +563,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
           <button aria-pressed={workspace === 'sequence'} onClick={() => setWorkspace('sequence')}>Construction</button>
         </nav>}
         {out && feas && (
-          <FeasibilityBadge feas={feas} start={out.setup.start} />
+          <FeasibilityBadge feas={feas} start={(setup ?? out.setup).start} />
         )}
         {stale && (
           <button className="bld-stale" onClick={() => void build()} title="The drawings, takeoff or specification changed since this was built">
@@ -520,6 +578,19 @@ export default function BuildView({ project, sections, specText, sheetText, shee
             Issues {allIssues.length ? <i className={allIssues.some((i) => i.severity === 'conflict') ? 'bad' : ''}>{allIssues.length}</i> : null}
           </button>
           <button aria-pressed={inspectorOpen} onClick={() => setInspectorOpen(v => !v)} disabled={!out}>Inspector</button>
+          <ImportScheduleButton
+            model={model}
+            setup={out?.setup ?? null}
+            onError={setError}
+            onImported={(s, note) => {
+              setSchedules({ ...(edits.schedules ?? { use: 'imported' }), use: 'imported', imported: s });
+              setScheduleNote(note);
+              setWorkspace('sequence');
+              setBottom('activities');
+              setDay(0);
+              setSel(null);
+            }}
+          />
           <details className="bld-export"><summary>Export</summary><div>
           <button onClick={() => void exportIfc()} disabled={!out || !!busy} title="IFC 4: opens in Revit, Archicad, Solibri, Navisworks, Bonsai — elements with their takeoff, materials, spec sections and the 4D schedule">
             Export IFC
@@ -537,7 +608,18 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         </div>
       </header>
 
-      <div className="bld-main">
+      <div className="bld-main" style={{ ['--bld-side-w' as string]: `${sideW}px` }}>
+        {setupOpen ? (
+          <div className="bld-side-edge" role="separator" aria-orientation="vertical" aria-label="Drag to resize the side panel" onPointerDown={dragSide}>
+            <button className="bld-side-hide" onClick={() => setSetupOpen(false)} onPointerDown={(e) => e.stopPropagation()} title="Hide the side panel" aria-label="Hide the side panel">
+              ‹
+            </button>
+          </div>
+        ) : (
+          <button className="bld-side-show" onClick={() => setSetupOpen(true)} title="Show the side panel" aria-label="Show the side panel">
+            ›
+          </button>
+        )}
         {setupOpen && out && (
           <div className="bld-left-tabs" role="tablist" aria-label="Side panel">
             {/* "Elements", not "Model": the header's Model/Construction switch already has that name (and "Browser" opens this panel). */}
@@ -577,7 +659,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         {setupOpen && (!out || left === 'setup') && (
           <SetupPanel
             project={project}
-            setup={setup}
+            setup={out?.setup ?? null}
             facts={facts}
             levels={levels}
             edits={edits}
@@ -618,8 +700,8 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                 </div>
                 <div className="bld-tg">
                   {project.sample && (
-                    <button className={tourOn ? 'on' : ''} onClick={() => setTourOn(true)} title="A quick tour of the model view">
-                      Tour
+                    <button className={tourOn ? 'on' : ''} onClick={() => setTourOn(true)} title="How to use the model view">
+                      Help
                     </button>
                   )}
                   <button data-tour="ai" className={aiRun.running ? 'on' : ''} onClick={() => setAiOpen(true)} title="Build or carry on the 3D model with Claude or ChatGPT">
@@ -654,6 +736,16 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                 view={view}
                 tradeOrder={tradeOrder}
                 onSelect={(id) => {
+                  // Selecting for a link: each click adds (or takes away) one element.
+                  if (picking) {
+                    if (id)
+                      setPicks((p) => {
+                        const n = new Set(p);
+                        if (!n.delete(id)) n.add(id);
+                        return n;
+                      });
+                    return;
+                  }
                   if (id) setInspectorOpen(true);
                   setTreeSel(null);
                   setSel(id ? { kind: 'element', id } : null);
@@ -778,6 +870,17 @@ export default function BuildView({ project, sections, specText, sheetText, shee
               {error && <p className="bld-error">{error}</p>}
             </div>
           )}
+          {picking && out && (
+            <PickBar
+              count={picks.size}
+              target={userActOf(sel?.kind === 'activity' ? sel.id : undefined)}
+              aiModel={showAiModel}
+              onLink={() => sel && linkPicks(sel.id)}
+              onClear={() => setPicks(new Set())}
+              onDone={() => startPicking(false)}
+              onShowElements={() => setView3d('takeoff')}
+            />
+          )}
           {aiOpen && (
             <AiModelPanel
               projectName={project.name}
@@ -793,7 +896,23 @@ export default function BuildView({ project, sections, specText, sheetText, shee
 
         {out && inspectorOpen && (
           <aside className="bld-inspect" ref={inspectRef}>
-            {selAct ? (
+            {selAct && userActOf(selAct.id) ? (
+              <UserActivityCard
+                a={userActOf(selAct.id)!}
+                t={times[selAct.id]}
+                schedules={edits.schedules}
+                levels={levels}
+                elements={selAct.elements.map((id) => elById.get(id)!).filter(Boolean)}
+                picks={picks}
+                picking={picking}
+                model={model!}
+                onPicking={startPicking}
+                onLink={() => linkPicks(selAct.id)}
+                onPick={(id) => setSel({ kind: 'activity', id })}
+                onElement={(id) => setSel({ kind: 'element', id })}
+                onChange={setSchedules}
+              />
+            ) : selAct ? (
               <ActivityCard
                 a={selAct}
                 t={times[selAct.id]}
@@ -914,10 +1033,14 @@ export default function BuildView({ project, sections, specText, sheetText, shee
               <button role="tab" aria-selected={bottom === 'schedule'} className={bottom === 'schedule' ? 'on' : ''} onClick={() => setBottom('schedule')}>
                 Schedule
               </button>
+              <button role="tab" aria-selected={bottom === 'activities'} className={bottom === 'activities' ? 'on' : ''} onClick={() => setBottom('activities')} title="Import a schedule, or build your own and link it to the model">
+                Activities
+              </button>
               <button role="tab" aria-selected={bottom === 'quantities'} className={bottom === 'quantities' ? 'on' : ''} onClick={() => setBottom('quantities')}>
                 Quantities
               </button>
             </div>
+            <ScheduleSourcePicker schedules={edits.schedules} onChange={(next) => (setSchedules(next), setSel(null), setScheduleNote(null))} />
             <button className="primary" onClick={() => (day >= end ? (setDay(0), setPlaying(true)) : setPlaying((p) => !p))} aria-label={playing ? 'Pause' : 'Play'}>
               {playing ? '❚❚' : '▶'}
             </button>
@@ -938,7 +1061,42 @@ export default function BuildView({ project, sections, specText, sheetText, shee
               </button>
             </span>
           </div>
-          {bottom === 'schedule' ? (
+          {bottom === 'activities' && model ? (
+            <ScheduleTable
+              schedules={edits.schedules}
+              generated={out.schedule.activities}
+              times={times}
+              levels={levels}
+              model={model}
+              selected={sel?.kind === 'activity' ? sel.id : null}
+              picks={picks}
+              picking={picking}
+              note={scheduleNote}
+              importButton={
+                <ImportScheduleButton
+                  className="primary"
+                  model={model}
+                  setup={out.setup}
+                  onError={setError}
+                  onImported={(s, note) => {
+                    setSchedules({ ...(edits.schedules ?? { use: 'imported' }), use: 'imported', imported: s });
+                    setScheduleNote(note);
+                    setDay(0);
+                  }}
+                >
+                  Import schedule…
+                </ImportScheduleButton>
+              }
+              onPick={(id) => (setInspectorOpen(true), setTreeSel(null), setSel({ kind: 'activity', id }))}
+              onPicking={startPicking}
+              onLink={linkPicks}
+              onChange={(next) => {
+                if (next.use !== (edits.schedules?.use ?? 'generated')) (setSel(null), setScheduleNote(null));
+                setSchedules(next);
+              }}
+              onSave={onSave}
+            />
+          ) : bottom === 'schedule' ? (
             <Gantt groups={groups} times={times} end={end} zoom={zoom} day={day} target={targetIdx} cal={cal} selected={sel?.kind === 'activity' ? sel.id : null} onPick={(id) => (setInspectorOpen(true), setTreeSel(null), setSel({ kind: 'activity', id }))} onDay={(d) => (setPlaying(false), setDay(d))} />
           ) : (
             model && (

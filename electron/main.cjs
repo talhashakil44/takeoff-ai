@@ -123,6 +123,14 @@ function registerIpc() {
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify(body) });
     return { status: res.status, body: await res.text() };
   });
+  // The sample projects (drawings, takeoffs and 3D model, names taken off) are kept as
+  // downloads on the app's GitHub release, not in the app; fetched from here (no CORS).
+  ipcMain.handle('samples:fetch', async (_e, file) => {
+    if (!/^[\w-]+\.takeoff$/.test(file)) throw new Error('Not a sample');
+    const res = await fetch(`https://github.com/talhashakil44/takeoff-ai/releases/download/samples/${file}`);
+    if (!res.ok) throw new Error(`The sample could not be downloaded (${res.status}). Check the internet connection.`);
+    return await res.arrayBuffer();
+  });
   ipcMain.handle('folder:writeExport', (_e, dir, filename, data) => folder.writeExport(requireRoot(), dir, filename, data));
 
   // Projects opened from another folder (a shared OneDrive, Dropbox, Google Drive or network

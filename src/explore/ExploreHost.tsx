@@ -20,13 +20,23 @@ export function ExploreHost({
   liveProject,
   onOpenTakeoff,
   onBuild,
+  open: openProp,
+  onOpenChange,
 }: {
   liveProject?: Project;
   onOpenTakeoff?: (sheet: Sheet) => void;
   onBuild?: () => void;
+  /** Opened from outside (the app's title bar); without it, a launcher button shows. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false),
-    [data, setData] = useState<Omit<ExploreWorkspaceProps, "onClose"> | null>(
+  const [openOwn, setOpenOwn] = useState(false);
+  const open = openProp ?? openOwn;
+  const setOpen = (o: boolean) => {
+    setOpenOwn(o);
+    onOpenChange?.(o);
+  };
+  const [data, setData] = useState<Omit<ExploreWorkspaceProps, "onClose"> | null>(
       null,
     ),
     [error, setError] = useState(""),
@@ -199,11 +209,11 @@ export function ExploreHost({
     };
   }, [open, liveProject]);
   if (!open)
-    return (
+    return openProp === undefined ? (
       <button className="ex-launch" onClick={() => setOpen(true)}>
-        ⌗ Explore drawing <span aria-hidden="true">↗</span>
+        ⌗ Explore drawing <span className="ex-beta">Experimental</span>
       </button>
-    );
+    ) : null;
   return (
     <Suspense
       fallback={

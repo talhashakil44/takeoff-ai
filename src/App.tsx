@@ -175,8 +175,15 @@ export function App() {
   const [dropOn, setDropOn] = useState<string | null>(null);
   /** Takeoffs picked together (Box select), on the open sheet. */
   const [multiIds, setMultiIds] = useState<string[]>([]);
+  /** Takeoffs to pick once the sheet they are on has opened (a type clicked in the takeoff list). */
+  const pickOnOpen = useRef<string[] | null>(null);
   // A selection belongs to its sheet.
-  useEffect(() => setMultiIds([]), [sheetId]);
+  useEffect(() => {
+    setMultiIds(pickOnOpen.current ?? []);
+    pickOnOpen.current = null;
+  }, [sheetId]);
+  /** The type picked on the left, its takeoffs shown on the drawing and in the takeoff list (view only). */
+  const [litTypeId, setLitTypeId] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ id?: string; box?: [number, number, number, number]; n: number } | null>(null);
   /** Text runs per drawing page, read once for the sheet search. */
   const textCache = useRef(new Map<string, PageText[]>());
@@ -255,6 +262,7 @@ export function App() {
   const [linkedFolders, setLinkedFolders] = useState<Map<string, string>>(new Map());
   /** MCP: the app as the AI's tools see it (set each render), and the calls waiting their turn. */
   const mcpCtxRef = useRef<McpContext | null>(null);
+  const [exploreOpen, setExploreOpen] = useState(false);
   const mcpQueue = useRef<Promise<unknown>>(Promise.resolve());
   /** Desktop app with no projects folder yet (or one that went missing): the setup screen. */
   const [folderSetup, setFolderSetup] = useState<{ suggested: string; iCloud: boolean; missing: string | null } | null>(null);
@@ -303,6 +311,7 @@ export function App() {
     setProject(p);
     setSheetId(p.sheets[0]?.id ?? null);
     setActiveTypeId(null);
+    setLitTypeId(null);
     setEditingTypeId(null);
     setSelectedId(null);
     setTool('select');
@@ -694,6 +703,20 @@ export function App() {
     setFocus((f) => ({ box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], n: (f?.n ?? 0) + 1 }));
   };
 
+  /** Picks every takeoff of a type on a sheet and frames them, or clears them when they are already picked. */
+  const pickType = (typeId: string, sid: string) => {
+    if (!project) return;
+    const ids = project.measurements.filter((m) => m.typeId === typeId && m.sheetId === sid).map((m) => m.id);
+    setLitTypeId(null);
+    if (sid === sheetId && ids.length === multiIds.length && ids.every((id) => multiIds.includes(id))) {
+      setMultiIds([]);
+      return;
+    }
+    if (sid !== sheetId) pickOnOpen.current = ids;
+    else setMultiIds(ids);
+    showTypeOn(typeId, sid);
+  };
+
   /**
    * The activity log is written a moment after the last change, not on every one: on a big
    * project it is thousands of events, and writing it each keystroke made editing lag.
@@ -935,6 +958,14 @@ export function App() {
     void ocrSheetNames(due.map((d) => d.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, pdfs, busy]);
+
+  // The types of the takeoffs picked on the drawing or in the takeoff list, marked in the list on the left.
+  const pickedSet = new Set(selectedId ? [...multiIds, selectedId] : multiIds);
+  const linkedTypeIds = project && pickedSet.size ? [...new Set(project.measurements.filter((m) => pickedSet.has(m.id)).map((m) => m.typeId))] : [];
+  const linkedKey = linkedTypeIds.join();
+  useEffect(() => {
+    if (linkedKey) document.querySelector('.source.types .type-item.linked')?.scrollIntoView({ block: 'center' });
+  }, [linkedKey]);
 
   if (!project) return <div className="loading">Opening your project…</div>;
 
@@ -1683,12 +1714,51 @@ export function App() {
     setToast({ text: `Copied ${types.length} type${types.length === 1 ? '' : 's'} from ${from.name}`, undo: true });
   }
 
-  /** Opens a new sample project holding a finished 3D model Claude built, on its guided tour. */
-  async function openSampleModel() {
+  /** The sample projects: drawings (names taken off), their takeoffs and the 3D model Claude built. */
+  const SAMPLES = [
+    { name: 'Sample project #1: ski lodge', file: 'sample-1-ski-lodge.takeoff', was: [] as string[], load: () => import('./scene3d/sampleLodge') },
+    { name: 'Sample project #2: maintenance shop', file: 'sample-2-maintenance-shop.takeoff', was: ['Sample project: maintenance shop'], load: () => import('./scene3d/sample') },
+  ];
+  /** Opens a sample project: the full one (drawings, takeoffs, 3D) in the desktop app, else just its 3D model. */
+  async function openSampleModel(n: 1 | 2 = 1) {
+    const sample = SAMPLES[n - 1];
     setBusy('Opening the sample project…');
     try {
-      const { default: model } = await import('./scene3d/sample');
-      await createProjectNamed('Sample project: maintenance shop', 'metric');
+      // Opened before: open that one again rather than making another (the full one if there is one).
+      const list = (await listProjects()).filter((x) => x.name === sample.name || sample.was.includes(x.name));
+      const opened = (await Promise.all(list.map((x) => loadProjectById(x.id)))).filter((p): p is Project => !!p?.sample);
+      const full = opened.find((p) => p.docs.length);
+      const existing = full ?? (desktopApi?.fetchSample ? undefined : opened.find((p) => p.scene3d));
+      if (existing) {
+        await switchProject(existing.id!);
+        if (existing.name !== sample.name) commit((p) => ({ ...p, name: sample.name }), 'Rename project');
+        setView('build');
+        return;
+      }
+      if (desktopApi?.fetchSample) {
+        setBusy('Downloading the sample project…');
+        const got = await desktopApi.fetchSample(sample.file).catch(() => null);
+        if (got) {
+          let last: Project | null = null;
+          await readProjectFiles(got, async (o) => {
+            o.project = { ...o.project, name: sample.name, sample: true };
+            for (const [id, data] of o.pdfs) await savePdf(id, data);
+            await saveProject(o.project);
+            if (o.project.id) await saveActivity(o.project.id, o.activity);
+            last = o.project;
+          });
+          // A 3D-only copy from an older version steps aside for the full one.
+          for (const p of opened) if (!p.docs.length && !p.measurements.length) await saveProject({ ...p, name: `${sample.name} (3D only)` });
+          if (last) {
+            await openProjectState(last);
+            setView('build');
+            return;
+          }
+        }
+        setToast({ text: 'The full sample could not be downloaded, so this is its 3D model only.', undo: false });
+      }
+      const { default: model } = await sample.load();
+      await createProjectNamed(sample.name, 'metric');
       commit((p) => ({ ...p, sample: true, scene3d: model }), 'Sample project');
       setView('build');
     } catch (e) {
@@ -2700,6 +2770,9 @@ export function App() {
   const chooseType = (t: TakeoffType) => {
     setActiveTypeId(t.id);
     setSelectedId(null);
+    // Its takeoffs stand out on the drawing and in the takeoff list until Esc.
+    setMultiIds([]);
+    setLitTypeId(t.id);
     if (tool === 'select' || tool === 'calibrate' || (tool === 'fill' && t.kind !== 'area') || (tool === 'symbol' && t.kind !== 'count') || (tool === 'trace' && t.kind !== 'linear') || tool === 'cutout') setTool('measure');
   };
 
@@ -2849,7 +2922,7 @@ export function App() {
 
   return (
     <div className="app">
-      <ExploreHost liveProject={project} onBuild={()=>setView('build')} onOpenTakeoff={s=>{setView('drawings');follow([{sheetId:s.id,box:[0,0,s.width,s.height],label:s.name}],s.name);}} />
+      <ExploreHost open={exploreOpen} onOpenChange={setExploreOpen} liveProject={project} onBuild={()=>setView('build')} onOpenTakeoff={s=>{setView('drawings');follow([{sheetId:s.id,box:[0,0,s.width,s.height],label:s.name}],s.name);}} />
       <header className="titlebar">
         <input
           ref={projectFileInput}
@@ -3157,7 +3230,7 @@ export function App() {
                 return (
                   <li
                     key={keyPrefix + t.id}
-                    className={`type-item ${t.hidden ? 'is-hidden' : ''} ${(keyPrefix && keyPrefix !== 'unused|') || (!keyPrefix && groupOf(t) && known.has(groupOf(t)!)) ? 'in-group' : ''} ${keyPrefix.includes('|') && keyPrefix !== 'unused|' ? 'in-division' : ''}`}
+                    className={`type-item ${t.hidden ? 'is-hidden' : ''} ${linkedTypeIds.includes(t.id) ? 'linked' : ''} ${(keyPrefix && keyPrefix !== 'unused|') || (!keyPrefix && groupOf(t) && known.has(groupOf(t)!)) ? 'in-group' : ''} ${keyPrefix.includes('|') && keyPrefix !== 'unused|' ? 'in-division' : ''}`}
                     draggable
                     onDragStart={(e) => {
                       dragType.current = t.id;
@@ -3332,11 +3405,14 @@ export function App() {
           onSelect={(id) => {
             setSelectedId(id);
             setMultiIds([]);
+            setLitTypeId(null);
             if (id) setEditingTypeId(null);
           }}
           multiIds={picked.map((m) => m.id)}
+          litTypeId={litTypeId}
           onMultiSelect={(ids, add) => {
             setSelectedId(null);
+            setLitTypeId(null);
             setMultiIds((cur) => (add ? [...new Set([...cur, ...ids])] : ids));
           }}
           onDeleteMany={deleteMeasurements}
@@ -3462,9 +3538,16 @@ export function App() {
               <button className="link-button try-sample" onClick={() => void openSample()}>
                 No drawings handy? Try a sample plan
               </button>
-              <button className="link-button try-sample" onClick={() => void openSampleModel()}>
-                Or tour a sample project with a 3D model built by AI
-              </button>
+              <span className="try-sample">
+                Or tour a sample project with a 3D model built by AI:{' '}
+                <button className="link-button" onClick={() => void openSampleModel(1)}>
+                  #1 ski lodge
+                </button>{' '}
+                ·{' '}
+                <button className="link-button" onClick={() => void openSampleModel(2)}>
+                  #2 maintenance shop
+                </button>
+              </span>
               <div className="welcome-units">
                 <span>Measure in</span>
                 <div className="segmented small" role="radiogroup" aria-label="Units">
@@ -3668,6 +3751,7 @@ export function App() {
         <div className="view-pane build-pane">
           <Suspense fallback={<div className="bld-loading">Opening Build It…</div>}>
             <BuildView
+              key={project.id}
               project={project}
               sections={buildSections}
               specText={specTextOf}
@@ -3684,7 +3768,7 @@ export function App() {
                 follow(to, label);
               }}
               onSave={(name, data) => void saveFile(name, data)}
-              onOpenSample={() => void openSampleModel()}
+              onOpenSample={() => void openSampleModel(1)}
               renderSheet={renderSheetRegion}
               onClose={() => setView('drawings')}
             />
@@ -3777,6 +3861,9 @@ export function App() {
             onGrouping={chooseGrouping}
             activity={activity}
             selectedId={selectedId}
+            pickedIds={picked.map((m) => m.id)}
+            litTypeId={litTypeId}
+            onPickType={pickType}
             onSelect={setSelectedId}
             onDelete={deleteMeasurements}
             onRetype={(id, typeId) => commit((p) => ({ ...p, measurements: p.measurements.map((m) => (m.id === id ? { ...m, typeId } : m)) }), 'Change type')}
@@ -3788,6 +3875,8 @@ export function App() {
               if (!m) return;
               if (m.sheetId !== sheetId) setSheetId(m.sheetId);
               setSelectedId(id);
+              setMultiIds([]);
+              setLitTypeId(null);
               setFocus((f) => ({ id, n: (f?.n ?? 0) + 1 }));
             }}
             onRename={(id, label) =>
@@ -3843,6 +3932,18 @@ export function App() {
               setPopover(null);
               void duplicateProject();
             }}
+            onSample={(n) => {
+              setPopover(null);
+              void openSampleModel(n);
+            }}
+            onOpenFolder={
+              desktopApi?.linked && syncFolder
+                ? () => {
+                    setPopover(null);
+                    void openFromFolder();
+                  }
+                : undefined
+            }
             onSaveFile={() => {
               setPopover(null);
               void saveProjectFile();
@@ -4064,6 +4165,7 @@ export function App() {
           label="More"
           groups={[
             [
+              { label: 'Explore drawing…', hint: 'Experimental', onSelect: () => setExploreOpen(true) },
               { label: 'Files…', hint: 'Add, remove, reorder', onSelect: () => setFilesOpen(true) },
               { label: 'History', hint: 'Every change', onSelect: () => setTab('history') },
               { label: 'Quick start', onSelect: () => setAiDialog('help') },

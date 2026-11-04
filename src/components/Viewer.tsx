@@ -39,6 +39,8 @@ interface Props {
   onSelect: (id: string | null) => void;
   /** Takeoffs picked together with Box select (or Shift-drag in Select). */
   multiIds: string[];
+  /** A type picked in the list: its takeoffs stand out when nothing is selected. */
+  litTypeId?: string | null;
   /** A new multi-selection; `add` keeps the takeoffs already picked (Shift). */
   onMultiSelect: (ids: string[], add: boolean) => void;
   onDeleteMany: (ids: string[]) => void;
@@ -147,9 +149,9 @@ export function Viewer(props: Props) {
     const xs = m ? m.points.map((p) => p[0]) : [f.box![0], f.box![2]];
     const ys = m ? m.points.map((p) => p[1]) : [f.box![1], f.box![3]];
     const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    // A count is a point: show the area around it.
-    const bw = Math.max(x1 - x0, 80);
-    const bh = Math.max(y1 - y0, 80);
+    // A count is a point: show the area around it, enough to see where on the plan it is.
+    const bw = Math.max(x1 - x0, 300);
+    const bh = Math.max(y1 - y0, 300);
     const fitZoom = Math.min(size.w / sheet.width, size.h / sheet.height) * 0.95;
     const zoom = Math.max(fitZoom, Math.min(8, Math.min(size.w / (bw * 1.6), size.h / (bh * 1.6))));
     setView({ zoom, x: size.w / 2 - ((x0 + x1) / 2) * zoom, y: size.h / 2 - ((y0 + y1) / 2) * zoom });
@@ -488,6 +490,11 @@ export function Viewer(props: Props) {
       if (mv.moved && edit && edit.id === mv.id) {
         suppressClick.current = true;
         props.onMoveTakeoff(mv.id, edit.points, edit.holes ?? mv.holes);
+      } else if (!mv.moved) {
+        // A press without a drag is a click on the takeoff. The drawing holds the pointer, so
+        // Chrome sends the click to it, not the takeoff: select it here and drop that click.
+        suppressClick.current = true;
+        props.onSelect(mv.id);
       }
       setEdit(null);
       return;
@@ -633,6 +640,13 @@ export function Viewer(props: Props) {
   const z = view.zoom;
   const shapesInteractive = tool === 'select' || tool === 'box';
   const multi = new Set(props.multiIds);
+  // What is picked stands out: drawn on top with a halo, the rest faded. A selection wins over a
+  // type picked in the list; while measuring one takeoff selected (the last room filled) is not faded around.
+  const lit = new Set(
+    selectedId || multi.size ? [...multi, ...(selectedId ? [selectedId] : [])] : props.litTypeId ? measurements.filter((m) => m.typeId === props.litTypeId).map((m) => m.id) : [],
+  );
+  const fade = lit.size > 0 && (shapesInteractive || !selectedId);
+  const drawn = lit.size ? [...measurements.filter((m) => !lit.has(m.id)), ...measurements.filter((m) => lit.has(m.id))] : measurements;
   // Named takeoffs (rooms) show their number with the quantity.
   const labelOf = (m: Measurement, type: TakeoffType, sheet: Sheet) => {
     const v = measurementVars(m, type, sheet, units);
@@ -714,13 +728,14 @@ export function Viewer(props: Props) {
               strokeWidth={3 / z}
             />
           )}
-          {sheet && measurements.map((shown) => {
+          {sheet && drawn.map((shown) => {
             const m = edit && edit.id === shown.id ? { ...shown, points: edit.points, holes: edit.holes ?? shown.holes } : shown;
             const type = typeById.get(m.typeId);
             if (!type) return null;
             const isSel = m.id === selectedId || multi.has(m.id);
+            const isLit = lit.has(m.id);
             const common = {
-              className: shapesInteractive ? 'shape interactive' : 'shape',
+              className: `shape${shapesInteractive ? ' interactive' : ''}${isLit ? ' lit' : fade ? ' faded' : ''}`,
               // In Select, press on a takeoff and drag to move the whole thing (corners still
               // move one at a time from their handles once it is selected).
               onPointerDown: (e: PointerEvent<SVGElement>) => {
@@ -733,6 +748,8 @@ export function Viewer(props: Props) {
               onClick: (e: MouseEvent) => {
                 if (!shapesInteractive) return;
                 e.stopPropagation();
+                // Where the click does reach the takeoff, the drawing never sees it to drop it.
+                suppressClick.current = false;
                 // Box select: a click adds a takeoff to the picked ones, or takes it out.
                 if (tool === 'box') props.onMultiSelect(multi.has(m.id) ? props.multiIds.filter((id) => id !== m.id) : [...props.multiIds, m.id], false);
                 else props.onSelect(m.id);
@@ -741,49 +758,53 @@ export function Viewer(props: Props) {
             const label = labelOf(m, type, sheet);
             if (type.kind === 'count') {
               const [x, y] = m.points[0];
-              return (
+              const dot = (
                 <circle
                   key={m.id}
-                  {...common}
+                  {...(isLit ? {} : common)}
                   cx={x}
                   cy={y}
-                  r={(isSel ? 8 : 6) / z}
+                  r={(isLit ? 8 : 6) / z}
                   fill={type.color}
-                  stroke={isSel ? '#000' : '#fff'}
+                  stroke={isLit ? '#000' : '#fff'}
                   strokeWidth={1.5 / z}
                 />
+              );
+              if (!isLit) return dot;
+              // A ring round it, so a picked count shows even with the whole sheet in view.
+              return (
+                <g key={m.id} {...common}>
+                  <circle className="pick-halo" cx={x} cy={y} r={15 / z} strokeWidth={6 / z} />
+                  <circle cx={x} cy={y} r={15 / z} fill="none" stroke={type.color} strokeWidth={2 / z} />
+                  {dot}
+                </g>
               );
             }
             if (type.kind === 'linear') {
               const mid = m.points[Math.floor((m.points.length - 1) / 2)];
               return (
                 <g key={m.id} {...common}>
+                  {isLit && <polyline className="pick-halo" points={m.points.map((p) => p.join(',')).join(' ')} strokeWidth={14} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
                   <polyline
                     points={m.points.map((p) => p.join(',')).join(' ')}
                     fill="none"
                     stroke={type.color}
-                    strokeWidth={isSel ? 5 : 3}
+                    strokeWidth={isLit ? 5 : 3}
                     strokeLinejoin="round"
                     strokeLinecap="round"
                     vectorEffect="non-scaling-stroke"
-                    opacity={0.85}
+                    opacity={isLit ? 1 : 0.85}
                   />
                   {/* Above the point, clear of its handle. */}
                   {isSel && <Label at={[mid[0], mid[1] - 16 / z]} z={z} text={label} />}
                 </g>
               );
             }
+            const d = [m.points, ...m.holes].map(ringToPath).join('');
             return (
               <g key={m.id} {...common}>
-                <path
-                  d={[m.points, ...m.holes].map(ringToPath).join('')}
-                  fillRule="evenodd"
-                  fill={type.color}
-                  fillOpacity={isSel ? 0.4 : 0.25}
-                  stroke={type.color}
-                  strokeWidth={isSel ? 3 : 1.5}
-                  vectorEffect="non-scaling-stroke"
-                />
+                {isLit && <path className="pick-halo" d={d} strokeWidth={10} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+                <path d={d} fillRule="evenodd" fill={type.color} fillOpacity={isLit ? 0.45 : 0.25} stroke={type.color} strokeWidth={isLit ? 3 : 1.5} vectorEffect="non-scaling-stroke" />
               </g>
             );
           })}
@@ -796,6 +817,12 @@ export function Viewer(props: Props) {
             const points = edit && edit.id === m.id ? edit.points : m.points;
             const label = labelOf({ ...m, points }, type, sheet);
             if (m.id !== selectedId && bboxWidth(points) * z <= label.length * 7 + 12) return null;
+            if (fade && !lit.has(m.id))
+              return (
+                <g key={`l${m.id}`} className="faded">
+                  <Label at={centroid(points)} z={z} text={label} />
+                </g>
+              );
             return <Label key={`l${m.id}`} at={centroid(points)} z={z} text={label} />;
           })}
 

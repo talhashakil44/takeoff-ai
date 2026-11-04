@@ -1,0 +1,10 @@
+"ID","Task Name","Duration","Start","Finish","Predecessors","Resource Names","Outline Level"
+1,"Preconstruction","12 days?","Mon 11/2/26","Tue 11/17/26","","",1
+2,"Shop drawings - doors and hardware","10 days","Mon 11/2/26","Fri 11/13/26","","Vault-Tech",2
+3,"Mobilization","2 days","Mon 11/16/26","Tue 11/17/26","2SS+5 days","",2
+4,"Level 1","25 days","Wed 11/18/26","Tue 12/22/26","","",1
+5,"Steel stud framing L1","8 days","Wed 11/18/26","Fri 11/27/26","3","Framer",2
+6,"Electrical rough-in - Level 1","1 wk","Mon 11/30/26","Fri 12/4/26","5","Sparky Electric",2
+7,"Install HM doors, frames and hardware","3 days","Mon 12/7/26","Wed 12/9/26","6FS+0d,2","",2
+8,"Paint walls","5d","Thu 12/10/26","Wed 12/16/26","7","",2
+9,"Owner walkthrough","0 days","Wed 12/16/26","Wed 12/16/26","8","",2

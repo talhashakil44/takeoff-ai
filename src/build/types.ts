@@ -262,6 +262,55 @@ export interface BuildEdits {
   levels?: Record<string, string>;
   /** Level elevations set by hand (metres). */
   elevations?: Record<string, number>;
+  /** Schedules the user imported or made, and which one the model plays. */
+  schedules?: ScheduleEdits;
+}
+
+/** A link to an activity in the user's schedule (finish-to-start, start-to-start, …), lag in working days. */
+export interface UserLink {
+  from: string;
+  type: 'FS' | 'SS' | 'FF' | 'SF';
+  lag: number;
+}
+
+/** An activity in a schedule the user imported or built: it plays on the model through its linked elements. */
+export interface UserActivity {
+  /** 'imp:<code>' for an imported activity, 'own:<n>' for one the user made. */
+  id: string;
+  /** The ID shown and used in predecessor lists: the file's activity ID, or a number. */
+  code: string;
+  name: string;
+  /** The summary task, WBS or phase it sits under, for grouping. */
+  group?: string;
+  kind: ActivityKind;
+  trade: string | null;
+  level: string | null;
+  /** Working days (0: a milestone). */
+  duration: number;
+  /** Starts no earlier than this date (ISO): the file's start, or one the user set. */
+  start?: string;
+  /** The finish the file gave, for comparison only. */
+  finish?: string;
+  preds: UserLink[];
+  /** Model elements it builds (element ids). */
+  elements: string[];
+  /** How the elements were linked: matched by trade and words, or picked on the model by the user. */
+  linked?: 'matched' | 'picked';
+}
+
+export interface UserSchedule {
+  /** The file's name, or "My schedule". */
+  name: string;
+  format?: 'csv' | 'xlsx' | 'msp-xml' | 'xer' | 'own';
+  importedAt?: string;
+  activities: UserActivity[];
+}
+
+export interface ScheduleEdits {
+  /** Which schedule the timeline and the model follow. */
+  use: 'generated' | 'imported' | 'own';
+  imported?: UserSchedule;
+  own?: UserSchedule;
 }
 
 export interface Scheduled {

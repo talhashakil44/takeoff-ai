@@ -1,0 +1,290 @@
+/* The user's own schedules in Build It: the activities table, the source picker, picking on the model. */
+.bld .sch-source {
+  max-width: 220px;
+  padding: 5px 8px;
+  border: 1px solid rgba(124, 196, 255, 0.35);
+  border-radius: 8px;
+  background: rgba(124, 196, 255, 0.1);
+  color: #e5edf7;
+  font: inherit;
+}
+.bld .sch-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.bld .sch-toolbar,
+.bld .sch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bld .sch-toolbar {
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(140, 170, 255, 0.1);
+}
+.bld .sch-row {
+  margin: 8px 0;
+}
+.bld .sch-toolbar button,
+.bld .sch-row button,
+.bld .sch-pickbar button,
+.bld .sch-filter button {
+  padding: 4px 10px;
+  border: 1px solid rgba(140, 170, 255, 0.18);
+  border-radius: 7px;
+  background: rgba(140, 170, 255, 0.06);
+  color: #c9d2f0;
+  font: inherit;
+  cursor: pointer;
+}
+.bld .sch-toolbar button:hover,
+.bld .sch-row button:hover,
+.bld .sch-pickbar button:hover {
+  background: rgba(140, 170, 255, 0.14);
+}
+.bld .sch-toolbar button.on,
+.bld .sch-row button.on,
+.bld .sch-filter button[aria-pressed='true'] {
+  background: rgba(124, 196, 255, 0.18);
+  border-color: rgba(124, 196, 255, 0.45);
+  color: #fff;
+}
+.bld .sch-filter button.warn {
+  color: #ffc861;
+}
+.bld .sch-filter button.warn[aria-pressed='true'] {
+  background: rgba(255, 179, 64, 0.16);
+  border-color: rgba(255, 179, 64, 0.45);
+}
+.bld :is(.sch-toolbar, .sch-row, .sch-pickbar) button.primary {
+  background: linear-gradient(135deg, #3d7bff, #7c5cff);
+  border-color: transparent;
+  color: #fff;
+}
+.bld :is(.sch-toolbar, .sch-row, .sch-pickbar) button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.bld .sch-danger {
+  color: #ffb4a8 !important;
+}
+.bld .sch-filter {
+  display: flex;
+  gap: 4px;
+}
+.bld .sch-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #fff;
+}
+.bld .sch-spacer {
+  flex: 1;
+}
+.bld .sch-note {
+  margin: 0;
+  padding: 5px 12px;
+  background: rgba(124, 196, 255, 0.08);
+  color: #b9d7f5;
+  font-size: 11.5px;
+}
+.bld .sch-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.bld .sch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.bld .sch-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 5px 6px;
+  background: #0e1422;
+  color: #8fa0cc;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(140, 170, 255, 0.12);
+}
+.bld .sch-table td {
+  padding: 2px 6px;
+  border-bottom: 1px solid rgba(140, 170, 255, 0.06);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.bld .sch-table tr {
+  cursor: pointer;
+}
+.bld .sch-table tbody tr:hover {
+  background: rgba(140, 170, 255, 0.05);
+}
+.bld .sch-table tr.sel {
+  background: rgba(124, 196, 255, 0.12);
+}
+.bld .sch-table tr.crit .sch-code {
+  color: #ff9f43;
+}
+/* Doubled class: above the app's input rule, so the cells read as a table until hovered. */
+.bld.bld .sch-table td :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-shadow: none;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #e5edf7;
+  font: inherit;
+  color-scheme: dark;
+}
+.bld.bld .sch-table td :is(input, select):hover,
+.bld.bld .sch-table td :is(input, select):focus {
+  border-color: rgba(140, 170, 255, 0.25);
+  background: rgba(0, 0, 0, 0.3);
+}
+.bld.bld .sch-table td select {
+  border-left: 3px solid transparent;
+  width: 176px;
+}
+.bld.bld .sch-table td:nth-child(4) select {
+  width: 118px;
+}
+.bld .sch-table td:nth-child(2) {
+  width: 32%;
+  min-width: 200px;
+}
+.bld.bld .sch-table td input.num {
+  width: 52px;
+  text-align: right;
+}
+.bld.bld .sch-table td input[type='date'] {
+  width: 128px;
+}
+.bld .sch-code {
+  color: #8fa0cc;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.bld .sch-dates {
+  color: #b3c3d5;
+  font-size: 11.5px;
+}
+.bld .sch-model em {
+  font-style: normal;
+}
+.bld .sch-unlinked {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 179, 64, 0.16);
+  color: #ffc861;
+  font-size: 11px;
+}
+.bld .sch-link {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border: 1px solid rgba(124, 196, 255, 0.45);
+  border-radius: 999px;
+  background: rgba(124, 196, 255, 0.14);
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.bld .sch-none {
+  padding: 14px;
+  text-align: center;
+}
+.bld .sch-empty {
+  padding: 14px 16px;
+  max-width: 760px;
+  line-height: 1.6;
+}
+.bld .sch-empty p {
+  margin: 0 0 6px;
+}
+.bld .sch-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  align-items: center;
+  margin: 12px 0;
+}
+.bld .sch-fields label {
+  display: contents;
+}
+.bld .sch-fields span {
+  color: #8fa0cc;
+  font-size: 11px;
+}
+.bld .sch-fields :is(input, select),
+.bld .sch-card .sch-type,
+.bld .sch-card .sch-lag {
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid rgba(140, 170, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+  font: inherit;
+  color-scheme: dark;
+}
+.bld .sch-card .sch-type {
+  margin-left: 6px;
+  padding: 1px 2px;
+}
+.bld .sch-card .sch-lag {
+  width: 38px;
+  margin-left: 4px;
+  padding: 1px 4px;
+  text-align: right;
+}
+.bld .sch-elements {
+  margin: 0;
+  padding-left: 16px;
+  max-height: 220px;
+  overflow: auto;
+}
+.bld .sch-elements li {
+  margin: 2px 0;
+}
+.bld .sch-end {
+  margin-top: 16px;
+}
+.bld .sch-pickbar {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 78px;
+  z-index: 6;
+  width: fit-content;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border: 1px solid rgba(124, 196, 255, 0.45);
+  border-radius: 10px;
+  background: #17222ef2;
+  box-shadow: 0 10px 28px #0007;
+  color: #e5edf7;
+}
+.bld .sch-pickbar .dim {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

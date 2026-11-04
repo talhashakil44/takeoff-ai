@@ -565,6 +565,14 @@ input[type='checkbox'] {
   flex: 1;
   min-width: 0;
 }
+/* The type of the takeoffs picked on the drawing or in the takeoff list. */
+.type-item.linked > .source-row {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.type-item.linked .type-name {
+  color: var(--accent);
+}
 /* Show / hide a type's takeoffs on the drawing. */
 .icon-button.eye {
   flex: none;
@@ -669,6 +677,15 @@ input[type='checkbox'] {
 .viewer .shape.interactive {
   pointer-events: visiblePainted;
   cursor: pointer;
+}
+/* Picked takeoffs: a highlighter halo under them, everything else faded back. */
+.viewer .pick-halo {
+  fill: none;
+  stroke: #ffd60a;
+  stroke-opacity: 0.85;
+}
+.viewer .faded {
+  opacity: 0.2;
 }
 .viewer .draft {
   pointer-events: none;
@@ -1246,6 +1263,129 @@ input[type='checkbox'] {
 }
 .takeoff-group li.selected {
   background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+/* The takeoff tree: discipline, sheet (all sheets), type, takeoff. */
+.takeoff-disc {
+  margin-bottom: 6px;
+}
+.tree-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: var(--radius-s);
+  background: none;
+  box-shadow: none;
+  text-align: left;
+}
+.tree-head:hover:not(:disabled) {
+  background: var(--fill);
+}
+.tree-name {
+  flex: none;
+  font-weight: 600;
+}
+.tree-sub {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 400;
+}
+.disc-head {
+  margin-bottom: 4px;
+  background: var(--window);
+}
+.disc-head .tree-name {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.takeoff-sheet {
+  margin: 0 0 6px 8px;
+}
+.sheet-head .tree-name {
+  font-size: 12px;
+}
+.takeoff-sheet.current > .sheet-head .tree-name::after {
+  content: ' · open';
+  font-weight: 400;
+  color: var(--accent);
+}
+.takeoff-sheet .takeoff-group {
+  margin-left: 12px;
+}
+.takeoff-disc > .takeoff-group {
+  margin-left: 4px;
+}
+.takeoff-disc .takeoff-group {
+  margin-bottom: 4px;
+}
+.takeoff-disc .takeoff-group ul {
+  margin: 2px 0 8px;
+}
+.takeoff-group header {
+  gap: 2px;
+  padding: 0;
+  border-radius: var(--radius-s);
+}
+.takeoff-group header .fold {
+  width: 22px;
+  min-height: 28px;
+  color: var(--text-3);
+}
+.type-pick {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--radius-s);
+  background: none;
+  box-shadow: none;
+  text-align: left;
+  font-weight: 400;
+}
+.type-pick:hover:not(:disabled) {
+  background: var(--fill);
+}
+.group-total {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+/* A type picked: all of it highlighted on the drawing. */
+.takeoff-group.picked header,
+.takeoff-group.lit header {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.takeoff-group.picked .type-pick:hover:not(:disabled),
+.takeoff-group.lit .type-pick:hover:not(:disabled) {
+  background: transparent;
+}
+.takeoff-group.picked .group-name,
+.takeoff-group.lit .group-name {
+  color: var(--accent);
+}
+.takeoff-group.has-picked header .group-count {
+  color: var(--accent);
+  font-weight: 600;
+}
+.takeoff-group.picked ul {
+  border-color: var(--accent);
 }
 .row-index {
   width: 20px;
