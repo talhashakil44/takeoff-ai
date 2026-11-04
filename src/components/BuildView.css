@@ -333,3 +333,65 @@
 .bld-allowance label.check { display: inline-flex; align-items: center; gap: 6px; }
 .bld-allowance label.check input { width: auto; margin: 0; }
 .bld-allowance.suggested { border-style: dashed; }
+
+/* The side panel: tabs wrap instead of running off the edge; drag its edge to resize, ‹ hides it. */
+.bld-workspace .bld-main {
+  position: relative;
+}
+.bld-workspace .bld-left,
+.bld-workspace .bld-setup,
+.bld-workspace .bld-left-tabs ~ .bld-setup {
+  width: var(--bld-side-w, 320px);
+}
+.bld-workspace .bld-tabs {
+  flex-wrap: wrap;
+}
+.bld-workspace .bld-tabs button {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+.bld-side-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--bld-side-w, 320px) - 4px);
+  width: 8px;
+  z-index: 7;
+  cursor: col-resize;
+}
+.bld-side-edge:hover {
+  background: #4f8cff55;
+}
+.bld-side-hide,
+.bld-side-show {
+  position: absolute;
+  top: 50%;
+  width: 18px;
+  height: 44px;
+  margin-top: -22px;
+  padding: 0;
+  border: 1px solid #405268;
+  border-radius: 0 6px 6px 0;
+  background: #17222e;
+  color: #e5edf7;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 8;
+}
+.bld-side-hide {
+  left: 4px;
+}
+.bld-side-show {
+  left: 0;
+}
+.bld-side-hide:hover,
+.bld-side-show:hover {
+  background: #293c50;
+}
+@media (max-width: 900px) {
+  .bld-workspace .bld-left,
+  .bld-workspace .bld-setup {
+    width: min(var(--bld-side-w, 320px), 85vw);
+  }
+}

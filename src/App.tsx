@@ -255,6 +255,7 @@ export function App() {
   const [linkedFolders, setLinkedFolders] = useState<Map<string, string>>(new Map());
   /** MCP: the app as the AI's tools see it (set each render), and the calls waiting their turn. */
   const mcpCtxRef = useRef<McpContext | null>(null);
+  const [exploreOpen, setExploreOpen] = useState(false);
   const mcpQueue = useRef<Promise<unknown>>(Promise.resolve());
   /** Desktop app with no projects folder yet (or one that went missing): the setup screen. */
   const [folderSetup, setFolderSetup] = useState<{ suggested: string; iCloud: boolean; missing: string | null } | null>(null);
@@ -2888,7 +2889,7 @@ export function App() {
 
   return (
     <div className="app">
-      <ExploreHost liveProject={project} onBuild={()=>setView('build')} onOpenTakeoff={s=>{setView('drawings');follow([{sheetId:s.id,box:[0,0,s.width,s.height],label:s.name}],s.name);}} />
+      <ExploreHost open={exploreOpen} onOpenChange={setExploreOpen} liveProject={project} onBuild={()=>setView('build')} onOpenTakeoff={s=>{setView('drawings');follow([{sheetId:s.id,box:[0,0,s.width,s.height],label:s.name}],s.name);}} />
       <header className="titlebar">
         <input
           ref={projectFileInput}
@@ -4123,6 +4124,7 @@ export function App() {
           label="More"
           groups={[
             [
+              { label: 'Explore drawing…', hint: 'Experimental', onSelect: () => setExploreOpen(true) },
               { label: 'Files…', hint: 'Add, remove, reorder', onSelect: () => setFilesOpen(true) },
               { label: 'History', hint: 'Every change', onSelect: () => setTab('history') },
               { label: 'Quick start', onSelect: () => setAiDialog('help') },

@@ -98,6 +98,35 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const [revisionSheets, setRevisionSheets] = useState<RevisionSheet[]>([]);
   const [hints, setHints] = useState<Record<string, string> | null>(null);
   const [setupOpen, setSetupOpen] = useState(true);
+  const [sideW, setSideW] = useState(() => {
+    try {
+      return Math.min(720, Math.max(240, Number(localStorage.getItem('takeoff.buildSideW')) || 320));
+    } catch {
+      return 320;
+    }
+  });
+  /** Drags the side panel's edge to make it wider or narrower. */
+  const dragSide = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const x0 = e.clientX;
+    const w0 = sideW;
+    let w = w0;
+    const move = (ev: PointerEvent) => {
+      w = Math.min(Math.max(240, w0 + ev.clientX - x0), Math.min(720, window.innerWidth * 0.6));
+      setSideW(w);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      try {
+        localStorage.setItem('takeoff.buildSideW', String(Math.round(w)));
+      } catch {
+        /* not kept: fine */
+      }
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [issueFilter,setIssueFilter] = useState<'all'|'conflict'|'warning'>('all');
   const [sel, setSel] = useState<{ kind: 'element' | 'activity'; id: string } | null>(null);
@@ -537,7 +566,18 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         </div>
       </header>
 
-      <div className="bld-main">
+      <div className="bld-main" style={{ ['--bld-side-w' as string]: `${sideW}px` }}>
+        {setupOpen ? (
+          <div className="bld-side-edge" role="separator" aria-orientation="vertical" aria-label="Drag to resize the side panel" onPointerDown={dragSide}>
+            <button className="bld-side-hide" onClick={() => setSetupOpen(false)} onPointerDown={(e) => e.stopPropagation()} title="Hide the side panel" aria-label="Hide the side panel">
+              ‹
+            </button>
+          </div>
+        ) : (
+          <button className="bld-side-show" onClick={() => setSetupOpen(true)} title="Show the side panel" aria-label="Show the side panel">
+            ›
+          </button>
+        )}
         {setupOpen && out && (
           <div className="bld-left-tabs" role="tablist" aria-label="Side panel">
             {/* "Elements", not "Model": the header's Model/Construction switch already has that name (and "Browser" opens this panel). */}
