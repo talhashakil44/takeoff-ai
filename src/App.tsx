@@ -175,8 +175,15 @@ export function App() {
   const [dropOn, setDropOn] = useState<string | null>(null);
   /** Takeoffs picked together (Box select), on the open sheet. */
   const [multiIds, setMultiIds] = useState<string[]>([]);
+  /** Takeoffs to pick once the sheet they are on has opened (a type clicked in the takeoff list). */
+  const pickOnOpen = useRef<string[] | null>(null);
   // A selection belongs to its sheet.
-  useEffect(() => setMultiIds([]), [sheetId]);
+  useEffect(() => {
+    setMultiIds(pickOnOpen.current ?? []);
+    pickOnOpen.current = null;
+  }, [sheetId]);
+  /** The type picked on the left, its takeoffs shown on the drawing and in the takeoff list (view only). */
+  const [litTypeId, setLitTypeId] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ id?: string; box?: [number, number, number, number]; n: number } | null>(null);
   /** Text runs per drawing page, read once for the sheet search. */
   const textCache = useRef(new Map<string, PageText[]>());
@@ -303,6 +310,7 @@ export function App() {
     setProject(p);
     setSheetId(p.sheets[0]?.id ?? null);
     setActiveTypeId(null);
+    setLitTypeId(null);
     setEditingTypeId(null);
     setSelectedId(null);
     setTool('select');
@@ -694,6 +702,20 @@ export function App() {
     setFocus((f) => ({ box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], n: (f?.n ?? 0) + 1 }));
   };
 
+  /** Picks every takeoff of a type on a sheet and frames them, or clears them when they are already picked. */
+  const pickType = (typeId: string, sid: string) => {
+    if (!project) return;
+    const ids = project.measurements.filter((m) => m.typeId === typeId && m.sheetId === sid).map((m) => m.id);
+    setLitTypeId(null);
+    if (sid === sheetId && ids.length === multiIds.length && ids.every((id) => multiIds.includes(id))) {
+      setMultiIds([]);
+      return;
+    }
+    if (sid !== sheetId) pickOnOpen.current = ids;
+    else setMultiIds(ids);
+    showTypeOn(typeId, sid);
+  };
+
   /**
    * The activity log is written a moment after the last change, not on every one: on a big
    * project it is thousands of events, and writing it each keystroke made editing lag.
@@ -935,6 +957,14 @@ export function App() {
     void ocrSheetNames(due.map((d) => d.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, pdfs, busy]);
+
+  // The types of the takeoffs picked on the drawing or in the takeoff list, marked in the list on the left.
+  const pickedSet = new Set(selectedId ? [...multiIds, selectedId] : multiIds);
+  const linkedTypeIds = project && pickedSet.size ? [...new Set(project.measurements.filter((m) => pickedSet.has(m.id)).map((m) => m.typeId))] : [];
+  const linkedKey = linkedTypeIds.join();
+  useEffect(() => {
+    if (linkedKey) document.querySelector('.source.types .type-item.linked')?.scrollIntoView({ block: 'center' });
+  }, [linkedKey]);
 
   if (!project) return <div className="loading">Opening your project…</div>;
 
@@ -2700,6 +2730,9 @@ export function App() {
   const chooseType = (t: TakeoffType) => {
     setActiveTypeId(t.id);
     setSelectedId(null);
+    // Its takeoffs stand out on the drawing and in the takeoff list until Esc.
+    setMultiIds([]);
+    setLitTypeId(t.id);
     if (tool === 'select' || tool === 'calibrate' || (tool === 'fill' && t.kind !== 'area') || (tool === 'symbol' && t.kind !== 'count') || (tool === 'trace' && t.kind !== 'linear') || tool === 'cutout') setTool('measure');
   };
 
@@ -3157,7 +3190,7 @@ export function App() {
                 return (
                   <li
                     key={keyPrefix + t.id}
-                    className={`type-item ${t.hidden ? 'is-hidden' : ''} ${(keyPrefix && keyPrefix !== 'unused|') || (!keyPrefix && groupOf(t) && known.has(groupOf(t)!)) ? 'in-group' : ''} ${keyPrefix.includes('|') && keyPrefix !== 'unused|' ? 'in-division' : ''}`}
+                    className={`type-item ${t.hidden ? 'is-hidden' : ''} ${linkedTypeIds.includes(t.id) ? 'linked' : ''} ${(keyPrefix && keyPrefix !== 'unused|') || (!keyPrefix && groupOf(t) && known.has(groupOf(t)!)) ? 'in-group' : ''} ${keyPrefix.includes('|') && keyPrefix !== 'unused|' ? 'in-division' : ''}`}
                     draggable
                     onDragStart={(e) => {
                       dragType.current = t.id;
@@ -3332,11 +3365,14 @@ export function App() {
           onSelect={(id) => {
             setSelectedId(id);
             setMultiIds([]);
+            setLitTypeId(null);
             if (id) setEditingTypeId(null);
           }}
           multiIds={picked.map((m) => m.id)}
+          litTypeId={litTypeId}
           onMultiSelect={(ids, add) => {
             setSelectedId(null);
+            setLitTypeId(null);
             setMultiIds((cur) => (add ? [...new Set([...cur, ...ids])] : ids));
           }}
           onDeleteMany={deleteMeasurements}
@@ -3777,6 +3813,9 @@ export function App() {
             onGrouping={chooseGrouping}
             activity={activity}
             selectedId={selectedId}
+            pickedIds={picked.map((m) => m.id)}
+            litTypeId={litTypeId}
+            onPickType={pickType}
             onSelect={setSelectedId}
             onDelete={deleteMeasurements}
             onRetype={(id, typeId) => commit((p) => ({ ...p, measurements: p.measurements.map((m) => (m.id === id ? { ...m, typeId } : m)) }), 'Change type')}
@@ -3788,6 +3827,8 @@ export function App() {
               if (!m) return;
               if (m.sheetId !== sheetId) setSheetId(m.sheetId);
               setSelectedId(id);
+              setMultiIds([]);
+              setLitTypeId(null);
               setFocus((f) => ({ id, n: (f?.n ?? 0) + 1 }));
             }}
             onRename={(id, label) =>

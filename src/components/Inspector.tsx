@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { describeGroup, groupActivity, type ActivityEvent } from '../activity';
 import { FINISH_ROLES, type Measurement, type Project, type Sheet, type TakeoffType } from '../model';
 import { measurementVars, primaryOf, primaryUnit, type TypeTotals } from '../quantities';
+import { disciplineOf, takeoffTree, type TypeNode } from '../takeoffTree';
 import { formatQty } from '../units';
 import { Icon } from './Icons';
 import { QuantityPanel } from './QuantityPanel';
@@ -29,6 +30,12 @@ interface Props {
   onGrouping: (g: QtyGrouping) => void;
   activity: ActivityEvent[];
   selectedId: string | null;
+  /** Takeoffs picked together on the open sheet (a type clicked here, or Box select). */
+  pickedIds: string[];
+  /** The type picked on the left, shown with its takeoffs. */
+  litTypeId: string | null;
+  /** Picks every takeoff of a type on a sheet, going to that sheet. */
+  onPickType: (typeId: string, sheetId: string) => void;
   onSelect: (id: string | null) => void;
   onDelete: (ids: string[]) => void;
   onRetype: (id: string, typeId: string) => void;
@@ -142,33 +149,139 @@ function SelectionCard({ m, project, sheet: current, onDelete, onRetype, onSelec
   );
 }
 
-function TakeoffList({ project, sheet, selectedId, onShow, onDelete, roomOf }: Props) {
+/** A type's takeoffs added up, in its unit; ones on unscaled sheets are left out. */
+function typeTotal(items: Measurement[], type: TakeoffType, project: Project, sheets: Map<string, Sheet>): string {
+  let sum = 0;
+  let scaled = 0;
+  for (const m of items) {
+    const sheet = sheets.get(m.sheetId);
+    const v = sheet ? measurementVars(m, type, sheet, project.units) : null;
+    if (!v) continue;
+    sum += primaryOf(type.kind, v);
+    scaled++;
+  }
+  return scaled ? `${formatQty(sum)} ${primaryUnit(type.kind, project.units)}` : 'no scale';
+}
+
+function TakeoffList({ project, sheet, selectedId, pickedIds, litTypeId, onPickType, onShow, onDelete, roomOf }: Props) {
   const [scope, setScope] = useState<'sheet' | 'all'>('sheet');
   const [query, setQuery] = useState('');
+  /** Groups folded open or shut by hand, over their defaults. */
+  const [folds, setFolds] = useState<Map<string, boolean>>(new Map());
   const typeName = useMemo(() => new Map(project.types.map((t) => [t.id, t.name.toLowerCase()])), [project.types]);
   const q = query.trim().toLowerCase();
-  const sheetNames = useMemo(() => new Map(project.sheets.map((s) => [s.id, s.name])), [project.sheets]);
-  const list = (scope === 'sheet' && sheet ? project.measurements.filter((m) => m.sheetId === sheet.id) : project.measurements).filter(
-    (m) =>
-      !q ||
-      (m.label ?? '').toLowerCase().includes(q) ||
-      (typeName.get(m.typeId) ?? '').includes(q) ||
-      (roomOf(m) ?? '').toLowerCase().includes(q) ||
-      (scope === 'all' && (sheetNames.get(m.sheetId) ?? '').toLowerCase().includes(q)),
+  const sheetsById = useMemo(() => new Map(project.sheets.map((s) => [s.id, s])), [project.sheets]);
+  const docs = useMemo(() => new Map(project.docs.map((d) => [d.id, d])), [project.docs]);
+  const list = useMemo(
+    () =>
+      (scope === 'sheet' && sheet ? project.measurements.filter((m) => m.sheetId === sheet.id) : project.measurements).filter((m) => {
+        if (!q) return true;
+        const s = sheetsById.get(m.sheetId);
+        return (
+          (m.label ?? '').toLowerCase().includes(q) ||
+          (typeName.get(m.typeId) ?? '').includes(q) ||
+          (roomOf(m) ?? '').toLowerCase().includes(q) ||
+          (scope === 'all' && !!s && `${s.name} ${s.title ?? ''}`.toLowerCase().includes(q))
+        );
+      }),
+    [project.measurements, scope, sheet, q, sheetsById, typeName, roomOf],
   );
-  const groups = useMemo(() => {
-    const byType = new Map<string, Measurement[]>();
-    for (const m of list) {
-      const items = byType.get(m.typeId);
-      if (items) items.push(m);
-      else byType.set(m.typeId, [m]);
-    }
-    return project.types.filter((t) => byType.has(t.id)).map((t) => ({ type: t, items: byType.get(t.id)! }));
-  }, [list, project.types]);
-  const sheetName = (id: string) => sheetNames.get(id) ?? '';
+  const tree = useMemo(() => takeoffTree(project, list), [project, list]);
+
+  // What is picked: on the drawing, here, or a type on the left.
+  const picked = useMemo(() => new Set([...pickedIds, ...(selectedId ? [selectedId] : [])]), [pickedIds, selectedId]);
+  const first = project.measurements.find((m) => m.id === (selectedId ?? pickedIds[0]));
+  const litOn = litTypeId ? (list.find((m) => m.typeId === litTypeId && m.sheetId === sheet?.id) ?? list.find((m) => m.typeId === litTypeId)) : undefined;
+  // Where the list scrolls to: the picked takeoff's row, else the picked or lit type's header.
+  const target = selectedId ? `m:${selectedId}` : first ? `t:${first.sheetId}:${first.typeId}` : litOn ? `t:${litOn.sheetId}:${litOn.typeId}` : '';
+  const isOpen = (key: string, dflt: boolean) => folds.get(`${scope}|${key}`) ?? dflt;
+  const fold = (key: string, dflt: boolean) => setFolds((f) => new Map(f).set(`${scope}|${key}`, !isOpen(key, dflt)));
+
+  // Open the groups that hold what was picked, then bring it into view.
+  const scrollTo = useRef(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const pickKey = `${selectedId}|${pickedIds.join()}|${litTypeId}|${scope}`;
+  useEffect(() => {
+    const shown = picked.size ? project.measurements.filter((m) => picked.has(m.id)) : litOn ? [litOn] : [];
+    if (shown.length)
+      setFolds((f) => {
+        const next = new Map(f);
+        for (const m of shown.slice(0, 200)) {
+          const s = sheetsById.get(m.sheetId);
+          const keys = [`d:${s ? disciplineOf(s, docs.get(s.docId)) : 'Other'}`, `s:${m.sheetId}`, `t:${m.sheetId}:${m.typeId}`];
+          for (const k of keys) for (const sc of ['sheet', 'all']) next.set(`${sc}|${k}`, true);
+        }
+        return next;
+      });
+    scrollTo.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickKey]);
+  useEffect(() => {
+    if (!scrollTo.current || !target) return;
+    const el = listRef.current?.querySelector(`[data-key="${target}"]`);
+    if (!el) return;
+    scrollTo.current = false;
+    el.scrollIntoView({ block: 'nearest' });
+  });
+
+  const renderType = ({ type, items }: TypeNode, sheetId: string) => {
+    const key = `t:${sheetId}:${type.id}`;
+    const open = isOpen(key, scope === 'sheet');
+    const all = items.every((m) => picked.has(m.id));
+    const some = !all && items.some((m) => picked.has(m.id));
+    const short = type.name.split(' – ')[0];
+    return (
+      <section className={`takeoff-group ${all ? 'picked' : some ? 'has-picked' : ''} ${type.id === litTypeId ? 'lit' : ''}`} key={key}>
+        <header data-key={key}>
+          <button className="icon-button fold" onClick={() => fold(key, scope === 'sheet')} aria-expanded={open} aria-label={open ? `Fold ${short}` : `Show each ${short}`}>
+            <span className={`doc-chevron ${open ? 'open' : ''}`}>
+              <Icon name="chevron" size={12} />
+            </span>
+          </button>
+          <button className="type-pick" onClick={() => onPickType(type.id, sheetId)} title={all ? 'Click again to clear' : `Highlight all ${items.length} on the sheet`} aria-pressed={all}>
+            <span className="dot" style={{ background: type.color }} />
+            <span className="group-name">{type.name}</span>
+            {type.kind !== 'count' && <span className="group-total">{typeTotal(items, type, project, sheetsById)}</span>}
+            <span className="group-count">{items.length}</span>
+          </button>
+          <button className="icon-button" title={`Delete all ${items.length} ${short} takeoffs shown`} aria-label="Delete group" onClick={() => onDelete(items.map((m) => m.id))}>
+            <Icon name="trash" size={15} />
+          </button>
+        </header>
+        {open && (
+          <ul>
+            {items.map((m, i) => (
+              <li key={m.id} data-key={`m:${m.id}`} className={picked.has(m.id) ? 'selected' : ''} onClick={() => onShow(m.id)} title="Show on the sheet">
+                <span className="row-index">{i + 1}</span>
+                <span className="row-qty">
+                  {m.label && <span className="row-label">{m.label}</span>}
+                  {/* An unnamed count is one each: its type's name says more than "1 ea". */}
+                  {type.kind === 'count' && !m.label ? short : qtyOf(m, type, project)}
+                </span>
+                <span className="row-where" title={roomOf(m) ?? ''}>
+                  {roomOf(m) && <span className="row-room">{roomOf(m)}</span>}
+                </span>
+                <button
+                  className="icon-button row-delete"
+                  title="Delete takeoff"
+                  aria-label="Delete takeoff"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete([m.id]);
+                  }}
+                >
+                  <Icon name="trash" size={15} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    );
+  };
 
   return (
-    <div className="takeoff-list">
+    <div className="takeoff-list" ref={listRef}>
       <div className="list-toolbar">
         <div className="segmented small" role="tablist" aria-label="Show takeoffs from">
           <button role="tab" aria-selected={scope === 'sheet'} className={scope === 'sheet' ? 'on' : ''} onClick={() => setScope('sheet')}>
@@ -188,7 +301,7 @@ function TakeoffList({ project, sheet, selectedId, onShow, onDelete, roomOf }: P
         <Icon name="search" size={14} />
         <input id="takeoff-filter" placeholder="Find a room, sheet or type" value={query} onChange={(e) => setQuery(e.target.value)} />
       </label>
-      {groups.length === 0 && (
+      {tree.length === 0 && (
         <div className="empty-note">
           <Icon name="list" size={22} />
           <p>
@@ -196,45 +309,46 @@ function TakeoffList({ project, sheet, selectedId, onShow, onDelete, roomOf }: P
           </p>
         </div>
       )}
-      {groups.map(({ type, items }) => (
-        <section className="takeoff-group" key={type.id}>
-          <header>
-            <span className="dot" style={{ background: type.color }} />
-            <span className="group-name">{type.name}</span>
-            <span className="group-count">{items.length}</span>
-            <button className="icon-button" title={`Delete all ${items.length} ${type.name.split(' – ')[0]} takeoffs shown`} aria-label="Delete group" onClick={() => onDelete(items.map((m) => m.id))}>
-              <Icon name="trash" size={15} />
+      {/* Discipline, then sheet (all sheets), then type, then each takeoff. Click a type to
+          highlight all of it on the sheet, or a takeoff to show just that one. */}
+      {tree.map((d) => {
+        const dKey = `d:${d.discipline}`;
+        const dOpen = isOpen(dKey, true);
+        const one = scope === 'sheet' ? d.sheets[0]?.sheet : undefined;
+        return (
+          <section className="takeoff-disc" key={dKey}>
+            <button className="tree-head disc-head" onClick={() => fold(dKey, true)} aria-expanded={dOpen}>
+              <span className={`doc-chevron ${dOpen ? 'open' : ''}`}>
+                <Icon name="chevron" size={12} />
+              </span>
+              <span className="tree-name">{d.discipline}</span>
+              <span className="tree-sub">{one ? `${one.name}${one.title ? ` · ${one.title}` : ''}` : `${d.sheets.length} sheet${d.sheets.length === 1 ? '' : 's'}`}</span>
+              <span className="group-count">{d.count}</span>
             </button>
-          </header>
-          <ul>
-            {items.map((m, i) => (
-              <li key={m.id} className={m.id === selectedId ? 'selected' : ''} onClick={() => onShow(m.id)} title="Show on the sheet">
-                <span className="row-index">{i + 1}</span>
-                <span className="row-qty">
-                  {m.label && <span className="row-label">{m.label}</span>}
-                  {/* An unnamed count is one each: its type's name says more than "1 ea". */}
-                  {type.kind === 'count' && !m.label ? type.name.split(' – ')[0] : qtyOf(m, type, project)}
-                </span>
-                <span className="row-where" title={[scope === 'all' ? sheetName(m.sheetId) : '', roomOf(m) ?? ''].filter(Boolean).join(' · ')}>
-                  {scope === 'all' && <span className="row-sheet">{sheetName(m.sheetId)}</span>}
-                  {roomOf(m) && <span className="row-room">{roomOf(m)}</span>}
-                </span>
-                <button
-                  className="icon-button row-delete"
-                  title="Delete takeoff"
-                  aria-label="Delete takeoff"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete([m.id]);
-                  }}
-                >
-                  <Icon name="trash" size={15} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+            {dOpen &&
+              (scope === 'sheet'
+                ? d.sheets.flatMap((s) => s.types.map((t) => renderType(t, s.sheet.id)))
+                : d.sheets.map((s) => {
+                    const sKey = `s:${s.sheet.id}`;
+                    const sOpen = isOpen(sKey, true);
+                    const current = s.sheet.id === sheet?.id;
+                    return (
+                      <div className={`takeoff-sheet ${current ? 'current' : ''}`} key={sKey}>
+                        <button className="tree-head sheet-head" onClick={() => fold(sKey, true)} aria-expanded={sOpen} title={current ? 'The open sheet' : undefined}>
+                          <span className={`doc-chevron ${sOpen ? 'open' : ''}`}>
+                            <Icon name="chevron" size={12} />
+                          </span>
+                          <span className="tree-name">{s.sheet.name}</span>
+                          <span className="tree-sub">{s.sheet.title}</span>
+                          <span className="group-count">{s.count}</span>
+                        </button>
+                        {sOpen && s.types.map((t) => renderType(t, s.sheet.id))}
+                      </div>
+                    );
+                  }))}
+          </section>
+        );
+      })}
     </div>
   );
 }
