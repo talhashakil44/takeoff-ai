@@ -1,0 +1,27 @@
+ERMHDR	19.12	2026-11-04	Project	admin	Admin	dbxDatabaseNoName	Project Management	CAD
+%T	PROJECT
+%F	proj_id	proj_short_name
+%R	100	SHOP
+%T	CALENDAR
+%F	clndr_id	clndr_name	day_hr_cnt
+%R	1	Standard 5 day	8
+%R	2	Ten hour	10
+%T	PROJWBS
+%F	wbs_id	proj_id	wbs_short_name	wbs_name	parent_wbs_id	proj_node_flag
+%R	200	100	SHOP	Maintenance shop		Y
+%R	201	100	SUB	Submittals	200	N
+%R	202	100	INT	Interior - Level 1	200	N
+%T	TASK
+%F	task_id	proj_id	wbs_id	clndr_id	task_type	task_code	task_name	target_drtn_hr_cnt	target_start_date	target_end_date	early_start_date	early_end_date	act_start_date
+%R	1001	100	201	1	TT_Task	A1000	Submit door hardware schedule	40	2026-11-09 08:00	2026-11-13 17:00			
+%R	1002	100	202	2	TT_Task	A1010	Drywall partitions	100	2026-11-16 08:00	2026-11-27 17:00			
+%R	1003	100	202	1	TT_Task	A1020	Acoustic ceiling grid and tile	24	2026-11-30 08:00	2026-12-02 17:00			
+%R	1004	100	202	1	TT_FinMile	A1030	Interiors complete	0	2026-12-02 17:00	2026-12-02 17:00			
+%R	1005	100	200	1	TT_WBS	WBS1	Summary bar	0					
+%T	TASKPRED
+%F	task_pred_id	task_id	pred_task_id	proj_id	pred_proj_id	pred_type	lag_hr_cnt
+%R	1	1002	1001	100	100	PR_FS	0
+%R	2	1003	1002	100	100	PR_FF	16
+%R	3	1004	1003	100	100	PR_FS	0
+%R	4	1003	9999	100	101	PR_FS	0
+%E

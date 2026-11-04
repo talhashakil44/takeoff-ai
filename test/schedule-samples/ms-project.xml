@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+  <!-- Saved from MS Project as XML: a small shop fit-out. -->
+  <Name>Shop fit-out.xml</Name>
+  <MinutesPerDay>480</MinutesPerDay>
+  <Tasks>
+    <Task>
+      <UID>0</UID><ID>0</ID><Name>Shop fit-out</Name><OutlineLevel>0</OutlineLevel><Summary>1</Summary>
+      <Start>2027-01-04T08:00:00</Start><Finish>2027-02-05T17:00:00</Finish>
+    </Task>
+    <Task>
+      <UID>1</UID><ID>1</ID><Name>Foundations</Name><OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+      <Start>2027-01-04T08:00:00</Start><Finish>2027-01-15T17:00:00</Finish><Duration>PT80H0M0S</Duration>
+    </Task>
+    <Task>
+      <UID>2</UID><ID>2</ID><Name>Excavate &amp; form footings</Name><OutlineLevel>2</OutlineLevel><Summary>0</Summary>
+      <Start>2027-01-04T08:00:00</Start><Finish>2027-01-08T17:00:00</Finish><Duration>PT40H0M0S</Duration><Milestone>0</Milestone>
+      <Baseline><Number>0</Number><Start>2026-12-01T08:00:00</Start><Finish>2026-12-04T17:00:00</Finish><Duration>PT32H0M0S</Duration></Baseline>
+    </Task>
+    <Task>
+      <UID>3</UID><ID>3</ID><Name>Pour footings</Name><OutlineLevel>2</OutlineLevel><Summary>0</Summary>
+      <Start>2027-01-11T08:00:00</Start><Finish>2027-01-15T17:00:00</Finish><Duration>PT40H0M0S</Duration><Milestone>0</Milestone>
+      <PredecessorLink><PredecessorUID>2</PredecessorUID><Type>1</Type><CrossProject>0</CrossProject><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+    </Task>
+    <Task>
+      <UID>4</UID><ID>4</ID><Name>Building</Name><OutlineLevel>1</OutlineLevel><Summary>1</Summary>
+      <Start>2027-01-18T08:00:00</Start><Finish>2027-02-05T17:00:00</Finish><Duration>PT120H0M0S</Duration>
+    </Task>
+    <Task>
+      <UID>5</UID><ID>5</ID><Name>Erect structural steel</Name><OutlineLevel>2</OutlineLevel><Summary>0</Summary>
+      <Start>2027-01-20T08:00:00</Start><Finish>2027-01-26T17:00:00</Finish><Duration>PT40H0M0S</Duration>
+      <PredecessorLink><PredecessorUID>3</PredecessorUID><Type>1</Type><LinkLag>9600</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+    </Task>
+    <Task>
+      <UID>6</UID><ID>6</ID><Name>Roofing</Name><OutlineLevel>2</OutlineLevel><Summary>0</Summary>
+      <Start>2027-01-27T08:00:00</Start><Finish>2027-02-02T17:00:00</Finish><Duration>PT40H0M0S</Duration>
+      <PredecessorLink><PredecessorUID>5</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+    </Task>
+    <Task>
+      <UID>7</UID><ID>7</ID><Name>Mezzanine partitions</Name><OutlineLevel>2</OutlineLevel><Summary>0</Summary>
+      <Start>2027-01-27T08:00:00</Start><Finish>2027-02-05T17:00:00</Finish><Duration>PT64H0M0S</Duration>
+      <PredecessorLink><PredecessorUID>5</PredecessorUID><Type>3</Type><LinkLag>14400</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+      <PredecessorLink><PredecessorUID>4</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+    </Task>
+    <Task>
+      <UID>8</UID><ID>8</ID><Name>Substantial completion</Name><OutlineLevel>1</OutlineLevel><Summary>0</Summary>
+      <Start>2027-02-05T17:00:00</Start><Finish>2027-02-05T17:00:00</Finish><Duration>PT0H0M0S</Duration><Milestone>1</Milestone>
+      <PredecessorLink><PredecessorUID>6</PredecessorUID><Type>1</Type></PredecessorLink>
+      <PredecessorLink><PredecessorUID>7</PredecessorUID><Type>0</Type><LinkLag>0</LinkLag></PredecessorLink>
+    </Task>
+  </Tasks>
+  <Resources><Resource><UID>1</UID><Name>Crew</Name><Start>2027-01-01T08:00:00</Start></Resource></Resources>
+  <Assignments><Assignment><UID>1</UID><TaskUID>2</TaskUID><Start>2027-01-04T08:00:00</Start></Assignment></Assignments>
+</Project>
