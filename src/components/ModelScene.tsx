@@ -44,7 +44,7 @@ interface TourStep {
   text: string;
 }
 const TOUR: TourStep[] = [
-  { target: null, title: 'A model built by AI', text: 'Claude built this shop from its tender drawings: 575 walls, doors, roofs, beams, fixtures and site pieces, each tied to the sheet it came from. Here is a quick look around.' },
+  { target: null, title: 'A model built by AI', text: 'Claude built this building from its tender drawings: walls, doors, roofs, beams, fixtures, services and the site, each piece tied to the sheet it came from. Here is a quick look around.' },
   { target: '.mdl-views', title: 'Views', text: 'Jump between the exterior, the rear, a cutaway, the structure, the services, a plan and the whole site. Drag to orbit, scroll to zoom, right-drag to pan.' },
   { target: '.mdl-cut', title: 'Cut it open', text: 'The section cut hides everything above a height, so you can look into the rooms and check the layout against the plans.' },
   { target: '.mdl-layers', title: 'Layers', text: 'Turn trades on and off: envelope, roof, steel, interior walls, mechanical, electrical, the site.' },

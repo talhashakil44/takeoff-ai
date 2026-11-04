@@ -1683,21 +1683,27 @@ export function App() {
     setToast({ text: `Copied ${types.length} type${types.length === 1 ? '' : 's'} from ${from.name}`, undo: true });
   }
 
-  const SAMPLE_NAME = 'Sample project: maintenance shop';
-  /** Opens the sample project holding a finished 3D model Claude built, on its guided tour. */
-  async function openSampleModel() {
+  /** The sample projects: finished 3D models Claude built from public tender sets (names taken off). */
+  const SAMPLES = [
+    { name: 'Sample project #1: ski lodge', was: [] as string[], load: () => import('./scene3d/sampleLodge') },
+    { name: 'Sample project #2: maintenance shop', was: ['Sample project: maintenance shop'], load: () => import('./scene3d/sample') },
+  ];
+  /** Opens a sample project holding a finished 3D model Claude built, on its guided tour. */
+  async function openSampleModel(n: 1 | 2 = 1) {
+    const sample = SAMPLES[n - 1];
     setBusy('Opening the sample project…');
     try {
       // Opened before: open that one again rather than making another.
-      const had = (await listProjects()).find((x) => x.name === SAMPLE_NAME);
+      const had = (await listProjects()).find((x) => x.name === sample.name || sample.was.includes(x.name));
       const existing = had ? await loadProjectById(had.id) : undefined;
       if (existing?.sample && existing.scene3d) {
         await switchProject(existing.id!);
+        if (existing.name !== sample.name) commit((p) => ({ ...p, name: sample.name }), 'Rename project');
         setView('build');
         return;
       }
-      const { default: model } = await import('./scene3d/sample');
-      await createProjectNamed(SAMPLE_NAME, 'metric');
+      const { default: model } = await sample.load();
+      await createProjectNamed(sample.name, 'metric');
       commit((p) => ({ ...p, sample: true, scene3d: model }), 'Sample project');
       setView('build');
     } catch (e) {
@@ -3471,9 +3477,16 @@ export function App() {
               <button className="link-button try-sample" onClick={() => void openSample()}>
                 No drawings handy? Try a sample plan
               </button>
-              <button className="link-button try-sample" onClick={() => void openSampleModel()}>
-                Or tour a sample project with a 3D model built by AI
-              </button>
+              <span className="try-sample">
+                Or tour a sample project with a 3D model built by AI:{' '}
+                <button className="link-button" onClick={() => void openSampleModel(1)}>
+                  #1 ski lodge
+                </button>{' '}
+                ·{' '}
+                <button className="link-button" onClick={() => void openSampleModel(2)}>
+                  #2 maintenance shop
+                </button>
+              </span>
               <div className="welcome-units">
                 <span>Measure in</span>
                 <div className="segmented small" role="radiogroup" aria-label="Units">
@@ -3694,7 +3707,7 @@ export function App() {
                 follow(to, label);
               }}
               onSave={(name, data) => void saveFile(name, data)}
-              onOpenSample={() => void openSampleModel()}
+              onOpenSample={() => void openSampleModel(1)}
               renderSheet={renderSheetRegion}
               onClose={() => setView('drawings')}
             />
@@ -3853,9 +3866,9 @@ export function App() {
               setPopover(null);
               void duplicateProject();
             }}
-            onSample={() => {
+            onSample={(n) => {
               setPopover(null);
-              void openSampleModel();
+              void openSampleModel(n);
             }}
             onOpenFolder={
               desktopApi?.linked && syncFolder
