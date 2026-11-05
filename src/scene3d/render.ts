@@ -476,6 +476,8 @@ export class ModelRenderer {
 
   /** (Re)builds the meshes from the scene. */
   load(model: Scene3D) {
+    performance.mark('tk:load');
+    this.firstFrame = true;
     for (const it of this.items) {
       this.scene.remove(it.mesh);
       it.mesh.geometry.dispose();
@@ -536,6 +538,8 @@ export class ModelRenderer {
     this.ground.visible = !this.envOn;
     this.scene.add(this.ground);
     const siteSize = this.all.getSize(new THREE.Vector3()).length();
+    performance.measure('tk:geometry', 'tk:load');
+    performance.mark('tk:env');
     if (this.env) {
       // The terrain rolls out to the horizon; haze takes the far hills.
       this.env.build({ building: this.box, all: this.all, sources, trees, floor: 0 });
@@ -553,6 +557,7 @@ export class ModelRenderer {
     const r = Math.max(span * 0.9, Math.min(span * 3, this.all.getSize(new THREE.Vector3()).length() / 2));
     this.sunFit = { c: c.clone(), r };
     this.placeSun();
+    performance.measure('tk:terrain', 'tk:env');
     this.gtao?.updateGtaoMaterial({ radius: Math.max(0.6, Math.min(2, span * 0.03)), distanceExponent: 1.4, thickness: 1.2, scale: 1 });
     this.apply();
   }
@@ -842,8 +847,15 @@ export class ModelRenderer {
     // Over the head, so its shine on glass ahead sits high rather than dead centre.
     if (this.lamp.intensity) this.lamp.position.copy(this.camera.position).y += 1.2;
     this.sky.position.copy(this.camera.position);
+    if (this.firstFrame) performance.mark('tk:frame');
     this.composer.render();
+    if (this.firstFrame) {
+      this.firstFrame = false;
+      performance.measure('tk:first-frame', 'tk:frame');
+      performance.measure('tk:load-to-picture', 'tk:load');
+    }
   }
+  private firstFrame = false;
 
   dispose() {
     for (const it of this.items) it.mesh.geometry.dispose();

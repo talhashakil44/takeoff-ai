@@ -59,6 +59,8 @@ export function solidsOf(s: Shape3D): Solid[] {
       return [{ poly: strip([s.from[0], s.from[1]], [s.to[0], s.to[1]], s.radius * 2), z0: Math.min(s.from[2], s.to[2]) - s.radius, z1: Math.max(s.from[2], s.to[2]) + s.radius }];
     case 'sphere':
       return [{ poly: ring([s.at[0], s.at[1]], s.radius), z0: s.at[2] - s.radius, z1: s.at[2] + s.radius }];
+    case 'mesh':
+      return [];
   }
 }
 
