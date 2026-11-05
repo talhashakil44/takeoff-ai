@@ -59,6 +59,8 @@ export class TextureLibrary {
   private sets = new Map<string, Pbr>();
   private grainMap: THREE.Texture | null = null;
   private loader: THREE.TextureLoader;
+  /** Decodes images off the main thread, so they don't stall the picture as they arrive. */
+  private bitmaps: THREE.ImageBitmapLoader | null = null;
   private pending = 0;
   /** A texture could not be loaded (the plain finishes stay). */
   failed = false;
@@ -68,10 +70,36 @@ export class TextureLibrary {
   constructor(private anisotropy = 8) {
     const mgr = new THREE.LoadingManager();
     this.loader = new THREE.TextureLoader(mgr);
+    // Safari's createImageBitmap ignores the flip option; there the plain loader stays.
+    const safari = typeof navigator !== 'undefined' && /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
+    if (typeof createImageBitmap === 'function' && !safari) this.bitmaps = new THREE.ImageBitmapLoader(mgr).setOptions({ imageOrientation: 'flipY', premultiplyAlpha: 'none' });
   }
 
   private load(file: string, colour: boolean) {
     this.pending++;
+    if (this.bitmaps) {
+      const t = new THREE.Texture();
+      t.flipY = false;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = this.anisotropy;
+      if (colour) t.colorSpace = THREE.SRGBColorSpace;
+      this.bitmaps.load(
+        `${base()}textures/${file}`,
+        (img) => {
+          t.image = img;
+          t.needsUpdate = true;
+          this.pending--;
+          this.onLoad?.();
+        },
+        undefined,
+        () => {
+          this.pending--;
+          this.failed = true;
+          this.onLoad?.();
+        },
+      );
+      return t;
+    }
     const t = this.loader.load(
       `${base()}textures/${file}`,
       () => {

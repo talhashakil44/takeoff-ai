@@ -331,7 +331,8 @@ export class SiteEnvironment {
     const size = all.getSize(new THREE.Vector3());
     const span = Math.max(40, size.x, size.z);
     // The site's own grades, on a grid: the grass the model drew, under its paving.
-    const cell = Math.min(4, Math.max(0.8, span / 170));
+    // Finer on long sites (an access road), so the grades near the building stay true.
+    const cell = Math.min(4, Math.max(0.8, span / (span > 250 ? 340 : 170)));
     const x0 = all.min.x - cell * 2, z0 = all.min.z - cell * 2;
     const nx = Math.ceil((size.x + cell * 4) / cell) + 1, nz = Math.ceil((size.z + cell * 4) / cell) + 1;
     const grade = new Float32Array(nx * nz).fill(NaN);

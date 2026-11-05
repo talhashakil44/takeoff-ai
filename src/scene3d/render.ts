@@ -558,6 +558,17 @@ export class ModelRenderer {
     this.sunFit = { c: c.clone(), r };
     this.placeSun();
     performance.measure('tk:terrain', 'tk:env');
+    // Shaders compile in parallel (KHR_parallel_shader_compile) before the first picture, not in it.
+    if (this.env) {
+      const warm: Promise<void> = this.renderer
+        .compileAsync(this.scene, this.camera)
+        .catch(() => undefined)
+        .then(() => {
+          if (this.warming === warm) this.warming = null;
+          this.onChange?.();
+        });
+      this.warming = warm;
+    }
     this.gtao?.updateGtaoMaterial({ radius: Math.max(0.6, Math.min(2, span * 0.03)), distanceExponent: 1.4, thickness: 1.2, scale: 1 });
     this.apply();
   }
@@ -575,8 +586,10 @@ export class ModelRenderer {
 
   /** Something that casts shadows moved or changed: redraw the sun's shadow map next frame. */
   shadowsChanged() {
-    this.renderer.shadowMap.needsUpdate = true;
+    this.shadowDirty = true;
   }
+  private shadowDirty = true;
+  private shadowAt = 0;
 
   /** True once the terrain and trees are showing. */
   get envOn() {
@@ -643,6 +656,7 @@ export class ModelRenderer {
 
   /** A still at a set size (4K by default), as a PNG; the view on screen is left as it was. */
   async capture(width = 3840, height = 2160): Promise<Blob | null> {
+    if (this.warming) await this.warming;
     const r = this.renderer;
     const ratio = r.getPixelRatio();
     const { w, h } = this.size;
@@ -847,6 +861,14 @@ export class ModelRenderer {
     // Over the head, so its shine on glass ahead sits high rather than dead centre.
     if (this.lamp.intensity) this.lamp.position.copy(this.camera.position).y += 1.2;
     this.sky.position.copy(this.camera.position);
+    // On the move (playing, scrubbing, orbiting) the sun's shadow redraws a few times a second;
+    // the still picture gets it at once.
+    if (this.shadowDirty && (this.detail.high || !this.env || performance.now() - this.shadowAt > 300)) {
+      this.renderer.shadowMap.needsUpdate = true;
+      this.shadowDirty = false;
+      this.shadowAt = performance.now();
+    }
+    if (this.warming) return;
     if (this.firstFrame) performance.mark('tk:frame');
     this.composer.render();
     if (this.firstFrame) {
@@ -856,6 +878,7 @@ export class ModelRenderer {
     }
   }
   private firstFrame = false;
+  private warming: Promise<void> | null = null;
 
   dispose() {
     for (const it of this.items) it.mesh.geometry.dispose();

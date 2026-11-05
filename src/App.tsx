@@ -131,6 +131,9 @@ function keepVisibility(target: Project, now: Project): Project {
 /** The window answers MCP tool calls once, even when React runs its effects twice (development). */
 let mcpWired = false;
 
+/** Sample downloads that weren't there this session (not published yet): open their 3D copy instead. */
+const MISSING_SAMPLES = new Set<string>();
+
 export function App() {
   const [project, setProject] = useState<Project | null>(null);
   const projectRef = useRef<Project | null>(null);
@@ -1742,10 +1745,18 @@ export function App() {
               return r.arrayBuffer();
             }
           : null;
-      const existing = full ?? (fetchSample ? undefined : opened.find((p) => p.scene3d));
+      // A sample that isn't published as a download: its 3D copy, opened again rather than made anew.
+      const missing = MISSING_SAMPLES.has(sample.file);
+      const existing = full ?? (fetchSample && !missing ? undefined : opened.find((p) => p.scene3d));
+      // The app's own copy of the sample's 3D model, when newer than the one saved (site works added, say).
+      const freshen = async (p: Project) => {
+        const { default: model } = await sample.load();
+        if ((model.updated ?? '') > (p.scene3d?.updated ?? '')) commit((q) => ({ ...q, scene3d: model }), 'Update the sample 3D model');
+      };
       if (existing) {
         await switchProject(existing.id!);
         if (existing.name !== sample.name) commit((p) => ({ ...p, name: sample.name }), 'Rename project');
+        await freshen(existing);
         setView('build');
         return;
       }
@@ -1765,9 +1776,18 @@ export function App() {
           for (const p of opened) if (!p.docs.length && !p.measurements.length) await saveProject({ ...p, name: `${sample.name} (3D only)` });
           if (last) {
             await openProjectState(last);
+            await freshen(last);
             setView('build');
             return;
           }
+        }
+        MISSING_SAMPLES.add(sample.file);
+        const copy = opened.find((p) => p.scene3d);
+        if (copy) {
+          await switchProject(copy.id!);
+          await freshen(copy);
+          setView('build');
+          return;
         }
         setToast({ text: 'The full sample could not be downloaded, so this is its 3D model only.', undo: false });
       }
