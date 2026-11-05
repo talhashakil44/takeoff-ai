@@ -19,7 +19,9 @@ export type Shape3D =
   /** A pipe, duct, rail or member between two points. */
   | { type: 'tube'; from: Pt3; to: Pt3; radius: number }
   | { type: 'cone'; at: Pt2; radius: number; z0: number; z1: number }
-  | { type: 'sphere'; at: Pt3; radius: number };
+  | { type: 'sphere'; at: Pt3; radius: number }
+  /** Ready-made triangles: v = [x, y, z, …] in metres, f = vertex indices, three per triangle (site works traced from civil drawings). */
+  | { type: 'mesh'; v: number[]; f: number[] };
 
 export interface Element3D {
   id: string;
@@ -247,6 +249,8 @@ export function meshOf(s: Shape3D): Mesh3D {
         }
       return { positions, indices };
     }
+    case 'mesh':
+      return { positions: s.v, indices: s.f };
   }
 }
 
@@ -283,8 +287,13 @@ export function shapeProblem(s: unknown): string | null {
       return !pt(o.from, 3) || !pt(o.to, 3) || !num(o.radius) ? 'tube needs from, to ([x, y, z]) and radius' : null;
     case 'sphere':
       return !pt(o.at, 3) || !num(o.radius) ? 'sphere needs at ([x, y, z]) and radius' : null;
+    case 'mesh': {
+      const v = o.v as unknown[], f = o.f as unknown[];
+      if (!Array.isArray(v) || !Array.isArray(f) || v.length % 3 || f.length % 3 || !v.every(num) || !f.every((i) => Number.isInteger(i) && (i as number) >= 0 && (i as number) < v.length / 3)) return 'mesh needs v ([x, y, z, …]) and f (triangle vertex indices)';
+      return far(v) ? 'mesh is over 2 km from the origin: use metres' : null;
+    }
     default:
-      return `unknown shape type ${String(o.type)} (box, wall, slab, cylinder, tube, cone, sphere)`;
+      return `unknown shape type ${String(o.type)} (box, wall, slab, cylinder, tube, cone, sphere, mesh)`;
   }
 }
 
