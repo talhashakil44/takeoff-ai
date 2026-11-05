@@ -19,5 +19,6 @@ export default defineConfig({
   base: './',
   plugins: [react(), serviceWorker(), ocrAssets()],
   define: { __BUILD__: JSON.stringify(build) },
+  build: { minify: false }, // TEMP: profiling preview
   test: { include: ['test/**/*.test.ts'] },
 });
