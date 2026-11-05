@@ -335,10 +335,14 @@ export class ModelRenderer {
     const r = this.renderer;
     // Sharper when still: up to twice the screen's pixels at rest, the screen's own (or less) on the move.
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    this.detail = { high: true, low: Math.min(1.25, dpr), top: Math.min(2, Math.max(dpr, 1.5)) };
+    this.detail = { high: true, low: 1, top: Math.min(2, Math.max(dpr, 1.5)) };
     r.setPixelRatio(opts.site ? this.detail.top : Math.min(2, dpr));
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFShadowMap;
+    // The sun's shadow map is redrawn only when the model or the site changes, not every time the
+    // camera moves: orbiting a big site with trees and grass stays quick.
+    r.shadowMap.autoUpdate = false;
+    r.shadowMap.needsUpdate = true;
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 1.0;
     r.localClippingEnabled = true;
@@ -393,7 +397,7 @@ export class ModelRenderer {
       this.loadSky(sunDir);
     }
     // Multisampled, half-float buffers: clean edges and no banding through the post passes.
-    const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: opts.site ? 4 : 0 });
+    const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: opts.site ? 2 : 0 });
     this.composer = new EffectComposer(r, target);
     this.composer.addPass(new RenderPass(s, this.camera));
     try {
@@ -559,6 +563,12 @@ export class ModelRenderer {
     this.sun.target.position.copy(c);
     Object.assign(this.sun.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 1, far: d + r * 2 });
     this.sun.shadow.camera.updateProjectionMatrix();
+    this.renderer.shadowMap.needsUpdate = true;
+  }
+
+  /** Something that casts shadows moved or changed: redraw the sun's shadow map next frame. */
+  shadowsChanged() {
+    this.renderer.shadowMap.needsUpdate = true;
   }
 
   /** True once the terrain and trees are showing. */
@@ -584,6 +594,7 @@ export class ModelRenderer {
     }
     this.finishes.clip.constant = cut ?? 1e5;
     this.version++;
+    this.shadowsChanged();
   }
 
   /** The ground under everything (for walking on). */
@@ -611,8 +622,11 @@ export class ModelRenderer {
 
   /** Sharper while still, quicker on the move: true when the pixel ratio changed. */
   setDetail(high: boolean) {
-    if (this.tracing || !this.env || this.detail.high === high || this.detail.low === this.detail.top) return false;
+    if (this.tracing || !this.env || this.detail.high === high) return false;
     this.detail.high = high;
+    // Ambient occlusion only on the still picture; on the move it's the costliest pass.
+    if (this.gtao) this.gtao.enabled = high;
+    if (this.detail.low === this.detail.top) return true;
     const ratio = high ? this.detail.top : this.detail.low;
     this.renderer.setPixelRatio(ratio);
     this.composer.setPixelRatio(ratio);

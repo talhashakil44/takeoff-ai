@@ -279,7 +279,8 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
     if (!x) return;
     if (bare) {
       x.m.setBuild(build ?? null);
-      x.invalidate();
+      // Scrubbing or playing the timeline draws quick frames; the still sharpens when it stops.
+      x.invalidate(true);
       return;
     }
     const s = seq;
@@ -295,7 +296,8 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
     x.m.setStage(bare ? stage ?? null : null);
     x.m.env?.setReveal(!!(bare && reveal));
     x.m.env?.setContext(!bare || context !== false);
-    x.invalidate();
+    x.m.shadowsChanged();
+    x.invalidate(true);
   }, [bare, stage, reveal, context, scene]);
 
   // Playing the sequence: a phase every 1.6 s, then the finished building.
