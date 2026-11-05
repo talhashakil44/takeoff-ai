@@ -477,7 +477,7 @@ export class SiteEnvironment {
       // Broadleaf sprays and conifer twigs: each kind on its own cards.
       for (const cone of [false, true]) {
         const list = all.filter((l) => !!l.cone === cone);
-        const per = (l: { r: number }) => Math.min(320, Math.max(40, Math.round(l.r * l.r * perR * 4.5)));
+        const per = (l: { r: number }) => Math.min(220, Math.max(32, Math.round(l.r * l.r * perR * 3.4)));
         const count = list.reduce((s, l) => s + per(l), 0);
         if (!count) continue;
         const mat = cone ? this.mats.needle : this.mats.leaf;
@@ -578,7 +578,7 @@ export class SiteEnvironment {
   private plantGrass(b: THREE.Box3, span: number) {
     const r = rng(9031);
     // One clump: blades of two segments, leaning out, each a little different.
-    const blades = 11, pos: number[] = [], nor: number[] = [], colr: number[] = [], h: number[] = [];
+    const blades = 9, pos: number[] = [], nor: number[] = [], colr: number[] = [], h: number[] = [];
     for (let k = 0; k < blades; k++) {
       const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.16;
       const bx = Math.cos(a) * d, bz = Math.sin(a) * d;
@@ -617,8 +617,8 @@ export class SiteEnvironment {
     const band = Math.min(45, Math.max(22, span * 0.45));
     const x0 = b.min.x - band, x1 = b.max.x + band, z0 = b.min.z - band, z1 = b.max.z + band;
     const spots: number[] = [];
-    const cap = 60000;
-    const step = 0.42;
+    const cap = 32000;
+    const step = 0.5;
     for (let z = z0; z < z1 && spots.length / 4 < cap; z += step)
       for (let x = x0; x < x1; x += step) {
         const px = x + (r() - 0.5) * step, pz = z + (r() - 0.5) * step;
