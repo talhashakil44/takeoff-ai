@@ -16,6 +16,8 @@ import { BuildScene, GLASS, type ElementState, type ViewCommand } from './BuildS
 import { ElementProperties, GroupProperties, ModelTree, QuantitySchedule, type TreeSel } from './BuildPanels';
 import { Icon } from './Icons';
 import { ModelScene } from './ModelScene';
+import { Explorer, phaseOfTrade, type ExplorerSchedule } from './Explorer';
+import { dayOf } from '../scene3d/sequence';
 import { AiModelPanel, type AgentRun } from './AiModelPanel';
 import { desktopApi, type AgentKey } from '../desktop';
 import { tradeOf, type Element3D } from '../scene3d/scene';
@@ -100,7 +102,8 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   const [drawingLines, setDrawingLines] = useState<DrawingLines>({});
   const [revisionSheets, setRevisionSheets] = useState<RevisionSheet[]>([]);
   const [hints, setHints] = useState<Record<string, string> | null>(null);
-  const [setupOpen, setSetupOpen] = useState(true);
+  // With an AI model, the 4D explorer fills the view; the browser opens from the header.
+  const [setupOpen, setSetupOpen] = useState(() => !project.scene3d?.elements.length);
   const [sideW, setSideW] = useState(() => {
     try {
       return Math.min(720, Math.max(240, Number(localStorage.getItem('takeoff.buildSideW')) || 320));
@@ -175,6 +178,23 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   };
   const scene3d = project.scene3d?.elements.length || aiRun.running ? project.scene3d ?? { version: 1 as const, title: project.name, origin: '', builtBy: 'AI', updated: '', elements: [] } : null;
   const showAiModel = view3d === 'model' && !!scene3d;
+  // The AI model in the 4D explorer (the default), or the classic model view with Build It's Gantt.
+  const [explorer, setExplorerOn] = useState(() => {
+    try {
+      return localStorage.getItem('takeoff.explorer') !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  const setExplorer = (on: boolean) => {
+    setExplorerOn(on);
+    try {
+      localStorage.setItem('takeoff.explorer', on ? 'on' : 'off');
+    } catch {
+      /* not kept: fine */
+    }
+  };
+  const showExplorer = showAiModel && explorer;
   // The sample project opens on the guided help tour, once; the Help button brings it back.
   const [tourOn, setTourOn] = useState(() => {
     if (!project.sample) return false;
@@ -434,6 +454,42 @@ export default function BuildView({ project, sections, specText, sheetText, shee
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [out, workspace, acts, times, dayInt]);
 
+  // The explorer plays Build It's schedule (generated, imported or own) on calendar days, each AI
+  // model element on its trade's work on its level; with no plan it works one out from the model.
+  const explorerSchedule = useMemo<ExplorerSchedule | null>(() => {
+    if (!out || !cal || !acts.length) return null;
+    const start = cal.date(0);
+    const at = (i: number) => dayOf(start, cal.date(Math.max(0, i)));
+    const shown = acts.filter((a) => times[a.id] && (['work', 'milestone', 'mobilize', 'testing', 'commissioning', 'closeout'].includes(a.kind)));
+    if (!shown.some((a) => a.kind === 'work')) return null;
+    const first = new Map<string, string>();
+    for (const a of [...shown].sort((x, y) => times[x.id].es - times[y.id].es)) {
+      if (a.kind !== 'work' || !a.trade) continue;
+      if (a.level && !first.has(`${a.trade}|${a.level}`)) first.set(`${a.trade}|${a.level}`, a.id);
+      if (!first.has(a.trade)) first.set(a.trade, a.id);
+    }
+    const lv = out.model.levels;
+    const levelId = (name: string) => {
+      const n = name.toLowerCase().trim();
+      if (!n) return null;
+      return lv.find((l) => l.name.toLowerCase() === n || l.id.toLowerCase() === n)?.id ?? lv.find((l) => l.name.toLowerCase().includes(n) || n.includes(l.name.toLowerCase()))?.id ?? null;
+    };
+    return {
+      start,
+      source: userView ? (edits.schedules?.use === 'own' ? 'own' : 'imported') : 'generated',
+      activities: shown.map((a) => {
+        const t = times[a.id];
+        const s0 = at(t.es);
+        return { id: a.id, name: a.name, phase: phaseOfTrade(a.trade, a.kind), s: s0, e: a.kind === 'milestone' ? s0 : Math.max(s0 + 1, at(t.ef)), milestone: a.kind === 'milestone', count: 0 };
+      }),
+      activityOf: (e: Element3D) => {
+        const tr = tradeOf(e);
+        const l = e.category === 'foundation' ? 'fdn' : levelId(e.level);
+        return (l && first.get(`${tr}|${l}`)) || first.get(tr) || (tr === 'partitions' ? first.get('structure') ?? null : null);
+      },
+    };
+  }, [out, cal, acts, times, userView, edits.schedules?.use]);
+
   const levels = model?.levels ?? [];
   const tradesUsed = useMemo(() => TRADES.filter((t) => model?.elements.some((e) => e.trade === t.key)), [model]);
   const highlight = useMemo(() => (picking ? picks : sel?.kind === 'activity' ? new Set(actById.get(sel.id)?.elements ?? []) : treeSel && !sel ? new Set(treeSel.ids) : null), [sel, actById, treeSel, picking, picks]);
@@ -538,7 +594,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
 
   return (
     <div className={`bld bld-workspace bld-mode-${workspace}`} role="region" aria-label="Build It">
-      <header className="bld-bar">
+      <header className={`bld-bar${showExplorer ? ' bld-bar-hidden' : ''}`}>
         {(busy || reading) && <div className="bld-live-status" role="status">{busy ?? `Reading the drawings… ${reading!.done} of ${reading!.of} sheets`}</div>}
         {!busy && !reading && revisionSheets.some((r) => !r.superseded) && (
           <div className="bld-live-status" role="note">
@@ -560,7 +616,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         </div>
         {out && <nav className="bld-workspace-switch" aria-label="Workspace">
           <button aria-pressed={workspace === 'model'} onClick={() => { setWorkspace('model'); setPlaying(false); }}>Model</button>
-          <button aria-pressed={workspace === 'sequence'} onClick={() => setWorkspace('sequence')}>Construction</button>
+          <button aria-pressed={workspace === 'sequence' && !showExplorer} onClick={() => { setWorkspace('sequence'); if (showExplorer) setExplorer(false); }}>Construction</button>
         </nav>}
         {out && feas && (
           <FeasibilityBadge feas={feas} start={(setup ?? out.setup).start} />
@@ -571,6 +627,11 @@ export default function BuildView({ project, sections, specText, sheetText, shee
           </button>
         )}
         <div className="bld-actions">
+          {showAiModel && (
+            <button aria-pressed={explorer} className={explorer ? 'on' : ''} onClick={() => setExplorer(!explorer)} title="The 4D explorer: the model on its site, built up to the date on the timeline">
+              4D explorer
+            </button>
+          )}
           <button className={setupOpen ? 'on' : ''} onClick={() => setSetupOpen((o) => !o)} title="The model browser and the setup">
             Browser
           </button>
@@ -676,7 +737,34 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         )}
 
         <section className="bld-stage">
-          {showAiModel && scene3d ? (
+          {showExplorer && scene3d ? (
+            <Explorer
+              scene={scene3d}
+              projectName={project.name}
+              schedule={explorerSchedule}
+              onSave={onSave}
+              extra={
+                <>
+                  {model && (
+                    <select value={view3d} onChange={(e) => setView3d(e.target.value as typeof view3d)} aria-label="Show" title="What the view shows">
+                      <option value="model">AI model</option>
+                      <option value="building">Building (beta)</option>
+                      <option value="takeoff">Takeoff</option>
+                    </select>
+                  )}
+                  <button data-tour="ai" onClick={() => setAiOpen(true)} title="Build or carry on the 3D model with Claude or ChatGPT">
+                    {aiRun.running ? 'AI building…' : 'Build 3D with AI'}
+                  </button>
+                  <button onClick={() => setExplorer(false)} title="The classic Build it view, with the Gantt, Issues and Inspector">
+                    Classic view
+                  </button>
+                  <button className="x4d-exit" onClick={onClose} aria-label="Close" title="Close Build it">
+                    <Icon name="close" size={14} />
+                  </button>
+                </>
+              }
+            />
+          ) : showAiModel && scene3d ? (
             <>
               <ModelScene scene={scene3d} stateOf={stateOf3d} stateKey={`${workspace}|${dayInt}`} tour={tourOn} onTourEnd={endTour} />
               <div className="bld-toolbar" role="toolbar" aria-label="View">
@@ -1026,7 +1114,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
         )}
       </div>
 
-      {out && cal && workspace === 'sequence' && (
+      {out && cal && workspace === 'sequence' && !showExplorer && (
         <footer className="bld-time">
           <div className="bld-controls">
             <div className="bld-btabs" role="tablist">
