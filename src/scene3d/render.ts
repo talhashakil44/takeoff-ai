@@ -61,6 +61,8 @@ const PATTERNS: Record<string, (c: string) => { w: number; h: number; size: numb
   noise: (c) => ({ w: 256, h: 256, size: 2.5, draw: noise(c, 20) }),
   grass: (c) => ({ w: 256, h: 256, size: 6, draw: (g, w, h) => { noise(c, 40)(g, w, h); g.fillStyle = 'rgba(40,60,20,.08)'; for (let i = 0; i < 400; i++) g.fillRect((i * 97) % w, (i * 53) % h, 2, 6); } }),
   panels: (c) => ({ w: 64, h: 256, size: 1.4, draw: (g, w, h) => { g.fillStyle = c; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(0,0,0,.13)'; for (let k = 0; k < 16; k++) g.fillRect(0, k * 16, w, 2); } }),
+  // Lap siding: horizontal boards about 180 mm, each lit on its face and shadowed under its lap.
+  lap: (c) => ({ w: 64, h: 256, size: 1.44, draw: (g, w) => { for (let k = 0; k < 8; k++) { const y = k * 32; const gr = g.createLinearGradient(0, y, 0, y + 32); gr.addColorStop(0, shade(c, 0.78)); gr.addColorStop(0.12, shade(c, 1.04)); gr.addColorStop(0.85, shade(c, 0.97)); gr.addColorStop(1, shade(c, 0.86)); g.fillStyle = gr; g.fillRect(0, y, w, 32); } } }),
   planks: (c) => ({ w: 256, h: 256, size: 1.6, draw: (g, w) => { for (let k = 0; k < 8; k++) { g.fillStyle = shade(c, 0.9 + ((k * 5) % 4) * 0.06); g.fillRect(0, k * 32, w, 30); } } }),
   tile: (c) => ({ w: 128, h: 128, size: 1.2, draw: (g, w, h) => { g.fillStyle = c; g.fillRect(0, 0, w, h); g.strokeStyle = shade(c, 0.85); g.lineWidth = 2; for (let k = 0; k <= 4; k++) { g.beginPath(); g.moveTo(k * 32, 0); g.lineTo(k * 32, h); g.moveTo(0, k * 32); g.lineTo(w, k * 32); g.stroke(); } } }),
 };
@@ -87,7 +89,7 @@ const PBR: Record<string, { set: TextureSet | 'grain'; size: number; normal?: nu
   soil: { set: 'mud', size: 4, normal: 1 },
 };
 /** Patterned finishes that also get a fine surface bump. */
-const BUMP: Record<string, number> = { brick: 0.5, epoxy: 0.12 };
+const BUMP: Record<string, number> = { brick: 0.5, epoxy: 0.12, lap_siding: 0.25 };
 /** Finishes whose texture runs along the member (wood grain). */
 const GRAIN = new Set(['timber', 'wood', 'door']);
 

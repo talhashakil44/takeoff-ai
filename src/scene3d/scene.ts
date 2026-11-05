@@ -83,7 +83,7 @@ export const CATEGORIES: [string, string][] = [
 export const MATERIALS: Record<string, { color: string; rough?: number; metal?: number; opacity?: number; pattern?: string }> = {
   block: { color: '#8c8984', rough: 0.9, pattern: 'block' }, brick: { color: '#9a5a44', rough: 0.9, pattern: 'brick' }, stone: { color: '#8f8a80', rough: 0.95 },
   concrete: { color: '#b9b7b0', rough: 0.9, pattern: 'noise' }, metal_panel: { color: '#cdbf9f', rough: 0.45, metal: 0.35, pattern: 'ribs' },
-  siding: { color: '#c9c3b6', rough: 0.7, pattern: 'ribs' }, stucco: { color: '#e4ddcf', rough: 0.95 }, wood: { color: '#a37a4f', rough: 0.7 },
+  siding: { color: '#c9c3b6', rough: 0.7, pattern: 'ribs' }, lap_siding: { color: '#b9c0c4', rough: 0.75, pattern: 'lap' }, stucco: { color: '#e4ddcf', rough: 0.95 }, wood: { color: '#a37a4f', rough: 0.7 },
   timber: { color: '#cfa06a', rough: 0.7 }, gypsum: { color: '#efebe3', rough: 0.9 },
   roof_metal: { color: '#4b3c34', rough: 0.4, metal: 0.5, pattern: 'seam' }, roof_membrane: { color: '#55595b', rough: 0.85 }, roof_shingle: { color: '#3d3d3f', rough: 0.95 },
   glass: { color: '#9cc4d6', rough: 0.05, metal: 0.1, opacity: 0.38 }, frame: { color: '#3a3f42', rough: 0.4, metal: 0.6 },
