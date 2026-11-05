@@ -1729,16 +1729,28 @@ export function App() {
       const list = (await listProjects()).filter((x) => x.name === sample.name || sample.was.includes(x.name));
       const opened = (await Promise.all(list.map((x) => loadProjectById(x.id)))).filter((p): p is Project => !!p?.sample);
       const full = opened.find((p) => p.docs.length);
-      const existing = full ?? (desktopApi?.fetchSample ? undefined : opened.find((p) => p.scene3d));
+      // The full sample (drawings, spec, takeoff, 3D): the desktop app downloads it itself; the web
+      // app gets it from its own address (/samples/, passed through from the GitHub release).
+      const web = typeof location !== 'undefined' && /^https?:$/.test(location.protocol);
+      const fetchSample = desktopApi?.fetchSample
+        ? (f: string) => desktopApi!.fetchSample!(f)
+        : web
+          ? async (f: string) => {
+              const r = await fetch(`${import.meta.env.BASE_URL}samples/${f}`);
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return r.arrayBuffer();
+            }
+          : null;
+      const existing = full ?? (fetchSample ? undefined : opened.find((p) => p.scene3d));
       if (existing) {
         await switchProject(existing.id!);
         if (existing.name !== sample.name) commit((p) => ({ ...p, name: sample.name }), 'Rename project');
         setView('build');
         return;
       }
-      if (desktopApi?.fetchSample) {
-        setBusy('Downloading the sample project…');
-        const got = await desktopApi.fetchSample(sample.file).catch(() => null);
+      if (fetchSample) {
+        setBusy('Downloading the sample project: drawings, spec, takeoff and 3D model…');
+        const got = await fetchSample(sample.file).catch(() => null);
         if (got) {
           let last: Project | null = null;
           await readProjectFiles(got, async (o) => {
