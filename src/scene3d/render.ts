@@ -339,7 +339,7 @@ export class ModelRenderer {
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     this.detail = { high: true, low: 1, top: Math.min(2, Math.max(dpr, 1.5)) };
     r.setPixelRatio(opts.site ? this.detail.top : Math.min(2, dpr));
-    r.shadowMap.enabled = true;
+    r.shadowMap.enabled = !(typeof location !== 'undefined' && location.search.includes('tknoshadow'));
     r.shadowMap.type = THREE.PCFShadowMap;
     // The sun's shadow map is redrawn only when the model or the site changes, not every time the
     // camera moves: orbiting a big site with trees and grass stays quick.
@@ -402,7 +402,9 @@ export class ModelRenderer {
     const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: opts.site ? 2 : 0 });
     this.composer = new EffectComposer(r, target);
     this.composer.addPass(new RenderPass(s, this.camera));
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
     try {
+      if (q.get('tknogtao')) throw new Error('TEMP');
       this.gtao = new GTAOPass(s, this.camera, 800, 600);
       this.gtao.blendIntensity = 0.9;
       this.gtao.updateGtaoMaterial({ radius: 0.9, distanceExponent: 1.4, thickness: 1.2, scale: 1 });
