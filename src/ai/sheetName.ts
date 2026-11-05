@@ -1,6 +1,7 @@
 import { getSample } from '../host';
 import type { PDFPageProxy } from '../pdf';
-import { askClaudeJson, getApiKey } from './claude';
+import { activeProvider, askClaudeJson, hasAiKey } from './claude';
+import { openAiJson } from './openai';
 import { askService, blobToBase64, serviceReady } from './service';
 
 const PROMPT = `These images are the title block of one sheet of a construction drawing set: the right-hand strip and the bottom strip of the sheet.
@@ -24,7 +25,7 @@ export interface SheetName {
 
 /** Whether AI can be asked from here: the artifact's Claude account, the web app's service, or an API key. */
 export async function canAskClaude(): Promise<boolean> {
-  return !!(await getSample()) || serviceReady() || !!getApiKey();
+  return !!(await getSample()) || serviceReady() || hasAiKey();
 }
 
 /**
@@ -42,7 +43,9 @@ export async function readSheetName(page: PDFPageProxy, signal?: AbortSignal): P
     ? await sample.json<SheetName>(PROMPT, { signal, images, modelTier: 'default' })
     : serviceReady()
       ? (await askService<SheetName>({ task: 'sheet-name', prompt: PROMPT, images: await Promise.all(images.map(blobToBase64)), maxTokens: 300 }, signal)).json
-      : await askClaudeJson<SheetName>(PROMPT, images, signal);
+      : activeProvider() === 'openai'
+        ? (await openAiJson<SheetName>(PROMPT, await Promise.all(images.map(blobToBase64)), { maxTokens: 300, signal })).json
+        : await askClaudeJson<SheetName>(PROMPT, images, signal);
   const clean = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
   return { number: clean(raw?.number), title: clean(raw?.title) };
 }

@@ -6931,3 +6931,22 @@ button.link-button:hover {
   line-height: 1.5;
   color: #b9c2e2;
 }
+.byo-pick {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.3);
+  align-self: flex-start;
+}
+.byo-pick button {
+  min-height: 26px;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  color: #b9c2e2;
+}
+.byo-pick button.on {
+  background: #7c5cff;
+  color: #fff;
+}

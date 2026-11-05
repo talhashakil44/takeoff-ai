@@ -86,7 +86,8 @@ const LOCAL_HOSTS = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
 function allowed(req, token) {
   if (!LOCAL_HOSTS.test(req.headers.host ?? '')) return false;
   const origin = req.headers.origin;
-  if (origin && origin !== 'null') return false;
+  // Any Origin header, "null" included, means a web page or sandboxed frame: never allowed.
+  if (origin !== undefined) return false;
   const auth = req.headers.authorization ?? '';
   const given = Buffer.from(auth.replace(/^Bearer\s+/i, ''));
   const want = Buffer.from(token);

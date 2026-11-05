@@ -2,7 +2,8 @@ import { z } from 'zod/v4';
 import { getSample, isSampleError } from '../host';
 import { pageTextRuns, renderTiles, type PDFPageProxy } from '../pdf';
 import { textLines } from '../sheetInfo';
-import { describeError, getApiKey, readAssemblyLegend } from './claude';
+import { activeProvider, describeError, hasAiKey, readAssemblyLegend } from './claude';
+import { openAiJson } from './openai';
 import { findAssemblyCodes } from '../assemblyBuilder';
 import { LEGEND_INSTRUCTIONS, legendRequest } from './prompt';
 import { askService, serviceReady, ServiceError } from './service';
@@ -25,7 +26,7 @@ export type AiRoute = 'account' | 'service' | 'api-key' | 'none';
 export async function aiRoute(): Promise<AiRoute> {
   if (await getSample()) return 'account';
   if (serviceReady()) return 'service';
-  return getApiKey() ? 'api-key' : 'none';
+  return hasAiKey() ? 'api-key' : 'none';
 }
 
 const schemaInstruction = () =>
@@ -101,6 +102,18 @@ export async function readLegend(page: PDFPageProxy, sheetName: string, signal: 
     );
     const parsed = ExtractionSchema.safeParse(json);
     if (!parsed.success) throw new ServiceError('invalid_json', 'The AI answer did not match the expected assembly format. Try again.');
+    return { extraction: parsed.data, runsText, answeredBy: model };
+  }
+
+  if (activeProvider() === 'openai') {
+    const tiles = await renderTiles(page, 2, 2, 1600);
+    const { json, model } = await openAiJson<unknown>(`${legendRequest(sheetName, lines, printedTags)}\n\n${schemaInstruction()}`, tiles, {
+      system: LEGEND_INSTRUCTIONS,
+      maxTokens: 32000,
+      signal,
+    });
+    const parsed = ExtractionSchema.safeParse(json);
+    if (!parsed.success) throw new Error('ChatGPT’s answer did not match the expected assembly format. Try again.');
     return { extraction: parsed.data, runsText, answeredBy: model };
   }
 
