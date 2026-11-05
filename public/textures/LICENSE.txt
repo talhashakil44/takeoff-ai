@@ -14,3 +14,14 @@ Each set is its colour (diff), OpenGL normal (nor_gl) and roughness (rough) map,
 reduced from the 2k originals to 1024 x 1024 JPEG. wood_table_001_grain_1k.jpg is
 derived from wood_table_001's colour map: greyscale, lightened, so a finish colour
 can tint the grain.
+
+Added for the realistic finishes (2k colour and relief, 1k roughness), also Poly Haven CC0:
+  box_profile_metal_sheet (ribbed_metal, made grey for tinting)  https://polyhaven.com/a/box_profile_metal_sheet
+  corrugated_iron_02 (corrugated_metal)  https://polyhaven.com/a/corrugated_iron_02
+  asphalt_02 (asphalt)                   https://polyhaven.com/a/asphalt_02
+  brushed_concrete                       https://polyhaven.com/a/brushed_concrete
+  concrete_block_wall (concrete_block)   https://polyhaven.com/a/concrete_block_wall
+  painted_plaster_wall (plaster)         https://polyhaven.com/a/painted_plaster_wall
+  leafy_grass                            https://polyhaven.com/a/leafy_grass
+  leaves_card*, cut from tree_small_02's leaves  https://polyhaven.com/a/tree_small_02
+  pine_twig and bark_*, from pine_tree_01        https://polyhaven.com/a/pine_tree_01

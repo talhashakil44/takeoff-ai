@@ -1,0 +1,3 @@
+The sky: Poly Haven's "Kloofendal 48d Partly Cloudy (Pure Sky)", CC0 1.0 (public domain).
+https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky
+sky_1k.hdr lights the model; sky_4k.jpg (the tonemapped photo, resized) is the backdrop.

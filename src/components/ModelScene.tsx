@@ -50,8 +50,8 @@ export interface ModelApi {
   tour: () => void;
   leave: () => void;
   plan: () => WalkPlan;
-  /** A 3840 × 2160 PNG of the view. */
-  capture: () => Promise<Blob | null>;
+  /** A 3840 × 2160 PNG of the view, path traced (photoreal) where the GPU can; progress 0–1. */
+  capture: (onProgress?: (k: number) => void) => Promise<Blob | null>;
 }
 
 /** The order a building goes up in, by layer: for the build sequence when no schedule is playing. */
@@ -547,7 +547,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
         tour: startTour,
         leave: () => leave(),
         plan: planOf,
-        capture: () => r.current?.m.capture() ?? Promise.resolve(null),
+        capture: (onProgress) => r.current?.m.captureTraced(3840, 2160, 160, onProgress) ?? Promise.resolve(null),
       }
     : null;
   useEffect(() => {

@@ -89,21 +89,6 @@ function canvasTexture(w: number, h: number, draw: (g: CanvasRenderingContext2D)
   return t;
 }
 
-/** A clump of leaves on a transparent card. */
-function leafTexture() {
-  return canvasTexture(256, 256, (g) => {
-    const r = rng(41);
-    const greens = ['#7d9a5c', '#9db36f', '#5f7b45', '#b6c487', '#6f8c4f', '#8aa565'];
-    for (let j = 0; j < 140; j++) {
-      const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 108, x = 128 + Math.cos(a) * d, y = 128 + Math.sin(a) * d;
-      g.fillStyle = greens[j % greens.length];
-      g.beginPath();
-      g.ellipse(x, y, 5 + r() * 8, 2.5 + r() * 4, r() * Math.PI, 0, Math.PI * 2);
-      g.fill();
-    }
-  });
-}
-
 /** Construction fence mesh: a fine grid with a top and bottom rail. */
 function fenceTexture() {
   return canvasTexture(128, 128, (g) => {
@@ -191,7 +176,8 @@ export class SiteEnvironment {
     uFoot: { value: new THREE.Vector4() },
     uR: { value: new THREE.Vector2(3, 18) },
   };
-  private grid: { x0: number; z0: number; cell: number; nx: number; nz: number; h: Float32Array } | null = null;
+  private grid: { x0: number; z0: number; cell: number; nx: number; nz: number; h: Float32Array; laid: Float32Array } | null = null;
+  private grass: THREE.InstancedMesh | null = null;
   private mats = {
     yellow: std('#e2a531', 0.45, 0.2),
     white: std('#e9e9e3', 0.45, 0.1),
@@ -207,14 +193,22 @@ export class SiteEnvironment {
     timber: std('#c99e68', 0.75),
     post: std('#55605d', 0.5, 0.6),
     fence: new THREE.MeshStandardMaterial({ color: '#3f7a66', roughness: 0.8, alphaTest: 0.45, side: THREE.DoubleSide }),
-    leaf: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.92, alphaTest: 0.38, side: THREE.DoubleSide, emissive: '#36461f', emissiveIntensity: 0.3 }),
+    leaf: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.75, alphaTest: 0.45, side: THREE.DoubleSide }),
+    needle: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8, alphaTest: 0.4, side: THREE.DoubleSide }),
     gravel: std('#9a958a', 1),
   };
   private ground: THREE.MeshStandardMaterial;
 
   constructor(private lib: TextureLibrary) {
     this.group.add(this.trees, this.background, this.props);
-    this.mats.leaf.map = leafTexture();
+    // Photo-scanned leaf sprays and pine twigs on the cards (Poly Haven, CC0), with their relief.
+    this.mats.leaf.map = lib.file('leaves_card.png');
+    this.mats.leaf.normalMap = lib.file('leaves_card_nor.jpg', false);
+    this.mats.leaf.normalScale.set(0.6, 0.6);
+    this.mats.needle.map = lib.file('pine_twig.png');
+    const bark = lib.file('bark_diff_1k.jpg'), barkN = lib.file('bark_nor_gl_1k.jpg', false);
+    for (const t of [bark, barkN]) t.repeat.set(2, 3);
+    Object.assign(this.mats.bark, { map: bark, normalMap: barkN, color: new THREE.Color('#ffffff') });
     this.mats.fence.map = fenceTexture();
     this.mats.fence.map.wrapS = this.mats.fence.map.wrapT = THREE.RepeatWrapping;
     const grav = lib.get('gravel');
@@ -227,14 +221,15 @@ export class SiteEnvironment {
   // ----------------------------------------------------------------------- terrain
 
   private groundMaterial() {
-    const grass = this.lib.get('grass'), mud = this.lib.get('mud');
+    const grass = this.lib.get('grass'), mud = this.lib.get('mud'), leafy = this.lib.get('leafy');
     const m = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, metalness: 0, envMapIntensity: 0.45 });
     const u = this.uniforms;
     m.onBeforeCompile = (s) => {
       Object.assign(s.uniforms, u, {
         tGrass: { value: grass.map }, nGrass: { value: grass.normalMap }, rGrass: { value: grass.roughnessMap },
         tMud: { value: mud.map }, nMud: { value: mud.normalMap }, rMud: { value: mud.roughnessMap },
-        uGrassTint: { value: tintFor('grass', '#888149') }, uMudTint: { value: tintFor('mud', '#6e5e48') },
+        tLeafy: { value: leafy.map }, nLeafy: { value: leafy.normalMap },
+        uGrassTint: { value: tintFor('grass', '#6d7a3f') }, uMudTint: { value: tintFor('mud', '#6e5e48') },
       });
       const box = /* glsl */ `
         uniform vec4 uFoot; uniform float uWork; uniform float uDig; uniform vec2 uR;
@@ -254,8 +249,8 @@ export class SiteEnvironment {
         .replace(
           '#include <common>',
           `#include <common>\n${box}\nvarying vec3 vTW; varying vec3 vTN;
-          uniform sampler2D tGrass, nGrass, rGrass, tMud, nMud, rMud; uniform vec3 uGrassTint, uMudTint;
-          float tMix;`,
+          uniform sampler2D tGrass, nGrass, rGrass, tMud, nMud, rMud, tLeafy, nLeafy; uniform vec3 uGrassTint, uMudTint;
+          float tMix; float nearK;`,
         )
         .replace(
           '#include <map_fragment>',
@@ -277,6 +272,11 @@ export class SiteEnvironment {
           float lum = dot(grassC, vec3(0.3, 0.59, 0.11));
           grassC = mix(grassC, vec3(lum) * vec3(1.05, 1.0, 0.8), smoothstep(0.12, 0.4, lum) * 0.7);
           grassC = min(grassC, vec3(0.3, 0.27, 0.16));
+          // Close up, a ground-level scan (blades, clover, leaf litter) instead of the aerial one.
+          float camD = length(vTW - cameraPosition);
+          nearK = 1.0 - smoothstep(6.0, 34.0, camD);
+          vec3 leafyC = mix(texture2D(tLeafy, w / 2.3).rgb, texture2D(tLeafy, turn * w / 5.7 + vec2(0.3)).rgb, 0.35) * vec3(0.56, 0.54, 0.24);
+          grassC = mix(grassC, leafyC, nearK * 0.8);
           vec3 mudC = mix(texture2D(tMud, w / 4.5).rgb, texture2D(tMud, w / 15.0 + vec2(0.5)).rgb, 0.4);
           float breakup = texture2D(tMud, w / 70.0).r;
           float fd = footDist(w);
@@ -291,7 +291,7 @@ export class SiteEnvironment {
         .replace(
           '#include <normal_fragment_maps>',
           `{
-            vec3 tg = texture2D(nGrass, w / 11.0).xyz * 2.0 - 1.0;
+            vec3 tg = mix(texture2D(nGrass, w / 11.0).xyz, texture2D(nLeafy, w / 2.3).xyz, nearK * 0.8) * 2.0 - 1.0;
             vec3 tm = texture2D(nMud, w / 4.5).xyz * 2.0 - 1.0;
             vec3 tn = mix(tg, tm, tMix);
             tn.xy *= 0.9;
@@ -348,7 +348,7 @@ export class SiteEnvironment {
         // Under paving: just below it, so it shows rather than the grass.
         if (!Number.isNaN(laid[k])) h[k] = Math.min(h[k], laid[k] - 0.07);
       }
-    this.grid = { x0, z0, cell, nx, nz, h };
+    this.grid = { x0, z0, cell, nx, nz, h, laid };
     this.uniforms.uFoot.value.set(building.min.x, building.min.z, building.max.x, building.max.z);
     const bsize = building.getSize(new THREE.Vector3());
     this.uniforms.uR.value.set(2.5, 6 + Math.max(bsize.x, bsize.z) * 0.35);
@@ -403,6 +403,7 @@ export class SiteEnvironment {
     this.group.add(this.terrain);
 
     this.plantTrees(opts.trees, all, span);
+    this.plantGrass(building, span);
     this.buildPlant(building);
   }
 
@@ -472,52 +473,71 @@ export class SiteEnvironment {
           bg.push({ c: new THREE.Vector3(x + (r() - 0.5) * h * 0.55, y + h * 0.58 + r() * h * 0.4, z + (r() - 0.5) * h * 0.55), r: h * (0.17 + r() * 0.1) });
       }
     }
-    const leaves = (list: { c: THREE.Vector3; r: number; cone?: number }[], perR: number, parent: THREE.Group, shadows: boolean) => {
-      const count = list.reduce((s, l) => s + Math.min(80, Math.max(14, Math.round(l.r * l.r * perR))), 0);
-      if (!count) return;
-      const geo = new THREE.PlaneGeometry(1, 1);
-      const out = new Float32Array(count * 3);
-      const mesh = new THREE.InstancedMesh(geo, this.mats.leaf, count);
-      const d = new THREE.Object3D();
-      const col = new THREE.Color();
-      let i = 0;
-      for (const l of list) {
-        const n = Math.min(80, Math.max(14, Math.round(l.r * l.r * perR)));
-        const hue = 0.19 + r() * 0.07;
-        for (let k = 0; k < n; k++) {
-          let p: THREE.Vector3;
-          if (l.cone) {
-            // A conifer: cards in a cone, wider at the bottom.
-            const t = Math.pow(r(), 0.7), a = r() * Math.PI * 2, rad = l.r * (1 - t) * Math.sqrt(r());
-            p = new THREE.Vector3(Math.cos(a) * rad, (t - 0.5) * l.cone, Math.sin(a) * rad);
-          } else {
-            const a = r() * Math.PI * 2, b = Math.acos(2 * r() - 1), rad = l.r * Math.cbrt(r());
-            p = new THREE.Vector3(Math.cos(a) * Math.sin(b) * rad, Math.cos(b) * rad * 0.85, Math.sin(a) * Math.sin(b) * rad);
+    const leaves = (all: { c: THREE.Vector3; r: number; cone?: number }[], perR: number, parent: THREE.Group, shadows: boolean) => {
+      // Broadleaf sprays and conifer twigs: each kind on its own cards.
+      for (const cone of [false, true]) {
+        const list = all.filter((l) => !!l.cone === cone);
+        const per = (l: { r: number }) => Math.min(320, Math.max(40, Math.round(l.r * l.r * perR * 4.5)));
+        const count = list.reduce((s, l) => s + per(l), 0);
+        if (!count) continue;
+        const mat = cone ? this.mats.needle : this.mats.leaf;
+        const geo = cone ? new THREE.PlaneGeometry(0.5, 1) : new THREE.PlaneGeometry(1, 1);
+        const out = new Float32Array(count * 3);
+        const mesh = new THREE.InstancedMesh(geo, mat, count);
+        const d = new THREE.Object3D();
+        const col = new THREE.Color();
+        let i = 0;
+        for (const l of list) {
+          const n = per(l);
+          // Each tree a little different in tone: some yellower, some bluer, some darker.
+          const tone = r(), dark = 0.78 + r() * 0.3;
+          for (let k = 0; k < n; k++) {
+            let p: THREE.Vector3;
+            if (l.cone) {
+              // A conifer: twigs in a cone, wider at the bottom, drooping outward.
+              const t = Math.pow(r(), 0.7), a = r() * Math.PI * 2, rad = l.r * (1 - t) * Math.sqrt(r());
+              p = new THREE.Vector3(Math.cos(a) * rad, (t - 0.5) * l.cone, Math.sin(a) * rad);
+            } else {
+              // Mostly on the crown's skin, as real foliage is: the inside is branches and shade.
+              const a = r() * Math.PI * 2, b = Math.acos(2 * r() - 1), rad = l.r * (0.55 + 0.45 * Math.sqrt(r()));
+              p = new THREE.Vector3(Math.cos(a) * Math.sin(b) * rad, Math.cos(b) * rad * 0.85, Math.sin(a) * Math.sin(b) * rad);
+            }
+            const dir = p.clone().normalize();
+            d.position.copy(l.c).add(p);
+            if (l.cone) d.rotation.set(-Math.PI / 2 + (r() - 0.5) * 0.9, Math.atan2(dir.x, dir.z) + (r() - 0.5) * 0.6, (r() - 0.5) * 0.8);
+            else d.rotation.set(r() * Math.PI, r() * Math.PI, r() * Math.PI);
+            d.scale.setScalar(l.cone ? 0.9 + r() * 0.6 : 0.75 + r() * 0.45);
+            d.updateMatrix();
+            mesh.setMatrixAt(i, d.matrix);
+            // Inner cards darker (self-shade), outer ones lit; a tint per tree.
+            const shade = (0.62 + 0.38 * Math.min(1, p.length() / Math.max(0.1, l.r))) * dark * (0.92 + r() * 0.16);
+            col.setRGB(shade * (0.96 + tone * 0.1), shade, shade * (1.02 - tone * 0.1));
+            mesh.setColorAt(i, col);
+            out.set([dir.x, dir.y + 0.35, dir.z], i * 3);
+            i++;
           }
-          const dir = p.clone().normalize();
-          d.position.copy(l.c).add(p);
-          d.rotation.set(r() * Math.PI, r() * Math.PI, r() * Math.PI);
-          d.scale.setScalar((l.cone ? 1.4 : 2.1) + r() * 1.0);
-          d.updateMatrix();
-          mesh.setMatrixAt(i, d.matrix);
-          mesh.setColorAt(i, col.setHSL(l.cone ? hue + 0.08 : hue, l.cone ? 0.3 : 0.25, (l.cone ? 0.5 : 0.74) + r() * 0.2, THREE.SRGBColorSpace));
-          out.set([dir.x, dir.y + 0.35, dir.z], i * 3);
-          i++;
         }
+        geo.setAttribute('aOut', new THREE.InstancedBufferAttribute(out, 3));
+        mesh.castShadow = shadows;
+        mesh.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: mat.map, alphaTest: mat.alphaTest, side: THREE.DoubleSide });
+        mesh.instanceMatrix.needsUpdate = true;
+        parent.add(mesh);
       }
-      geo.setAttribute('aOut', new THREE.InstancedBufferAttribute(out, 3));
-      mesh.castShadow = shadows;
-      mesh.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: this.mats.leaf.map, alphaTest: 0.38, side: THREE.DoubleSide });
-      mesh.instanceMatrix.needsUpdate = true;
-      parent.add(mesh);
     };
     // Leaves shade like a crown, not like flat cards: their normals lean outward.
-    this.mats.leaf.onBeforeCompile = (s) => {
-      s.vertexShader = s.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec3 aOut;')
-        .replace('#include <defaultnormal_vertex>', '#include <defaultnormal_vertex>\ntransformedNormal = normalize(mix(transformedNormal, normalMatrix * normalize(aOut), 0.8));');
-    };
-    this.mats.leaf.customProgramCacheKey = () => 'leaf-cards';
+    for (const [m, key] of [[this.mats.leaf, 'leaf-cards'], [this.mats.needle, 'needle-cards']] as const) {
+      m.onBeforeCompile = (s) => {
+        s.vertexShader = s.vertexShader
+          .replace('#include <common>', '#include <common>\nattribute vec3 aOut;')
+          .replace('#include <defaultnormal_vertex>', '#include <defaultnormal_vertex>\ntransformedNormal = normalize(mix(transformedNormal, normalMatrix * normalize(aOut), 0.7));');
+        // Light through the leaves: the side away from the sun glows a little green, not black.
+        s.fragmentShader = s.fragmentShader.replace(
+          '#include <emissivemap_fragment>',
+          '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.10, 0.13, 0.05);',
+        );
+      };
+      m.customProgramCacheKey = () => key;
+    }
     for (const [id, clumps] of clumpsOf) {
       const g = new THREE.Group();
       leaves(clumps, 9, g, true);
@@ -538,6 +558,124 @@ export class SiteEnvironment {
       tm.castShadow = true;
       this.background.add(tm);
     }
+  }
+
+  // ----------------------------------------------------------------------- grass
+
+  /** True where the model laid paving (or a slab) at x, z. */
+  private paved(x: number, z: number) {
+    const g = this.grid;
+    if (!g) return false;
+    const i = Math.round((x - g.x0) / g.cell), j = Math.round((z - g.z0) / g.cell);
+    if (i < 0 || j < 0 || i >= g.nx || j >= g.nz) return false;
+    return !Number.isNaN(g.laid[j * g.nx + i]);
+  }
+
+  /**
+   * Real 3D grass round the building: clumps of tapered blades, denser close in, thinning out to
+   * the textured meadow. Not on paving or under the building; flattened where the ground is dug.
+   */
+  private plantGrass(b: THREE.Box3, span: number) {
+    const r = rng(9031);
+    // One clump: blades of two segments, leaning out, each a little different.
+    const blades = 11, pos: number[] = [], nor: number[] = [], colr: number[] = [], h: number[] = [];
+    for (let k = 0; k < blades; k++) {
+      const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.16;
+      const bx = Math.cos(a) * d, bz = Math.sin(a) * d;
+      const face = r() * Math.PI, w = 0.012 + r() * 0.01, tall = 0.16 + r() * 0.22;
+      const lean = 0.25 + r() * 0.35, la = a + (r() - 0.5);
+      const ox = Math.cos(face) * w, oz = Math.sin(face) * w;
+      const P = (t: number, side: number) => {
+        const off = lean * t * t * tall;
+        return [bx + Math.cos(la) * off + side * ox * (1 - t), tall * t * (1 - 0.15 * lean * t), bz + Math.sin(la) * off + side * oz * (1 - t)];
+      };
+      const tris = [
+        [P(0, -1), P(0, 1), P(0.55, 1)],
+        [P(0, -1), P(0.55, 1), P(0.55, -1)],
+        [P(0.55, -1), P(0.55, 1), P(1, 0)],
+      ];
+      const ts = [[0, 0, 0.55], [0, 0.55, 0.55], [0.55, 0.55, 1]];
+      tris.forEach((tri, ti) =>
+        tri.forEach((v, vi) => {
+          pos.push(v[0], v[1], v[2]);
+          // Lit mostly as the ground under them is, so blades seen edge-on aren't black.
+          nor.push(Math.cos(face + Math.PI / 2) * 0.35, 1, Math.sin(face + Math.PI / 2) * 0.35);
+          const t = ts[ti][vi];
+          colr.push(0.025 + 0.07 * t, 0.04 + 0.1 * t, 0.01 + 0.025 * t);
+          h.push(t);
+        }),
+      );
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3));
+    geo.setAttribute('aH', new THREE.Float32BufferAttribute(h, 1));
+    geo.normalizeNormals();
+
+    // Where: out to a band round the building, thinning with distance.
+    const band = Math.min(45, Math.max(22, span * 0.45));
+    const x0 = b.min.x - band, x1 = b.max.x + band, z0 = b.min.z - band, z1 = b.max.z + band;
+    const spots: number[] = [];
+    const cap = 60000;
+    const step = 0.42;
+    for (let z = z0; z < z1 && spots.length / 4 < cap; z += step)
+      for (let x = x0; x < x1; x += step) {
+        const px = x + (r() - 0.5) * step, pz = z + (r() - 0.5) * step;
+        const dx = Math.max(b.min.x - px, 0, px - b.max.x), dz = Math.max(b.min.z - pz, 0, pz - b.max.z);
+        const d = Math.hypot(dx, dz);
+        if (d < 0.6) continue;
+        if (r() > 1 - smooth(Math.min(1, d / band)) * 0.85) continue;
+        if (this.paved(px, pz)) continue;
+        spots.push(px, this.heightAt(px, pz), pz, 0.7 + r() * 0.7);
+        if (spots.length / 4 >= cap) break;
+      }
+    const n = spots.length / 4;
+    if (!n) return;
+    const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.85, side: THREE.DoubleSide, envMapIntensity: 0.5 });
+    const u = this.uniforms;
+    mat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, u);
+      sh.vertexShader = sh.vertexShader
+        .replace(
+          '#include <common>',
+          `#include <common>
+          attribute float aH; uniform vec4 uFoot; uniform float uWork; uniform float uDig; uniform vec2 uR;
+          float footDistG(vec2 p) { vec2 c = (uFoot.xy + uFoot.zw) * 0.5, h = (uFoot.zw - uFoot.xy) * 0.5; vec2 d = abs(p - c) - h; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }`,
+        )
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          vec2 gw = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
+          float fd = footDistG(gw);
+          float torn = max((1.0 - smoothstep(uR.x, uR.y, fd)) * uWork, uDig * (1.0 - smoothstep(-0.5, 4.0, fd)));
+          transformed.y *= 1.0 - torn;
+          transformed.xz *= 1.0 - torn * 0.7;`,
+        );
+    };
+    mat.customProgramCacheKey = () => 'grass-blades';
+    const mesh = new THREE.InstancedMesh(geo, mat, n);
+    const d = new THREE.Object3D();
+    const col = new THREE.Color();
+    for (let i = 0; i < n; i++) {
+      d.position.set(spots[i * 4], spots[i * 4 + 1] - 0.02, spots[i * 4 + 2]);
+      d.rotation.set(0, r() * Math.PI * 2, 0);
+      d.scale.setScalar(spots[i * 4 + 3]);
+      d.updateMatrix();
+      mesh.setMatrixAt(i, d.matrix);
+      // Patches drier or lusher, as a real meadow is.
+      const dry = Math.max(0, fbm(spots[i * 4] / 9, spots[i * 4 + 2] / 9, 2) + 0.15) * 1.4;
+      const v = 0.85 + r() * 0.3;
+      col.setRGB(v * (1 + dry * 0.55), v * (1 + dry * 0.25), v * (1 - dry * 0.1));
+      mesh.setColorAt(i, col);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.frustumCulled = false;
+    mesh.name = 'grass';
+    this.grass = mesh;
+    this.group.add(mesh);
   }
 
   // ----------------------------------------------------------------------- plant and temporary works
@@ -795,6 +933,12 @@ export class SiteEnvironment {
       this.group.remove(this.terrain);
       this.terrain.geometry.dispose();
       this.terrain = null;
+    }
+    if (this.grass) {
+      this.group.remove(this.grass);
+      this.grass.geometry.dispose();
+      (this.grass.material as THREE.Material).dispose();
+      this.grass = null;
     }
     this.treeOf.clear();
     this.crane = this.digger = null;

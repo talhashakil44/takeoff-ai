@@ -56,8 +56,9 @@ const pretty = (k: string) => (k.charAt(0).toUpperCase() + k.slice(1)).replace(/
 /** The finishes drawn with photo textures: their swatch is the texture itself. */
 const SWATCH: Record<string, string> = {
   timber: 'wood_table_001_grain_1k.jpg', wood: 'wood_table_001_grain_1k.jpg', door: 'wood_table_001_grain_1k.jpg',
-  concrete: 'concrete_floor_02_diff_1k.jpg', sealed_concrete: 'concrete_floor_02_diff_1k.jpg', stone: 'concrete_floor_02_diff_1k.jpg',
-  gravel: 'gravel_ground_01_diff_1k.jpg', asphalt: 'gravel_ground_01_diff_1k.jpg', grass: 'aerial_grass_rock_diff_1k.jpg', soil: 'brown_mud_leaves_01_diff_1k.jpg',
+  concrete: 'brushed_concrete_diff_2k.jpg', sealed_concrete: 'brushed_concrete_diff_2k.jpg', stone: 'concrete_floor_02_diff_1k.jpg',
+  gravel: 'gravel_ground_01_diff_1k.jpg', asphalt: 'asphalt_diff_2k.jpg', grass: 'aerial_grass_rock_diff_1k.jpg', soil: 'brown_mud_leaves_01_diff_1k.jpg',
+  block: 'concrete_block_diff_2k.jpg', stucco: 'plaster_diff_2k.jpg',
 };
 const typing = (e: KeyboardEvent) => e.target instanceof HTMLElement && (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable);
 
@@ -281,9 +282,13 @@ export function Explorer({ scene, projectName, schedule, extra, onSave }: Props)
 
   const capture = async () => {
     if (!api) return;
-    setToast('Rendering a 3840 × 2160 image…');
+    setToast('Rendering a photoreal 3840 × 2160 image…');
     await new Promise((r) => setTimeout(r, 30));
-    const blob = await api.capture();
+    let shown = -1;
+    const blob = await api.capture((k) => {
+      const pct = Math.round(k * 100);
+      if (pct !== shown) setToast(`Rendering a photoreal 3840 × 2160 image… ${(shown = pct)}%`);
+    });
     if (!blob) return setToast('The image could not be made on this computer.');
     onSave(`${projectName || building} - ${isoDay(seq.start, day)} 4K.png`, blob);
     setToast('Saved a 3840 × 2160 image of this construction stage.');

@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { CATEGORIES, MATERIALS, bounds, meshOf, type Element3D, type Scene3D } from './scene';
 import { TextureLibrary, tintFor, type TextureSet } from './textures';
 import { SiteEnvironment, type GroundSource, type ModelTree, type SiteStage } from './environment';
@@ -69,16 +70,22 @@ const PBR: Record<string, { set: TextureSet | 'grain'; size: number; normal?: nu
   timber: { set: 'grain', size: 2.6, normal: 0.45 },
   wood: { set: 'grain', size: 2.0, normal: 0.45 },
   door: { set: 'grain', size: 1.8, normal: 0.3 },
-  concrete: { set: 'concrete', size: 3.2, normal: 0.8 },
-  sealed_concrete: { set: 'concrete', size: 4, normal: 0.35, rough: 0.55 },
+  concrete: { set: 'bconcrete', size: 3.5, normal: 0.7 },
+  sealed_concrete: { set: 'bconcrete', size: 4, normal: 0.35, rough: 0.55 },
   stone: { set: 'concrete', size: 1.3, normal: 1.4 },
+  block: { set: 'block', size: 2.4, normal: 1 },
+  stucco: { set: 'plaster', size: 3, normal: 0.5 },
+  metal_panel: { set: 'ribbed', size: 2.2, normal: 1 },
+  siding: { set: 'ribbed', size: 1.6, normal: 0.9 },
+  roof_metal: { set: 'corrugated', size: 2.4, normal: 1 },
+  overhead_door: { set: 'ribbed', size: 3.2, normal: 0.5 },
   gravel: { set: 'gravel', size: 3.4, normal: 0.6 },
-  asphalt: { set: 'gravel', size: 1.6, normal: 0.4 },
+  asphalt: { set: 'asphalt', size: 6, normal: 0.6 },
   grass: { set: 'grass', size: 10, normal: 0.9 },
   soil: { set: 'mud', size: 4, normal: 1 },
 };
 /** Patterned finishes that also get a fine surface bump. */
-const BUMP: Record<string, number> = { block: 0.6, brick: 0.5, stucco: 0.35, epoxy: 0.12 };
+const BUMP: Record<string, number> = { brick: 0.5, epoxy: 0.12 };
 /** Finishes whose texture runs along the member (wood grain). */
 const GRAIN = new Set(['timber', 'wood', 'door']);
 
@@ -159,7 +166,15 @@ class Finishes {
       const n = this.lib.get('concrete').normalMap;
       Object.assign(opts, { normalMap: n, normalScale: new THREE.Vector2(BUMP[key], BUMP[key]) });
     }
-    const m = key === 'glass' ? new THREE.MeshPhysicalMaterial({ ...opts, clearcoat: 0.6, envMapIntensity: 1.6 }) : new THREE.MeshStandardMaterial(opts);
+    // Glass: a dark, tinted pane that mirrors the sky (as real glazing does in daylight).
+    const m =
+      key === 'glass'
+        ? new THREE.MeshPhysicalMaterial(
+            this.lib
+              ? { ...opts, color: '#2e4652', roughness: 0.02, metalness: 0, opacity: 0.55, depthWrite: false, ior: 1.52, specularIntensity: 1, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 2.2 }
+              : { ...opts, clearcoat: 0.6, envMapIntensity: 1.6 },
+          )
+        : new THREE.MeshStandardMaterial(opts);
     this.state(m, state);
     this.cache.set(k, m);
     return m;
@@ -268,6 +283,9 @@ function skyMaterial(sun: THREE.Vector3) {
   });
 }
 
+/** The photographed sky's haze at the horizon (the far terrain fades into it). */
+const SKY_PHOTO_HAZE = '#a9b3c4';
+
 /** Everything the model needs to be drawn: scene, lights, camera, its elements. */
 export class ModelRenderer {
   readonly renderer: THREE.WebGLRenderer;
@@ -298,6 +316,17 @@ export class ModelRenderer {
   version = 0;
   /** A lamp at the eye while walking, so rooms under the roof aren't dark. Off (0) otherwise. */
   private lamp = new THREE.PointLight('#fff2df', 0, 26, 1.1);
+  private hemi = new THREE.HemisphereLight('#e4eefb', '#7d7462', 0.6);
+  /** Towards the sun (the photographed sky's, once it is in). */
+  private sunDir = new THREE.Vector3(-0.55, 0.62, 0.45).normalize();
+  private skyTurn = new THREE.Euler();
+  /** The sky's HDR as an equirect (the path tracer lights with it). */
+  private skyHdr: THREE.DataTexture | null = null;
+  /** True while a path-traced still is being made (the live view waits). */
+  tracing = false;
+  private traceExtra: THREE.Mesh[] = [];
+  /** The shadow's reach round the model's centre (set on load). */
+  private sunFit = { c: new THREE.Vector3(), r: 30 };
 
   constructor(canvas?: HTMLCanvasElement, opts: { preserve?: boolean; site?: boolean } = {}) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: !!opts.preserve });
@@ -330,7 +359,8 @@ export class ModelRenderer {
       s.environment = this.pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
       s.environmentIntensity = 0.45;
     }
-    s.add(new THREE.HemisphereLight('#e4eefb', '#7d7462', opts.site ? 0.55 : 0.65));
+    this.hemi.intensity = opts.site ? 0.55 : 0.65;
+    s.add(this.hemi);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(4096, 4096);
     this.sun.shadow.bias = -0.0003;
@@ -346,7 +376,7 @@ export class ModelRenderer {
       (this as { env: SiteEnvironment | null }).env = new SiteEnvironment(lib);
       this.env!.group.visible = false;
       s.add(this.env!.group);
-      for (const k of ['grass', 'mud', 'gravel', 'concrete', 'wood'] as const) lib.get(k);
+      for (const k of ['grass', 'mud', 'gravel', 'concrete', 'wood', 'ribbed', 'corrugated', 'asphalt', 'bconcrete', 'block', 'plaster', 'leafy'] as const) lib.get(k);
       void lib.grain;
       // The textures in: the finishes and the ground switch to them together.
       lib.onLoad = () => {
@@ -358,8 +388,11 @@ export class ModelRenderer {
         this.apply();
         this.onChange?.();
       };
+      this.loadSky(sunDir);
     }
-    this.composer = new EffectComposer(r);
+    // Multisampled, half-float buffers: clean edges and no banding through the post passes.
+    const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: opts.site ? 4 : 0 });
+    this.composer = new EffectComposer(r, target);
     this.composer.addPass(new RenderPass(s, this.camera));
     try {
       this.gtao = new GTAOPass(s, this.camera, 800, 600);
@@ -370,6 +403,67 @@ export class ModelRenderer {
       this.gtao = null;
     }
     this.composer.addPass(new OutputPass());
+  }
+
+  /**
+   * A photographed sky (Poly Haven, CC0): its HDR lights the model and shows in the glass, its
+   * 4k photo is the backdrop. Turned so its sun sits where the shadows' sun is.
+   */
+  private loadSky(sunDir: THREE.Vector3) {
+    let base = './';
+    try {
+      base = import.meta.env.BASE_URL ?? './';
+    } catch {
+      /* not under vite */
+    }
+    let hdr: THREE.DataTexture | null = null;
+    let photo: THREE.Texture | null = null;
+    const done = () => {
+      if (!hdr || !photo) return;
+      // The HDR's sun: its brightest texel, as a direction (three's equirect layout).
+      const img = hdr.image as { data: Uint16Array | Float32Array; width: number; height: number };
+      const read = img.data instanceof Uint16Array ? (v: number) => THREE.DataUtils.fromHalfFloat(v) : (v: number) => v;
+      let best = -1, bi = 0;
+      for (let i = 0; i < img.width * img.height; i++) {
+        const l = read(img.data[i * 4]) + read(img.data[i * 4 + 1]) + read(img.data[i * 4 + 2]);
+        if (l > best) {
+          best = l;
+          bi = i;
+        }
+      }
+      const u = (bi % img.width + 0.5) / img.width;
+      // Row 0 of the data is the top of the sky (flipY is off for data textures).
+      const v = 1 - (Math.floor(bi / img.width) + 0.5) / img.height;
+      const lon = (u - 0.5) * Math.PI * 2;
+      const found = Math.atan2(Math.sin(lon), Math.cos(lon));
+      const want = Math.atan2(sunDir.z, sunDir.x);
+      const elev = (v - 0.5) * Math.PI;
+      this.skyTurn = new THREE.Euler(0, found - want, 0);
+      // The shadows' sun at the photo's own height.
+      const horiz = Math.cos(elev);
+      this.sunDir.set(Math.cos(want) * horiz, Math.sin(elev), Math.sin(want) * horiz).normalize();
+      hdr.mapping = THREE.EquirectangularReflectionMapping;
+      const env = this.pmrem.fromEquirectangular(hdr).texture;
+      this.skyHdr = hdr;
+      photo.mapping = THREE.EquirectangularReflectionMapping;
+      photo.colorSpace = THREE.SRGBColorSpace;
+      const s = this.scene;
+      s.environment?.dispose();
+      s.environment = env;
+      s.environmentIntensity = 0.5;
+      s.environmentRotation.copy(this.skyTurn);
+      s.background = photo;
+      this.renderer.toneMappingExposure = 0.9;
+      s.backgroundRotation.copy(this.skyTurn);
+      s.backgroundIntensity = 1;
+      this.sky.visible = false;
+      this.hemi.intensity = 0.18;
+      if (this.scene.fog) (this.scene.fog as THREE.Fog).color.set(SKY_PHOTO_HAZE);
+      this.placeSun();
+      this.onChange?.();
+    };
+    new HDRLoader().load(`${base}env/sky_1k.hdr`, (t) => ((hdr = t), done()), undefined, () => undefined);
+    new THREE.TextureLoader().load(`${base}env/sky_4k.jpg`, (t) => ((photo = t), done()), undefined, () => undefined);
   }
 
   /** (Re)builds the meshes from the scene. */
@@ -438,7 +532,7 @@ export class ModelRenderer {
       // The terrain rolls out to the horizon; haze takes the far hills.
       this.env.build({ building: this.box, all: this.all, sources, trees, floor: 0 });
       const far = Math.max(1600, siteSize * 5);
-      this.scene.fog = new THREE.Fog(SKY.horizon, Math.max(180, siteSize * 1.1), far * 1.15);
+      this.scene.fog = new THREE.Fog(this.sky.visible ? SKY.horizon : SKY_PHOTO_HAZE, Math.max(180, siteSize * 1.1), far * 1.15);
       this.camera.far = far * 2.2;
     } else {
       // Haze only past the whole site, so the Site view stays clear.
@@ -449,12 +543,20 @@ export class ModelRenderer {
     this.camera.updateProjectionMatrix();
     // The sun from the south-west, its shadow fitted to the building and its near site.
     const r = Math.max(span * 0.9, Math.min(span * 3, this.all.getSize(new THREE.Vector3()).length() / 2));
-    this.sun.position.set(c.x - r * 0.9, r * 1.1, c.z + r * 0.7);
-    this.sun.target.position.copy(c);
-    Object.assign(this.sun.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 1, far: r * 4 });
-    this.sun.shadow.camera.updateProjectionMatrix();
+    this.sunFit = { c: c.clone(), r };
+    this.placeSun();
     this.gtao?.updateGtaoMaterial({ radius: Math.max(0.6, Math.min(2, span * 0.03)), distanceExponent: 1.4, thickness: 1.2, scale: 1 });
     this.apply();
+  }
+
+  /** The sun along sunDir, its shadow fitted to the building and its near site. */
+  private placeSun() {
+    const { c, r } = this.sunFit;
+    const d = r * 1.6;
+    this.sun.position.copy(c).addScaledVector(this.sunDir, d);
+    this.sun.target.position.copy(c);
+    Object.assign(this.sun.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 1, far: d + r * 2 });
+    this.sun.shadow.camera.updateProjectionMatrix();
   }
 
   /** True once the terrain and trees are showing. */
@@ -507,7 +609,7 @@ export class ModelRenderer {
 
   /** Sharper while still, quicker on the move: true when the pixel ratio changed. */
   setDetail(high: boolean) {
-    if (!this.env || this.detail.high === high || this.detail.low === this.detail.top) return false;
+    if (this.tracing || !this.env || this.detail.high === high || this.detail.low === this.detail.top) return false;
     this.detail.high = high;
     const ratio = high ? this.detail.top : this.detail.low;
     this.renderer.setPixelRatio(ratio);
@@ -585,13 +687,140 @@ export class ModelRenderer {
   /** The drawing size; `screen` false for an off-screen still (the screen's size is kept). */
   setSize(w: number, h: number, screen = true) {
     if (screen) this.size = { w, h };
+    // A still is being traced at its own size: the screen's size applies when it is done.
+    if (screen && this.tracing) return;
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
     this.camera.aspect = w / Math.max(1, h);
     this.camera.updateProjectionMatrix();
   }
 
+  /**
+   * A photoreal still: path traced (light bounced between every surface, soft sky shadows, true
+   * reflections), at a set size, as a PNG. Falls back to the live renderer's still if the GPU
+   * can't. `onProgress` gets 0–1.
+   */
+  async captureTraced(width = 3840, height = 2160, samples = 160, onProgress?: (k: number) => void): Promise<Blob | null> {
+    if (!this.env || !this.skyHdr) return this.capture(width, height);
+    const r = this.renderer;
+    const { w, h } = this.size;
+    const ratio = r.getPixelRatio();
+    const s = this.scene;
+    const swaps: [THREE.Mesh, THREE.Material | THREE.Material[]][] = [];
+    const hidden: THREE.Object3D[] = [];
+    const keep = { env: s.environment, fog: s.fog, envI: s.environmentIntensity };
+    this.tracing = true;
+    let pt: { dispose(): void; samples: number; renderSample(): void } | null = null;
+    try {
+      const { WebGLPathTracer } = await import('three-gpu-pathtracer');
+      // What the tracer can't read: the terrain's blended shader becomes a plain textured ground,
+      // the sky dome and the faint ghost layers go.
+      const terrain = this.env.terrain;
+      if (terrain) {
+        const g = terrain.geometry;
+        if (!g.getAttribute('uv')) {
+          const p = g.getAttribute('position');
+          const uv = new Float32Array(p.count * 2);
+          for (let i = 0; i < p.count; i++) {
+            // Warped, so the tile's repeats don't line up into rows across the meadow.
+            const x = p.getX(i), z = p.getZ(i);
+            uv[i * 2] = (x + 9 * (patch(x / 53, z / 53) - 0.5)) / 11;
+            uv[i * 2 + 1] = (z + 9 * (patch(x / 47 + 5.3, z / 47 + 2.1) - 0.5)) / 11;
+          }
+          g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+        }
+        if (!g.getAttribute('color')) {
+          // Patches lusher and drier, so the ground doesn't read as one repeated tile.
+          const p = g.getAttribute('position');
+          // RGBA: the tracer merges colours as four components.
+          const col = new Float32Array(p.count * 4);
+          for (let i = 0; i < p.count; i++) {
+            const x = p.getX(i), z = p.getZ(i);
+            const a = patch(x / 37, z / 37), b = patch(x / 9 + 3.1, z / 9 - 1.7);
+            const v = 0.72 + 0.28 * a + 0.12 * b;
+            col.set([v * (1 + 0.12 * (1 - a)), v, v * (0.92 + 0.1 * a), 1], i * 4);
+          }
+          g.setAttribute('color', new THREE.BufferAttribute(col, 4));
+        }
+        const grass = this.lib!.get('grass');
+        swaps.push([terrain, terrain.material]);
+        terrain.material = new THREE.MeshStandardMaterial({ map: grass.map, normalMap: grass.normalMap, color: tintFor('grass', '#56613a'), roughness: 1, vertexColors: true });
+      }
+      // The tracer reads plain meshes: each instanced set (leaves, grass, trunks) as one merged mesh.
+      const merged: THREE.Mesh[] = [];
+      s.traverseVisible((o) => {
+        if (!(o instanceof THREE.InstancedMesh) || !o.count) return;
+        const m = flattenInstances(o);
+        if (!m) return;
+        merged.push(m);
+        hidden.push(o);
+      });
+      for (const m of merged) s.add(m);
+      this.traceExtra = merged;
+      for (const it of this.items) if (it.mesh.visible && it.mesh.material === this.finishes.ghost) hidden.push(it.mesh);
+      hidden.push(this.sky);
+      for (const o of hidden) o.visible = false;
+      s.fog = null;
+      s.environment = this.skyHdr;
+      r.setPixelRatio(1);
+      r.setSize(width, height, false);
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+      const tracer = new WebGLPathTracer(r);
+      pt = tracer;
+      Object.assign(tracer, { renderScale: 1, dynamicLowRes: false, minSamples: 0, renderDelay: 0, fadeDuration: 0, bounces: 6, filterGlossyFactor: 0.4, renderToCanvas: true });
+      tracer.tiles.set(3, 3);
+      // Builds the ray-tracing structure (a few seconds on a big site).
+      await new Promise((ok) => setTimeout(ok, 30));
+      tracer.setScene(s, this.camera);
+      for (let i = 0; i < samples; i++) {
+        tracer.renderSample();
+        if (i % 3 === 2) {
+          onProgress?.(tracer.samples / samples);
+          await new Promise((ok) => setTimeout(ok, 0));
+        }
+      }
+      // One more pass and the copy in the same task, before the canvas can be cleared.
+      tracer.renderSample();
+      onProgress?.(1);
+      return await new Promise<Blob | null>((ok) => r.domElement.toBlob(ok, 'image/png'));
+    } catch (e) {
+      console.warn('Path tracing failed; using the live renderer', e);
+      this.tracing = false;
+      this.restoreTrace(swaps, hidden, keep, ratio, w, h);
+      return this.capture(width, height);
+    } finally {
+      pt?.dispose();
+      if (this.tracing) {
+        this.tracing = false;
+        this.restoreTrace(swaps, hidden, keep, ratio, w, h);
+      }
+    }
+  }
+
+  private restoreTrace(swaps: [THREE.Mesh, THREE.Material | THREE.Material[]][], hidden: THREE.Object3D[], keep: { env: THREE.Texture | null; fog: THREE.Fog | THREE.FogExp2 | null; envI: number }, ratio: number, w: number, h: number) {
+    for (const [m, mat] of swaps.splice(0)) {
+      (m.material as THREE.Material).dispose();
+      m.material = mat;
+    }
+    for (const o of hidden.splice(0)) if (o !== this.sky) o.visible = true;
+    for (const m of this.traceExtra.splice(0)) {
+      this.scene.remove(m);
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+    }
+    const s = this.scene;
+    s.environment = keep.env;
+    s.environmentIntensity = keep.envI;
+    s.fog = keep.fog;
+    this.renderer.setPixelRatio(ratio);
+    this.composer.setPixelRatio(ratio);
+    this.setSize(w, h);
+    this.render();
+  }
+
   render() {
+    if (this.tracing) return;
     // Over the head, so its shine on glass ahead sits high rather than dead centre.
     if (this.lamp.intensity) this.lamp.position.copy(this.camera.position).y += 1.2;
     this.sky.position.copy(this.camera.position);
@@ -608,11 +837,80 @@ export class ModelRenderer {
     this.ground?.geometry.dispose();
     this.composer.dispose();
     this.pmrem.dispose();
+    this.skyHdr?.dispose();
     this.sun.shadow.dispose();
     (this.scene.background as THREE.Texture | null)?.dispose?.();
     this.scene.environment?.dispose();
     this.renderer.dispose();
   }
+}
+
+/** Smooth 0–1 noise for ground patches. */
+function patch(x: number, y: number) {
+  const h = (a: number, b: number) => {
+    const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+  const a = h(xi, yi), b = h(xi + 1, yi), c = h(xi, yi + 1), d = h(xi + 1, yi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+
+/**
+ * An instanced mesh as one plain mesh in world space, its per-instance colours baked into the
+ * vertices (for the path tracer). The material is a copy without shader tweaks.
+ */
+function flattenInstances(o: THREE.InstancedMesh): THREE.Mesh | null {
+  const src = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry;
+  const pos = src.getAttribute('position'), nor = src.getAttribute('normal'), uv = src.getAttribute('uv'), vc = src.getAttribute('color');
+  if (!pos) return null;
+  const n = pos.count, count = o.count;
+  if (n * count > 4e6) return null;
+  const P = new Float32Array(n * count * 3), N = new Float32Array(n * count * 3), C = new Float32Array(n * count * 4);
+  const U = uv ? new Float32Array(n * count * 2) : null;
+  const m = new THREE.Matrix4(), nm = new THREE.Matrix3(), v = new THREE.Vector3(), col = new THREE.Color(1, 1, 1);
+  o.updateWorldMatrix(true, false);
+  for (let i = 0; i < count; i++) {
+    o.getMatrixAt(i, m);
+    m.premultiply(o.matrixWorld);
+    nm.getNormalMatrix(m);
+    if (o.instanceColor) o.getColorAt(i, col);
+    for (let k = 0; k < n; k++) {
+      const j = i * n + k;
+      v.fromBufferAttribute(pos, k).applyMatrix4(m);
+      P.set([v.x, v.y, v.z], j * 3);
+      if (nor) {
+        v.fromBufferAttribute(nor, k).applyMatrix3(nm).normalize();
+        N.set([v.x, v.y, v.z], j * 3);
+      }
+      const r = vc ? vc.getX(k) : 1, g = vc ? vc.getY(k) : 1, b = vc ? vc.getZ(k) : 1;
+      C.set([r * col.r, g * col.g, b * col.b, 1], j * 4);
+      if (U && uv) U.set([uv.getX(k), uv.getY(k)], j * 2);
+    }
+  }
+  if (src !== o.geometry) src.dispose();
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  if (nor) geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+  else geo.computeVertexNormals();
+  geo.setAttribute('color', new THREE.BufferAttribute(C, 4));
+  if (U) geo.setAttribute('uv', new THREE.BufferAttribute(U, 2));
+  const base = (Array.isArray(o.material) ? o.material[0] : o.material) as THREE.MeshStandardMaterial;
+  const mat = new THREE.MeshStandardMaterial({
+    color: base.color ?? new THREE.Color(1, 1, 1),
+    map: base.map ?? null,
+    normalMap: base.normalMap ?? null,
+    roughness: base.roughness ?? 0.8,
+    metalness: base.metalness ?? 0,
+    alphaTest: base.alphaTest,
+    side: base.side,
+    vertexColors: true,
+  });
+  const out = new THREE.Mesh(geo, mat);
+  out.castShadow = o.castShadow;
+  out.receiveShadow = o.receiveShadow;
+  return out;
 }
 
 /** Where the camera goes for a box to fill the view, looking along -dir. */
