@@ -493,7 +493,9 @@ export class ModelRenderer {
     this.all.makeEmpty();
     const sources: GroundSource[] = [];
     const trees: ModelTree[] = [];
-    for (const el of model.elements) {
+    // TEMP bisect: ?tkskip=water,lap_siding drops elements by material, category or id prefix.
+    const skip = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('tkskip') ?? '').split(',').filter(Boolean) : [];
+    for (const el of model.elements.filter((e) => !skip.some((k) => e.material === k || e.category === k || e.id.startsWith(k)))) {
       let geo: THREE.BufferGeometry;
       try {
         geo = elementGeometry(el, this.finishes.textureSize(el.material), this.finishes.grain(el.material));
