@@ -40,6 +40,7 @@ import { readTitleBlock, titleBlockBox } from './titleBlock';
 import { middleOf } from './locate';
 import { buildingOfDoc, buildingsOf, fileLabel, onBuilding, quantitySections, type QtyGrouping } from './buildings';
 import { isHosted, saveFile } from './host';
+import { getApiKey } from './ai/claude';
 import { RoomFinder } from './workers/rooms';
 import { FollowBar, LinksBar, TagCard, kindColor, linkTitle } from './components/LinksPanel';
 import { DrawingMap } from './components/DrawingMap';
@@ -3061,9 +3062,14 @@ export function App() {
             }}
           />
           {!isHosted && (
-            <button className={`secondary chat-toggle${chatOpen ? ' on' : ''}`} onClick={() => setChatOpen((o) => !o)} title="Ask Claude about this project" aria-pressed={chatOpen}>
-              <Icon name="chat" size={16} />
-              <span className="hide-narrow">Ask</span>
+            <button
+              className={`secondary chat-toggle${chatOpen ? ' on' : ''}${getApiKey() ? '' : ' byo'}`}
+              onClick={() => setChatOpen((o) => !o)}
+              title={getApiKey() ? 'Ask AI about this project' : 'Connect your own AI: Claude or ChatGPT'}
+              aria-pressed={chatOpen}
+            >
+              <Icon name="sparkle" size={16} />
+              <span className="hide-narrow">{getApiKey() ? 'Ask AI' : 'Connect AI'}</span>
             </button>
           )}
           <button className="secondary" onClick={() => fileInput.current?.click()} title="Add PDF drawings">

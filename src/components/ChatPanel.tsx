@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { chatSystem, chatTurn, type ChatMessage } from '../ai/chat';
-import { describeError, getApiKey } from '../ai/claude';
+import { describeError, getApiKey, setApiKey } from '../ai/claude';
 import type { ToolResult } from '../mcp/tools';
 import { TOOL_DEFS } from '../mcp/tools';
 import { Icon } from './Icons';
@@ -53,7 +53,7 @@ export function ChatPanel({ about, run, sheets, sections, onOpenSheet, onOpenSec
   const history = useRef<ChatMessage[]>([]);
   const abort = useRef<AbortController | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const hasKey = !!getApiKey();
+  const [hasKey, setHasKey] = useState(() => !!getApiKey());
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
@@ -179,8 +179,8 @@ export function ChatPanel({ about, run, sheets, sections, onOpenSheet, onOpenSec
     <aside className="chat-panel" aria-label="Ask the project">
       <header>
         <Icon name="chat" size={16} />
-        <strong>Ask the project</strong>
-        <span className="chat-sub">Claude · reads your drawings, specs and takeoff</span>
+        <strong>{hasKey ? 'Ask the project' : 'AI'}</strong>
+        <span className="chat-sub">{hasKey ? 'Claude · reads your drawings, specs and takeoff' : 'Bring your own Claude or ChatGPT'}</span>
         {turns.length > 0 && (
           <button
             className="chat-icon"
@@ -202,20 +202,7 @@ export function ChatPanel({ about, run, sheets, sections, onOpenSheet, onOpenSec
 
       <div className="chat-body" ref={scroller}>
         {!hasKey ? (
-          <div className="chat-empty">
-            <p>The chat uses your own Anthropic API key, kept on this computer.</p>
-            <button className="primary" onClick={onSettings}>
-              Add API key
-            </button>
-            {onConnect && (
-              <>
-                <p className="dim">Or use Claude Desktop or Claude Code you are already signed in to: connect it to Takeoff AI and talk to this project from there.</p>
-                <button className="secondary" onClick={onConnect}>
-                  Connect Claude app
-                </button>
-              </>
-            )}
-          </div>
+          <ByoAi desktop={!!onConnect} onConnect={onConnect} onSettings={onSettings} onKey={() => setHasKey(true)} />
         ) : turns.length === 0 ? (
           <div className="chat-empty">
             <p>Ask about the drawings, the specification, the addenda or the takeoff.</p>
@@ -278,5 +265,91 @@ export function ChatPanel({ about, run, sheets, sections, onOpenSheet, onOpenSec
         </form>
       )}
     </aside>
+  );
+}
+
+const DOWNLOAD = 'https://github.com/talhashakil44/takeoff-ai/releases/latest';
+
+const FAQ: [string, ReactNode][] = [
+  ['Do I need AI to use Takeoff AI?', 'No. Scale, measuring, counts, the spec reader and the built-in Automate tools all work without any AI.'],
+  [
+    'Does Takeoff AI come with an AI?',
+    'No. It has no AI account of its own and never uses anyone else\'s. You bring yours: your Claude or ChatGPT app on the desktop, or your own API key.',
+  ],
+  [
+    'Can I sign in with my Claude or ChatGPT plan on the web?',
+    'Not yet. Signing in with a Claude or ChatGPT plan works in the desktop app, which connects to the Claude or ChatGPT/Codex app on your computer. In the browser, use an Anthropic API key.',
+  ],
+  ['What does the desktop app do better?', 'Your Claude or ChatGPT can drive the whole takeoff there: open sheets, read legends, run the takeoffs and export. Everything it does shows on screen and can be undone.'],
+  ['Where is my API key kept? Who pays?', 'Only in this browser on this computer, sent straight to Anthropic when you ask something. Anthropic bills your key; Takeoff AI never sees it.'],
+];
+
+/** The "connect your AI" view: there is no shared AI, so the user brings their own. */
+function ByoAi({ desktop, onConnect, onSettings, onKey }: { desktop: boolean; onConnect?: () => void; onSettings: () => void; onKey: () => void }) {
+  const [key, setKey] = useState('');
+  return (
+    <div className="chat-empty byo">
+      <p className="byo-lead">
+        <strong>Bring your own AI.</strong> Takeoff AI has no AI of its own. Connect yours to ask about the drawings and specs and to run AI takeoffs.
+      </p>
+
+      <div className="byo-card">
+        <h4>Sign in with Claude or ChatGPT</h4>
+        {desktop ? (
+          <>
+            <p>Use the Claude Desktop, Claude Code or ChatGPT Codex app you already pay for. It works with Takeoff AI on this computer.</p>
+            <button className="primary" onClick={onConnect}>
+              Connect Claude or ChatGPT
+            </button>
+          </>
+        ) : (
+          <>
+            <p>Plan sign-in works in the desktop app, which connects to the Claude or ChatGPT app on your computer. That is the best way to run a full AI takeoff.</p>
+            <a className="button primary" href={DOWNLOAD} target="_blank" rel="noreferrer">
+              Download the desktop app
+            </a>
+          </>
+        )}
+      </div>
+
+      <div className="byo-card">
+        <h4>{desktop ? 'Or paste' : 'Or use'} an Anthropic API key</h4>
+        <form
+          className="byo-key"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!key.trim()) return;
+            setApiKey(key.trim());
+            setKey('');
+            onKey();
+          }}
+        >
+          <input type="password" autoComplete="off" placeholder="sk-ant-…" value={key} onChange={(e) => setKey(e.target.value)} aria-label="Anthropic API key" />
+          <button className="primary" disabled={!key.trim()}>
+            Save
+          </button>
+        </form>
+        <p className="dim">
+          Kept only in this browser. Get one at{' '}
+          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
+            console.anthropic.com
+          </a>
+          .{' '}
+          <button className="link-button" onClick={onSettings}>
+            More AI settings
+          </button>
+        </p>
+      </div>
+
+      <div className="byo-faq">
+        <h4>FAQ</h4>
+        {FAQ.map(([q, a]) => (
+          <details key={q}>
+            <summary>{q}</summary>
+            <p>{a}</p>
+          </details>
+        ))}
+      </div>
+    </div>
   );
 }
