@@ -395,3 +395,18 @@
     width: min(var(--bld-side-w, 320px), 85vw);
   }
 }
+
+/* In the 4D explorer its own header is the only one: the Build it bar keeps just its status lines. */
+.bld-workspace .bld-bar.bld-bar-hidden {
+  padding: 0;
+  gap: 0;
+  min-height: 0;
+  border: 0;
+}
+.bld-workspace .bld-bar.bld-bar-hidden > :not(.bld-live-status):not(.bld-live-error) {
+  display: none;
+}
+.bld-workspace .bld-bar.bld-bar-hidden > .bld-live-status,
+.bld-workspace .bld-bar.bld-bar-hidden > .bld-live-error {
+  margin: 6px 16px;
+}

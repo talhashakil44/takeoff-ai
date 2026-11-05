@@ -594,7 +594,7 @@ export default function BuildView({ project, sections, specText, sheetText, shee
 
   return (
     <div className={`bld bld-workspace bld-mode-${workspace}`} role="region" aria-label="Build It">
-      <header className="bld-bar">
+      <header className={`bld-bar${showExplorer ? ' bld-bar-hidden' : ''}`}>
         {(busy || reading) && <div className="bld-live-status" role="status">{busy ?? `Reading the drawings… ${reading!.done} of ${reading!.of} sheets`}</div>}
         {!busy && !reading && revisionSheets.some((r) => !r.superseded) && (
           <div className="bld-live-status" role="note">
@@ -754,6 +754,12 @@ export default function BuildView({ project, sections, specText, sheetText, shee
                   )}
                   <button data-tour="ai" onClick={() => setAiOpen(true)} title="Build or carry on the 3D model with Claude or ChatGPT">
                     {aiRun.running ? 'AI building…' : 'Build 3D with AI'}
+                  </button>
+                  <button onClick={() => setExplorer(false)} title="The classic Build it view, with the Gantt, Issues and Inspector">
+                    Classic view
+                  </button>
+                  <button className="x4d-exit" onClick={onClose} aria-label="Close" title="Close Build it">
+                    <Icon name="close" size={14} />
                   </button>
                 </>
               }

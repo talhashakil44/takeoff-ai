@@ -163,6 +163,12 @@
   gap: 8px;
   align-items: center;
 }
+.x4d .x4d-actions .x4d-exit {
+  order: 10;
+  display: grid;
+  place-items: center;
+  padding-inline: 10px;
+}
 .x4d-actions .beta {
   font-size: 8px;
   letter-spacing: 0.8px;
