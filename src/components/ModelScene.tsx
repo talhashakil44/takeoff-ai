@@ -4,7 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CATEGORIES, type Element3D, type Scene3D } from '../scene3d/scene';
 import { MODEL_VIEWS, ModelRenderer, layerColour, type ElementState, type ModelView } from '../scene3d/render';
 import { TourPlayer, Walker, tourShots, type Nav } from '../scene3d/walk';
-import { walkPlan, type WalkPlan } from '../scene3d/walkplan';
+import { walkPlan, type Stop, type WalkPlan } from '../scene3d/walkplan';
+import type { SiteStage } from '../scene3d/environment';
 import './ModelScene.css';
 
 /**
@@ -20,6 +21,37 @@ interface Props {
   /** The guided tour (the sample project): shown when true. */
   tour?: boolean;
   onTourEnd?: () => void;
+  /** Just the model (and walking): the Explorer around it draws the controls and drives it. */
+  bare?: boolean;
+  /** With `bare`: each element's progress on the day shown (see ModelRenderer.setBuild). */
+  build?: ((e: Element3D) => number) | null;
+  buildKey?: string;
+  /** With `bare`: the plant and earthworks on site that day. */
+  stage?: SiteStage | null;
+  /** With `bare`: what is shown while orbiting. */
+  layers?: Set<string>;
+  cut?: number | null;
+  focus?: Set<string> | null;
+  only?: ((e: Element3D) => boolean) | null;
+  /** With `bare`: see-through ground, and the hills and groves round the site. */
+  reveal?: boolean;
+  context?: boolean;
+  onApi?: (api: ModelApi | null) => void;
+  onMode?: (mode: 'orbit' | 'walk' | 'tour', level: string) => void;
+}
+
+/** What the Explorer can ask of the model view. */
+export interface ModelApi {
+  m: ModelRenderer;
+  invalidate: (moving?: boolean) => void;
+  fly: (to: THREE.Vector3, target: THREE.Vector3) => void;
+  /** Walk from the front door, or on a level (index into the walk plan's levels), or from a stop. */
+  walk: (level?: number, stop?: Stop) => void;
+  tour: () => void;
+  leave: () => void;
+  plan: () => WalkPlan;
+  /** A 3840 × 2160 PNG of the view. */
+  capture: () => Promise<Blob | null>;
 }
 
 /** The order a building goes up in, by layer: for the build sequence when no schedule is playing. */
@@ -55,10 +87,10 @@ const TOUR: TourStep[] = [
   { target: '[data-tour="ai"]', title: 'Your own drawings', text: 'Open your own project and click Build 3D with AI. Claude or ChatGPT reads your drawing set and builds the model on your own plan. It is in beta and takes 20 to 60 minutes.' },
 ];
 
-export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props) {
+export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, build, buildKey, stage, layers: shown, cut: cutTo, focus: focusOn, only, reveal, context, onApi, onMode }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const r = useRef<{ m: ModelRenderer; controls: OrbitControls; invalidate: () => void; fly: (to: THREE.Vector3, target: THREE.Vector3) => void; fitted: boolean; drive: (n: Nav | null) => void } | null>(null);
+  const r = useRef<{ m: ModelRenderer; controls: OrbitControls; invalidate: (moving?: boolean) => void; fly: (to: THREE.Vector3, target: THREE.Vector3) => void; fitted: boolean; drive: (n: Nav | null) => void } | null>(null);
   // Walking and the fly-through tour: what drives the camera instead of the orbit controls.
   const [mode, setMode] = useState<'orbit' | 'walk' | 'tour'>('orbit');
   const walker = useRef<Walker | null>(null);
@@ -87,15 +119,21 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
   useEffect(() => {
     const el = host.current, cv = canvas.current;
     if (!el || !cv) return;
-    const m = new ModelRenderer(cv);
+    const m = new ModelRenderer(cv, { site: true });
     const controls = new OrbitControls(m.camera, cv);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.screenSpacePanning = true;
     controls.maxPolarAngle = Math.PI * 0.497;
     let dirty = true;
+    // On the move (orbiting, flying, walking, playing) the picture drops to fewer pixels; still, it sharpens.
+    let moved = 0;
     let flying: { from: THREE.Vector3; to: THREE.Vector3; tf: THREE.Vector3; tt: THREE.Vector3; t0: number } | null = null;
-    controls.addEventListener('change', () => (dirty = true));
+    controls.addEventListener('change', () => {
+      dirty = true;
+      moved = performance.now();
+    });
+    m.onChange = () => (dirty = true);
     const size = () => {
       m.setSize(el.clientWidth, el.clientHeight);
       dirty = true;
@@ -112,7 +150,10 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
       last = now;
       if (nav) {
         try {
-          if (nav.update(now, dt)) dirty = true;
+          if (nav.update(now, dt)) {
+            dirty = true;
+            moved = now;
+          }
         } catch (err) {
           // Never freeze the view: back to orbiting.
           console.error(err);
@@ -126,9 +167,13 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
           controls.target.lerpVectors(flying.tf, flying.tt, k);
           if (t >= 1) flying = null;
           dirty = true;
+          moved = now;
         }
         if (controls.update()) dirty = true;
       }
+      if (now - moved < 350) {
+        if (m.setDetail(false)) dirty = true;
+      } else if (m.setDetail(true)) dirty = true;
       if (dirty) {
         dirty = false;
         m.render();
@@ -140,7 +185,10 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
       m,
       controls,
       fitted: false,
-      invalidate: () => (dirty = true),
+      invalidate: (moving) => {
+        dirty = true;
+        if (moving) moved = performance.now();
+      },
       fly: (to, target) => {
         if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
           m.camera.position.copy(to);
@@ -229,11 +277,26 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
   useEffect(() => {
     const x = r.current;
     if (!x) return;
+    if (bare) {
+      x.m.setBuild(build ?? null);
+      x.invalidate();
+      return;
+    }
     const s = seq;
     x.m.setStates(stateOf ?? (s === null ? null : (e) => { const p = phaseOf(e); return p < s ? 'done' : p === s ? 'doing' : 'todo'; }));
     x.invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateKey, seq, scene]);
+  }, [stateKey, seq, scene, bare, buildKey]);
+
+  // The site on the day (the Explorer's): plant, earthworks, see-through ground, the hills round about.
+  useEffect(() => {
+    const x = r.current;
+    if (!x) return;
+    x.m.setStage(bare ? stage ?? null : null);
+    x.m.env?.setReveal(!!(bare && reveal));
+    x.m.env?.setContext(!bare || context !== false);
+    x.invalidate();
+  }, [bare, stage, reveal, context, scene]);
 
   // Playing the sequence: a phase every 1.6 s, then the finished building.
   useEffect(() => {
@@ -303,10 +366,13 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
   useEffect(() => {
     const x = r.current;
     if (!x) return;
-    x.m.view = { layers, cut, focus };
+    // The Explorer says what shows while orbiting; walking and the tour set their own cut.
+    const orbiting = mode === 'orbit';
+    x.m.view = bare ? { layers: shown ?? layers, cut: orbiting ? cutTo ?? null : cut, focus: orbiting ? focusOn ?? null : focus, only: only ?? null } : { layers, cut, focus };
     x.m.apply();
     x.invalidate();
-  }, [layers, cut, focus]);
+  }, [layers, cut, focus, bare, shown, cutTo, focusOn, only, mode, scene]);
+  useEffect(() => onMode?.(mode, walkLevel), [mode, walkLevel, onMode]);
 
   // ------------------------------------------------------------------ walking and the tour
 
@@ -348,7 +414,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
     x.invalidate();
   };
   navFailed.current = () => leave(false);
-  const startWalk = () => {
+  const startWalk = (level?: number, stop?: Stop) => {
     if (!scene.elements.length) return;
     // From inside the tour, walk on from where it stopped; otherwise start outside the front door.
     const t = player.current;
@@ -359,8 +425,13 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
     const w = new Walker(x.m, p);
     w.onLevel = (i) => setWalkLevel(p.levels[i]?.name ?? '');
     const model = (v: THREE.Vector3): [number, number, number] => [v.x, -v.z, v.y];
-    if (inside) w.begin(model(inside.pos), model(inside.look));
-    else w.begin();
+    if (stop) w.begin(stop.at, stop.look);
+    else if (inside) w.begin(model(inside.pos), model(inside.look));
+    else if (level !== undefined && p.stops.some((s) => s.level === level)) {
+      const s = p.stops.find((x) => x.level === level)!;
+      w.begin(s.at, s.look);
+    } else w.begin();
+    if (level !== undefined && w.level !== level) w.changeLevel(level - w.level);
     walker.current = w;
     x.drive(w);
     if (import.meta.env.DEV) Object.assign(window, { __walk: w });
@@ -465,6 +536,30 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
     setCut(to.view.cut);
     x.fly(to.position, to.target);
   };
+  // The Explorer's handle on all this, kept current every render.
+  const apiNow = useRef<ModelApi | null>(null);
+  apiNow.current = r.current
+    ? {
+        m: r.current.m,
+        invalidate: r.current.invalidate,
+        fly: r.current.fly,
+        walk: (level, stop) => startWalk(level, stop),
+        tour: startTour,
+        leave: () => leave(),
+        plan: planOf,
+        capture: () => r.current?.m.capture() ?? Promise.resolve(null),
+      }
+    : null;
+  useEffect(() => {
+    if (!onApi) return;
+    const call = <K extends keyof ModelApi>(k: K) => ((...a: unknown[]) => (apiNow.current![k] as (...b: unknown[]) => unknown)(...a)) as ModelApi[K];
+    const x = r.current;
+    if (!x) return;
+    onApi({ m: x.m, invalidate: x.invalidate, fly: x.fly, walk: call('walk'), tour: call('tour'), leave: call('leave'), plan: call('plan'), capture: call('capture') });
+    return () => onApi(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toggle = (k: string) => setLayers((s) => {
     const n = new Set(s);
     if (n.has(k)) n.delete(k);
@@ -473,10 +568,26 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
   });
 
   return (
-    <div className="mdl" ref={host}>
+    <div className={`mdl ${bare ? 'mdl-bare' : ''}`} ref={host}>
       <canvas ref={canvas} aria-label={`3D model: ${scene.title}`} />
       {!scene.elements.length && <div className="mdl-empty">The model is empty so far.</div>}
-      <div className="mdl-views" role="group" aria-label="Views">
+      {bare && mode === 'walk' && (
+        <div className="mdl-pad mdl-pad-bare" aria-label="Move">
+          <button {...hold('ArrowUp')} aria-label="Forward" className="up">
+            ↑
+          </button>
+          <button {...hold('ArrowLeft')} aria-label="Turn left" className="lt">
+            ←
+          </button>
+          <button {...hold('ArrowDown')} aria-label="Back" className="dn">
+            ↓
+          </button>
+          <button {...hold('ArrowRight')} aria-label="Turn right" className="rt">
+            →
+          </button>
+        </div>
+      )}
+      {!bare && <div className="mdl-views" role="group" aria-label="Views">
         {MODEL_VIEWS.map((v) => (
           <button key={v.id} className={mode === 'orbit' && view === v.id ? 'on' : ''} aria-pressed={mode === 'orbit' && view === v.id} onClick={() => go(v.id)} title={v.sub}>
             {v.label}
@@ -495,8 +606,8 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
           <input type="range" min={-1} max={top + 0.5} step={0.05} value={cut ?? top + 0.5} onChange={(e) => setCut(Number(e.target.value) >= top + 0.45 ? null : Number(e.target.value))} />
           <em>{cut === null ? 'off' : `${cut.toFixed(2)} m`}</em>
         </label>
-      </div>
-      {mode === 'walk' && (
+      </div>}
+      {!bare && mode === 'walk' && (
         <div className="mdl-walk" role="region" aria-label="Walking">
           <div className="mdl-walk-head">
             <strong>Walking</strong>
@@ -558,7 +669,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
           </div>
         </div>
       )}
-      <div className={`mdl-layers ${layersOpen ? 'open' : ''}`}>
+      {!bare && <div className={`mdl-layers ${layersOpen ? 'open' : ''}`}>
         <button className="mdl-layers-head" aria-expanded={layersOpen} onClick={() => setLayersOpen((o) => !o)}>
           Layers <em>{scene.elements.length}</em>
         </button>
@@ -576,7 +687,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
             ))}
           </ul>
         )}
-      </div>
+      </div>}
       {picked && (
         <div className="mdl-inspect" role="dialog" aria-label={picked.name}>
           <h3>{picked.name}</h3>
@@ -611,7 +722,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
           </button>
         </div>
       )}
-      {!stateOf && scene.elements.length > 0 && (
+      {!bare && !stateOf && scene.elements.length > 0 && (
         <div className="mdl-seq">
           <button onClick={playSeq} aria-pressed={seqPlaying} title="Show the building going up in construction order">
             {seqPlaying ? '■ Stop' : '▶ Build sequence'}
@@ -626,7 +737,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
           )}
         </div>
       )}
-      {step && (
+      {!bare && step && (
         <>
           {tourBox && <div className="mdl-ring" style={{ left: tourBox.x - 6, top: tourBox.y - 6, width: tourBox.w + 12, height: tourBox.h + 12 }} aria-hidden="true" />}
           <div className={`mdl-tour ${tourBox ? '' : 'center'}`} role="dialog" aria-label={step.title} style={tourCardPos(tourBox, host.current)}>
@@ -653,9 +764,11 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd }: Props)
           </div>
         </>
       )}
-      <div className="mdl-credit">
-        {scene.title} · built by {scene.builtBy} from the drawings · not a coordinated BIM model
-      </div>
+      {!bare && (
+        <div className="mdl-credit">
+          {scene.title} · built by {scene.builtBy} from the drawings · not a coordinated BIM model
+        </div>
+      )}
     </div>
   );
 }

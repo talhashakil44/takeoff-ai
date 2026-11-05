@@ -1,0 +1,16 @@
+Surface textures for the 3D model view (terrain, timber, concrete, gravel).
+
+All are from Poly Haven (https://polyhaven.com) and are released under CC0 1.0
+Universal (public domain): https://creativecommons.org/publicdomain/zero/1.0/
+No attribution is required; it is given here anyway.
+
+  aerial_grass_rock     https://polyhaven.com/a/aerial_grass_rock
+  brown_mud_leaves_01   https://polyhaven.com/a/brown_mud_leaves_01
+  concrete_floor_02     https://polyhaven.com/a/concrete_floor_02
+  gravel_ground_01      https://polyhaven.com/a/gravel_ground_01
+  wood_table_001        https://polyhaven.com/a/wood_table_001
+
+Each set is its colour (diff), OpenGL normal (nor_gl) and roughness (rough) map,
+reduced from the 2k originals to 1024 x 1024 JPEG. wood_table_001_grain_1k.jpg is
+derived from wood_table_001's colour map: greyscale, lightened, so a finish colour
+can tint the grain.
