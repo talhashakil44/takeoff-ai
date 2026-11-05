@@ -6836,3 +6836,98 @@ button.link-button:hover {
   fill: #e8edff;
   font: 700 7px var(--font-mono, ui-monospace, monospace);
 }
+
+/* ---------- Bring your own AI (chat panel before an AI is connected) ---------- */
+.tb-right .chat-toggle.byo:not(.on) {
+  color: var(--ai);
+  border-color: #e2cdf2;
+}
+/* Keep "Connect AI" readable at every width: it is how people find the AI. */
+.tb-right .chat-toggle.byo span {
+  display: inline;
+}
+.chat-empty.byo {
+  gap: 12px;
+}
+.byo-lead {
+  line-height: 1.5;
+}
+.byo-lead strong {
+  color: #fff;
+}
+.byo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(140, 170, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.byo-card h4,
+.byo-faq h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+.byo-card p {
+  margin: 0;
+  line-height: 1.5;
+}
+.byo-card .dim {
+  margin-top: 0;
+}
+.byo-card a {
+  color: #a9b8ff;
+}
+.byo-card a.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #7c5cff;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+}
+.byo-card a.button:hover {
+  background: #8f74ff;
+}
+.byo-card button.primary {
+  background: #7c5cff;
+  border-color: #7c5cff;
+  color: #fff;
+}
+.byo-card button.primary:disabled {
+  opacity: 0.45;
+}
+.byo-card button.link-button {
+  color: #a9b8ff;
+}
+.byo-key {
+  display: flex;
+  gap: 6px;
+}
+.byo-key input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(140, 170, 255, 0.25);
+  color: #fff;
+}
+.byo-faq details {
+  border-top: 1px solid rgba(140, 170, 255, 0.12);
+  padding: 7px 0;
+}
+.byo-faq summary {
+  cursor: pointer;
+  color: #fff;
+}
+.byo-faq details p {
+  margin: 6px 0 0;
+  line-height: 1.5;
+  color: #b9c2e2;
+}
