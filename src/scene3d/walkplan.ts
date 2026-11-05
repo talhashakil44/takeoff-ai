@@ -337,8 +337,11 @@ export function findPath(g: Grid, a: Pt2, b: Pt2): Pt2[] | null {
   const [s, t] = [snap(a), snap(b)];
   if (s < 0 || t < 0) return null;
   const { nx, clear } = g;
-  const cost = new Float32Array(clear.length).fill(Infinity);
+  // Float64: in Float32 the rounding let equal-cost routes relax each other over and over, and a
+  // big open floor (Sample #3's) took half a minute.
+  const cost = new Float64Array(clear.length).fill(Infinity);
   const from = new Int32Array(clear.length).fill(-1);
+  const done = new Uint8Array(clear.length);
   const tc = centreOf(g, t);
   const h = (k: number) => {
     const c = centreOf(g, k);
@@ -378,6 +381,9 @@ export function findPath(g: Grid, a: Pt2, b: Pt2): Pt2[] | null {
   while (heap.length) {
     const [, k] = pop();
     if (k === t) break;
+    // Already settled from a cheaper entry: skip the stale one.
+    if (done[k]) continue;
+    done[k] = 1;
     const [i, j] = [k % nx, Math.floor(k / nx)];
     for (const [di, dj, w] of steps) {
       const [ii, jj] = [i + di, j + dj];

@@ -339,7 +339,7 @@ export class ModelRenderer {
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     this.detail = { high: true, low: 1, top: Math.min(2, Math.max(dpr, 1.5)) };
     r.setPixelRatio(opts.site ? this.detail.top : Math.min(2, dpr));
-    r.shadowMap.enabled = !(typeof location !== 'undefined' && location.search.includes('tknoshadow'));
+    r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFShadowMap;
     // The sun's shadow map is redrawn only when the model or the site changes, not every time the
     // camera moves: orbiting a big site with trees and grass stays quick.
@@ -402,9 +402,7 @@ export class ModelRenderer {
     const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: opts.site ? 2 : 0 });
     this.composer = new EffectComposer(r, target);
     this.composer.addPass(new RenderPass(s, this.camera));
-    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
     try {
-      if (q.get('tknogtao')) throw new Error('TEMP');
       this.gtao = new GTAOPass(s, this.camera, 800, 600);
       this.gtao.blendIntensity = 0.9;
       this.gtao.updateGtaoMaterial({ radius: 0.9, distanceExponent: 1.4, thickness: 1.2, scale: 1 });
@@ -478,8 +476,6 @@ export class ModelRenderer {
 
   /** (Re)builds the meshes from the scene. */
   load(model: Scene3D) {
-    performance.mark('tk:load');
-    this.firstFrame = true;
     for (const it of this.items) {
       this.scene.remove(it.mesh);
       it.mesh.geometry.dispose();
@@ -495,9 +491,7 @@ export class ModelRenderer {
     this.all.makeEmpty();
     const sources: GroundSource[] = [];
     const trees: ModelTree[] = [];
-    // TEMP bisect: ?tkskip=water,lap_siding drops elements by material, category or id prefix.
-    const skip = typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('tkskip') ?? '').split(',').filter(Boolean) : [];
-    for (const el of model.elements.filter((e) => !skip.some((k) => e.material === k || e.category === k || e.id.startsWith(k)))) {
+    for (const el of model.elements) {
       let geo: THREE.BufferGeometry;
       try {
         geo = elementGeometry(el, this.finishes.textureSize(el.material), this.finishes.grain(el.material));
@@ -542,8 +536,6 @@ export class ModelRenderer {
     this.ground.visible = !this.envOn;
     this.scene.add(this.ground);
     const siteSize = this.all.getSize(new THREE.Vector3()).length();
-    performance.measure('tk:geometry', 'tk:load');
-    performance.mark('tk:env');
     if (this.env) {
       // The terrain rolls out to the horizon; haze takes the far hills.
       this.env.build({ building: this.box, all: this.all, sources, trees, floor: 0 });
@@ -561,7 +553,6 @@ export class ModelRenderer {
     const r = Math.max(span * 0.9, Math.min(span * 3, this.all.getSize(new THREE.Vector3()).length() / 2));
     this.sunFit = { c: c.clone(), r };
     this.placeSun();
-    performance.measure('tk:terrain', 'tk:env');
     // Shaders compile in parallel (KHR_parallel_shader_compile) before the first picture, not in it.
     if (this.env) {
       const warm: Promise<void> = this.renderer
@@ -873,15 +864,8 @@ export class ModelRenderer {
       this.shadowAt = performance.now();
     }
     if (this.warming) return;
-    if (this.firstFrame) performance.mark('tk:frame');
     this.composer.render();
-    if (this.firstFrame) {
-      this.firstFrame = false;
-      performance.measure('tk:first-frame', 'tk:frame');
-      performance.measure('tk:load-to-picture', 'tk:load');
-    }
   }
-  private firstFrame = false;
   private warming: Promise<void> | null = null;
 
   dispose() {

@@ -19,3 +19,13 @@ describe('mesh shapes', () => {
     expect(JSON.stringify(lodge)).not.toMatch(/appleby|kelso|glen eden/i);
   });
 });
+
+describe('walk plan speed', () => {
+  it('plans the walk through Sample #3 in well under a second (it took 39 s)', async () => {
+    const { walkPlan } = await import('../src/scene3d/walkplan');
+    const { default: harbour } = await import('../src/scene3d/sampleHarbour');
+    const t = performance.now();
+    walkPlan(harbour);
+    expect(performance.now() - t).toBeLessThan(3000);
+  });
+});
