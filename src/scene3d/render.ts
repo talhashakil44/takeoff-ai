@@ -78,6 +78,8 @@ const PBR: Record<string, { set: TextureSet | 'grain'; size: number; normal?: nu
   metal_panel: { set: 'ribbed', size: 2.2, normal: 1 },
   siding: { set: 'ribbed', size: 1.6, normal: 0.9 },
   roof_metal: { set: 'corrugated', size: 2.4, normal: 1 },
+  roof_shingle: { set: 'asphalt', size: 1.4, normal: 1.4, rough: 0.95 },
+  roof_membrane: { set: 'asphalt', size: 4, normal: 0.5 },
   overhead_door: { set: 'ribbed', size: 3.2, normal: 0.5 },
   gravel: { set: 'gravel', size: 3.4, normal: 0.6 },
   asphalt: { set: 'asphalt', size: 6, normal: 0.6 },

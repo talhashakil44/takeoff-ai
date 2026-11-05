@@ -30,6 +30,8 @@ export interface Install {
   /** Day it is in place. */
   e: number;
   act: string;
+  /** Taken away again (temporary works): from s, gone by e. */
+  gone?: { s: number; e: number };
 }
 
 export interface Sequence4D {
@@ -40,7 +42,7 @@ export interface Sequence4D {
   activities: Activity4D[];
   /** Each element's days; missing: there from the start (existing work, the ground). */
   install: Map<string, Install>;
-  source: 'model' | 'generated' | 'imported' | 'own';
+  source: 'model' | 'generated' | 'imported' | 'own' | 'plan';
 }
 
 const FINISH = new Set(['epoxy', 'vinyl', 'carpet', 'tile', 'sealed_concrete']);
@@ -269,10 +271,50 @@ export function scheduleSequence(scene: Scene3D, input: { start: string; activit
   return { start: input.start, days, activities: sortActs(acts), install, source: input.source };
 }
 
+/**
+ * The model's own plan (Scene3D.schedule): each element up during its activity, temporary works
+ * taken down during theirs (top down, along the building); elements with no activity are there
+ * throughout.
+ */
+export function planSequence(scene: Scene3D): Sequence4D | null {
+  const plan = scene.schedule;
+  if (!plan?.activities?.length) return null;
+  const known = new Set(['mobilize', 'earthworks', 'underground', 'foundations', 'structure', 'roof', 'envelope', 'openings', 'interiors', 'services', 'finishes', 'landscape', 'closeout']);
+  const acts: Activity4D[] = plan.activities.map((a) => ({ id: a.id, name: a.name, phase: (known.has(a.phase) ? a.phase : 'finishes') as Phase, s: a.s, e: a.milestone ? a.s : Math.max(a.s + 0.5, a.e), milestone: a.milestone, count: 0 }));
+  const byId = new Map(acts.map((a) => [a.id, a]));
+  const groups = new Map<string, Element3D[]>();
+  for (const e of scene.elements) {
+    const a = e.activity ? byId.get(e.activity) : undefined;
+    if (a && !a.milestone) groups.set(a.id, [...(groups.get(a.id) ?? []), e]);
+  }
+  const install = new Map<string, Install>();
+  for (const [id, els] of groups) {
+    const a = byId.get(id)!;
+    a.count = els.length;
+    spread(els, a, install);
+  }
+  // Taken down: the last up comes down first.
+  const downs = new Map<string, Element3D[]>();
+  for (const e of scene.elements) if (e.until && byId.has(e.until) && install.has(e.id)) downs.set(e.until, [...(downs.get(e.until) ?? []), e]);
+  for (const [id, els] of downs) {
+    const a = byId.get(id)!;
+    const n = els.length, len = Math.max(1, a.e - a.s), each = Math.max(1, len * (n > 1 ? 0.3 : 1));
+    els.forEach((e, i) => {
+      const s = a.s + (n > 1 ? ((len - each) * i) / (n - 1) : 0);
+      install.get(e.id)!.gone = { s, e: Math.min(a.e, s + each) };
+    });
+  }
+  const days = Math.max(1, ...acts.map((a) => a.e));
+  return { start: plan.start, days, activities: sortActs(acts), install, source: 'plan' };
+}
+
 /** An element's progress on a day: below 0 not started, 0–1 going up, 1 in place. */
 export function progressOn(seq: Sequence4D, e: Element3D, day: number): number {
   const t = seq.install.get(e.id);
   if (!t) return 1;
+  if (t.gone && day >= t.gone.e) return -1;
+  // Coming down: shrinks back to its base.
+  if (t.gone && day >= t.gone.s) return Math.max(0.02, 1 - (day - t.gone.s) / Math.max(0.01, t.gone.e - t.gone.s));
   if (day < t.s) return -1;
   if (day >= t.e) return 1;
   return (day - t.s) / Math.max(0.01, t.e - t.s);

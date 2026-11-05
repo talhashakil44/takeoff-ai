@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import * as THREE from 'three';
 import { CATEGORIES, MATERIALS, type Element3D, type Scene3D } from '../scene3d/scene';
 import { fitCamera } from '../scene3d/render';
-import { dayOf, isoDay, modelSequence, nextStart, progressOn, scheduleSequence, type Activity4D, type Phase, type Sequence4D } from '../scene3d/sequence';
+import { dayOf, isoDay, modelSequence, nextStart, planSequence, progressOn, scheduleSequence, type Activity4D, type Phase, type Sequence4D } from '../scene3d/sequence';
 import type { SiteStage } from '../scene3d/environment';
 import type { Stop } from '../scene3d/walkplan';
 import { ModelScene, type ModelApi } from './ModelScene';
@@ -65,7 +65,12 @@ const typing = (e: KeyboardEvent) => e.target instanceof HTMLElement && (/^(INPU
 export function Explorer({ scene, projectName, schedule, extra, onSave }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const [api, setApi] = useState<ModelApi | null>(null);
-  const seq = useMemo<Sequence4D>(() => (schedule ? scheduleSequence(scene, schedule) : modelSequence(scene, nextStart())), [scene, schedule]);
+  // The user's own or imported schedule first, then a plan the model carries (a renovation's), then
+  // Build It's generated one, then an order worked out from the model.
+  const seq = useMemo<Sequence4D>(() => {
+    if (schedule && schedule.source !== 'generated') return scheduleSequence(scene, schedule);
+    return planSequence(scene) ?? (schedule ? scheduleSequence(scene, schedule) : modelSequence(scene, nextStart()));
+  }, [scene, schedule]);
   const [date, setDate] = useState(() => seq.days);
   const [dir, setDir] = useState<0 | 1 | -1>(0);
   const [speed, setSpeed] = useState(3);
@@ -120,7 +125,8 @@ export function Explorer({ scene, projectName, schedule, extra, onSave }: Props)
   const buildKey = `${seq.start}|${seq.days}|${day.toFixed(2)}`;
   const build = useCallback((e: Element3D) => progressOn(seq, e, day), [seq, day]);
   const live = useMemo(() => seq.activities.filter((a) => !a.milestone && day >= a.s && day < a.e), [seq, day]);
-  const scheduled = useMemo(() => scene.elements.filter((e) => seq.install.has(e.id)), [scene, seq]);
+  // Temporary works (taken away again) aren't counted as installed components.
+  const scheduled = useMemo(() => scene.elements.filter((e) => seq.install.has(e.id) && !seq.install.get(e.id)!.gone), [scene, seq]);
   const installed = useMemo(() => scheduled.filter((e) => progressOn(seq, e, day) >= 1).length, [scheduled, seq, day]);
   const stage = useMemo<SiteStage | null>(() => {
     if (!equipment) return null;
@@ -135,7 +141,9 @@ export function Explorer({ scene, projectName, schedule, extra, onSave }: Props)
     const digS = dug.length ? Math.min(...dug.map((a) => a.s)) : -1;
     const digE = of('foundations').length ? Math.max(...of('foundations').map((a) => a.e)) : dug.length ? Math.max(...dug.map((a) => a.e)) : -1;
     const dig = digS < 0 || day < digS ? 0 : day < digE ? Math.min(1, (day - digS) / 7) : Math.max(0, 1 - (day - digE) / 7);
-    const work01 = day >= landE ? 0 : day >= landS ? 1 - (day - landS) / Math.max(1, landE - landS) : Math.min(1, day / 5);
+    // A renovation (no ground or structural work) keeps its lawn.
+    const groundwork = of('earthworks', 'underground', 'foundations', 'structure').length > 0;
+    const work01 = !groundwork || day >= landE ? 0 : day >= landS ? 1 - (day - landS) / Math.max(1, landE - landS) : Math.min(1, day / 5);
     return { day, work: work01, dig, earthworks: on('earthworks', 'underground') || (on('foundations') && dig > 0.5), structure: on('structure', 'roof'), site };
   }, [seq, day, equipment]);
 
@@ -355,7 +363,9 @@ export function Explorer({ scene, projectName, schedule, extra, onSave }: Props)
   const sourceNote =
     seq.source === 'model'
       ? 'Worked out from the model: site, foundations, frame, envelope, roof, interiors, services, finishes, landscape. Plan it in Build It’s Construction view for real dates.'
-      : seq.source === 'generated'
+      : seq.source === 'plan'
+        ? 'The construction plan the model was built with: its activities and durations, temporary works included. Import your own schedule to replace it.'
+        : seq.source === 'generated'
         ? 'From the Build It schedule.'
         : `From your ${seq.source === 'imported' ? 'imported' : 'own'} schedule.`;
   const acts = seq.activities.filter((a) => (a.name + ' ' + a.id).toLowerCase().includes(find.toLowerCase()));

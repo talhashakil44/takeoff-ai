@@ -36,6 +36,21 @@ export interface Element3D {
   /** How sure: "dimensioned", "scaled from the elevation (±100 mm)", "assumed: …". */
   basis: string;
   shapes: Shape3D[];
+  /** The model's own 4D plan (see Scene3D.schedule): the activity that puts it up or applies it. */
+  activity?: string;
+  /** …and the one that takes it away again (scaffolding, hoarding, temporary works). */
+  until?: string;
+}
+
+/** An activity of a model's own 4D plan, in calendar days from its start (day 0). */
+export interface PlanActivity3D {
+  id: string;
+  name: string;
+  /** The kind of work, as the 4D sequence names it ('mobilize', 'envelope', 'openings', 'finishes', …). */
+  phase: string;
+  s: number;
+  e: number;
+  milestone?: boolean;
 }
 
 export interface Scene3D {
@@ -47,6 +62,12 @@ export interface Scene3D {
   builtBy: string;
   updated: string;
   elements: Element3D[];
+  /**
+   * A construction plan of its own, for work the usual new-build order doesn't fit (a renovation:
+   * scaffolding up, elevations repainted, windows on a long lead time). Elements name their
+   * activity; those without one are there throughout (the existing building).
+   */
+  schedule?: { start: string; activities: PlanActivity3D[] };
 }
 
 /** The layers, in the order Build It lists them. */

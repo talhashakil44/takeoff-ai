@@ -1718,9 +1718,10 @@ export function App() {
   const SAMPLES = [
     { name: 'Sample project #1: ski lodge', file: 'sample-1-ski-lodge.takeoff', was: [] as string[], load: () => import('./scene3d/sampleLodge') },
     { name: 'Sample project #2: maintenance shop', file: 'sample-2-maintenance-shop.takeoff', was: ['Sample project: maintenance shop'], load: () => import('./scene3d/sample') },
+    { name: 'Sample project #3: waterfront restaurant repaint', file: 'sample-3-waterfront-restaurant.takeoff', was: [] as string[], load: () => import('./scene3d/sampleHarbour') },
   ];
   /** Opens a sample project: the full one (drawings, takeoffs, 3D) in the desktop app, else just its 3D model. */
-  async function openSampleModel(n: 1 | 2 = 1) {
+  async function openSampleModel(n: 1 | 2 | 3 = 1) {
     const sample = SAMPLES[n - 1];
     setBusy('Opening the sample project…');
     try {
@@ -3546,6 +3547,10 @@ export function App() {
                 ·{' '}
                 <button className="link-button" onClick={() => void openSampleModel(2)}>
                   #2 maintenance shop
+                </button>{' '}
+                ·{' '}
+                <button className="link-button" onClick={() => void openSampleModel(3)}>
+                  #3 restaurant repaint
                 </button>
               </span>
               <div className="welcome-units">

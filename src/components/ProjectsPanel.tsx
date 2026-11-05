@@ -16,7 +16,7 @@ interface Props {
   onOpenFile: () => void;
   onBackupAll: () => void;
   /** Opens sample project #1 or #2 (a finished 3D model and a tour). */
-  onSample?: (n: 1 | 2) => void;
+  onSample?: (n: 1 | 2 | 3) => void;
   /** Desktop app: opens a project from a shared or local folder. */
   onOpenFolder?: () => void;
 }
@@ -94,6 +94,9 @@ export function ProjectsPanel({ currentId, persisted, folder, onOpen, onNew, onD
             </button>
             <button onClick={() => onSample(2)} title="A finished 3D model Claude built from a tender drawing set, with a short tour">
               Sample #2: shop
+            </button>
+            <button onClick={() => onSample(3)} title="An exterior repaint with scaffolding and a three-month 4D plan, with its paint and window takeoff">
+              Sample #3: repaint
             </button>
           </div>
         )}
