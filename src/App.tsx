@@ -40,7 +40,7 @@ import { readTitleBlock, titleBlockBox } from './titleBlock';
 import { middleOf } from './locate';
 import { buildingOfDoc, buildingsOf, fileLabel, onBuilding, quantitySections, type QtyGrouping } from './buildings';
 import { isHosted, saveFile } from './host';
-import { getApiKey } from './ai/claude';
+import { hasAiKey } from './ai/claude';
 import { RoomFinder } from './workers/rooms';
 import { FollowBar, LinksBar, TagCard, kindColor, linkTitle } from './components/LinksPanel';
 import { DrawingMap } from './components/DrawingMap';
@@ -3063,13 +3063,13 @@ export function App() {
           />
           {!isHosted && (
             <button
-              className={`secondary chat-toggle${chatOpen ? ' on' : ''}${getApiKey() ? '' : ' byo'}`}
+              className={`secondary chat-toggle${chatOpen ? ' on' : ''}${hasAiKey() ? '' : ' byo'}`}
               onClick={() => setChatOpen((o) => !o)}
-              title={getApiKey() ? 'Ask AI about this project' : 'Connect your own AI: Claude or ChatGPT'}
+              title={hasAiKey() ? 'Ask AI about this project' : 'Connect your own AI: Claude or ChatGPT'}
               aria-pressed={chatOpen}
             >
               <Icon name="sparkle" size={16} />
-              <span className="hide-narrow">{getApiKey() ? 'Ask AI' : 'Connect AI'}</span>
+              <span className="hide-narrow">{hasAiKey() ? 'Ask AI' : 'Connect AI'}</span>
             </button>
           )}
           <button className="secondary" onClick={() => fileInput.current?.click()} title="Add PDF drawings">

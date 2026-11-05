@@ -11,8 +11,6 @@
     "bench": "vitest run -c bench/vitest.config.ts bench/run.test.ts",
     "bench:score": "vitest run -c bench/vitest.config.ts bench/score.test.ts",
     "build:artifact": "tsc && vite build && node scripts/artifact-page.mjs",
-    "build:web": "tsc && vite build --mode web",
-    "deploy:web": "npm run build:web && wrangler pages deploy",
     "desktop": "vite build && electron .",
     "desktop:mac": "tsc && vite build && electron-builder --mac --publish never",
     "desktop:win": "tsc && vite build && electron-builder --win --publish never"

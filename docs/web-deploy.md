@@ -15,7 +15,7 @@ the provider. Another person on another computer has no key until they add their
 The automatic takeoffs (rooms, walls, doors, windows, symbols, finishes and the rest under
 Automate) read the drawings in the browser and use no AI at all.
 
-The old access-code service (`worker/aiProxy.ts`, `npm run build:web`) is no longer deployed:
+The old access-code service (removed, along with `npm run build:web`) is no longer deployed:
 its `/api/ai` route was removed. Don't set `AI_API_KEY` or `ACCESS_CODES` on the Pages project.
 
 ## Sample projects

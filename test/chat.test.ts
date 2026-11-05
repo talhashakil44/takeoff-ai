@@ -7,6 +7,7 @@ const replies = [
 const seen: unknown[] = [];
 vi.mock('../src/ai/claude', () => ({
   MODEL: 'm',
+  activeProvider: () => 'anthropic',
   client: () => ({
     beta: {
       messages: {

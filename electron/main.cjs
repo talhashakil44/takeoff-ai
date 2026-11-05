@@ -118,7 +118,8 @@ function registerIpc() {
   // Embeddings for the project map, with the user's own key: asked from here, where the
   // provider's browser rules (CORS) do not apply. Only these two hosts.
   ipcMain.handle('ai:embed', async (_e, url, key, body) => {
-    const host = new URL(url).host;
+    const u = new URL(url);
+    const host = u.protocol === 'https:' ? u.host : '';
     if (!['api.openai.com', 'api.voyageai.com', 'ai.mongodb.com'].includes(host)) throw new Error('Not an embeddings service');
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify(body) });
     return { status: res.status, body: await res.text() };

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getApiKey, MODEL, setApiKey } from '../ai/claude';
+import { activeProvider, getApiKey, MODEL, setApiKey } from '../ai/claude';
+import { getOpenAiKey, getOpenAiModel, OPENAI_DEFAULT_MODEL, setOpenAiKey, setOpenAiModel, setPreferredProvider } from '../ai/openai';
 import { getEmbeddingsKey, PROVIDER_NAME, providerOf, setEmbeddingsKey } from '../ai/embed';
 import { checkAccess, getAccessCode, serviceBuild, setAccessCode, type AccessInfo } from '../ai/service';
 
@@ -88,6 +89,7 @@ function ApiKeySection({ onDone }: { onDone: () => void }) {
           disabled={!key.trim()}
           onClick={() => {
             setApiKey(key.trim());
+            setPreferredProvider('anthropic');
             onDone();
           }}
         >
@@ -97,6 +99,55 @@ function ApiKeySection({ onDone }: { onDone: () => void }) {
           <button
             onClick={() => {
               setApiKey(null);
+              setKey('');
+            }}
+          >
+            Remove key
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** ChatGPT through the user's own OpenAI key: the same chat and AI takeoffs as Claude. */
+function OpenAiKeySection({ onDone }: { onDone: () => void }) {
+  const [key, setKey] = useState(getOpenAiKey() ?? '');
+  const [model, setModel] = useState(getOpenAiModel());
+  const saved = getOpenAiKey();
+  return (
+    <>
+      <h4 className="settings-sub">ChatGPT (OpenAI API key)</h4>
+      <label className="stack">
+        OpenAI API key
+        <input type="password" autoComplete="off" placeholder="sk-…" value={key} onChange={(e) => setKey(e.target.value)} />
+      </label>
+      <label className="stack">
+        Model
+        <input value={model} onChange={(e) => setModel(e.target.value)} placeholder={OPENAI_DEFAULT_MODEL} />
+      </label>
+      <p className="muted">
+        Get a key at platform.openai.com. Stored only in this browser; requests go straight to OpenAI. When both keys are saved, the one saved last
+        answers{activeProvider() ? ` (now: ${activeProvider() === 'openai' ? 'ChatGPT' : 'Claude'})` : ''}.
+      </p>
+      <div className="row-actions">
+        <button
+          className="on"
+          disabled={!key.trim()}
+          onClick={() => {
+            setOpenAiKey(key.trim());
+            setOpenAiModel(model.trim() || null);
+            setPreferredProvider('openai');
+            onDone();
+          }}
+        >
+          Save
+        </button>
+        {saved && (
+          <button
+            onClick={() => {
+              setOpenAiKey(null);
+              setPreferredProvider(null);
               setKey('');
             }}
           >
@@ -162,6 +213,7 @@ export function AiSettingsDialog({ onClose }: { onClose: () => void }) {
           <button onClick={onClose}>Close</button>
         </div>
         {serviceBuild ? <AccessCodeSection onDone={onClose} /> : <ApiKeySection onDone={onClose} />}
+        {!serviceBuild && <OpenAiKeySection onDone={onClose} />}
         <EmbeddingsKeySection />
       </div>
     </div>

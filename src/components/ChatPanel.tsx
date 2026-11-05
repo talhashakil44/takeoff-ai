@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { chatSystem, chatTurn, type ChatMessage } from '../ai/chat';
-import { describeError, getApiKey, setApiKey } from '../ai/claude';
+import { activeProvider, describeError, hasAiKey, setApiKey } from '../ai/claude';
+import { setOpenAiKey, setPreferredProvider, type Provider } from '../ai/openai';
 import type { ToolResult } from '../mcp/tools';
 import { TOOL_DEFS } from '../mcp/tools';
 import { Icon } from './Icons';
@@ -53,7 +54,9 @@ export function ChatPanel({ about, run, sheets, sections, onOpenSheet, onOpenSec
   const history = useRef<ChatMessage[]>([]);
   const abort = useRef<AbortController | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const [hasKey, setHasKey] = useState(() => !!getApiKey());
+  const [hasKey, setHasKey] = useState(() => hasAiKey());
+  const provider = activeProvider();
+  const startedOn = useRef(provider);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
@@ -140,6 +143,9 @@ export function ChatPanel({ about, run, sheets, sections, onOpenSheet, onOpenSec
     setBusy(true);
     const ctl = new AbortController();
     abort.current = ctl;
+    // A conversation stays with the AI it started on; switching AI starts a fresh one.
+    if (startedOn.current !== provider) history.current = [];
+    startedOn.current = provider;
     history.current = [...history.current, { role: 'user', content: q }];
     setTurns((t) => [...t, { role: 'user', text: q, tools: [] }, { role: 'assistant', text: '', tools: [] }]);
     const patch = (f: (t: Turn) => Turn) => setTurns((ts) => [...ts.slice(0, -1), f(ts[ts.length - 1])]);
@@ -180,7 +186,7 @@ export function ChatPanel({ about, run, sheets, sections, onOpenSheet, onOpenSec
       <header>
         <Icon name="chat" size={16} />
         <strong>{hasKey ? 'Ask the project' : 'AI'}</strong>
-        <span className="chat-sub">{hasKey ? 'Claude · reads your drawings, specs and takeoff' : 'Bring your own Claude or ChatGPT'}</span>
+        <span className="chat-sub">{hasKey ? `${provider === 'openai' ? 'ChatGPT' : 'Claude'} · reads your drawings, specs and takeoff` : 'Bring your own Claude or ChatGPT'}</span>
         {turns.length > 0 && (
           <button
             className="chat-icon"
@@ -278,15 +284,16 @@ const FAQ: [string, ReactNode][] = [
   ],
   [
     'Can I sign in with my Claude or ChatGPT plan on the web?',
-    'Not yet. Signing in with a Claude or ChatGPT plan works in the desktop app, which connects to the Claude or ChatGPT/Codex app on your computer. In the browser, use an Anthropic API key.',
+    'Not yet. Signing in with a Claude or ChatGPT plan works in the desktop app, which connects to the Claude or ChatGPT/Codex app on your computer. In the browser, use your own Anthropic or OpenAI API key.',
   ],
   ['What does the desktop app do better?', 'Your Claude or ChatGPT can drive the whole takeoff there: open sheets, read legends, run the takeoffs and export. Everything it does shows on screen and can be undone.'],
-  ['Where is my API key kept? Who pays?', 'Only in this browser on this computer, sent straight to Anthropic when you ask something. Anthropic bills your key; Takeoff AI never sees it.'],
+  ['Where is my API key kept? Who pays?', 'Only in this browser on this computer, sent straight to Anthropic or OpenAI when you ask something. They bill your key; Takeoff AI has no server and never sees it.'],
 ];
 
 /** The "connect your AI" view: there is no shared AI, so the user brings their own. */
 function ByoAi({ desktop, onConnect, onSettings, onKey }: { desktop: boolean; onConnect?: () => void; onSettings: () => void; onKey: () => void }) {
   const [key, setKey] = useState('');
+  const [which, setWhich] = useState<Provider>('anthropic');
   return (
     <div className="chat-empty byo">
       <p className="byo-lead">
@@ -313,27 +320,48 @@ function ByoAi({ desktop, onConnect, onSettings, onKey }: { desktop: boolean; on
       </div>
 
       <div className="byo-card">
-        <h4>{desktop ? 'Or paste' : 'Or use'} an Anthropic API key</h4>
+        <h4>{desktop ? 'Or paste' : 'Or use'} your own API key</h4>
+        <div className="byo-pick" role="radiogroup" aria-label="Which AI">
+          {(['anthropic', 'openai'] as Provider[]).map((p) => (
+            <button key={p} type="button" role="radio" aria-checked={which === p} className={which === p ? 'on' : ''} onClick={() => setWhich(p)}>
+              {p === 'anthropic' ? 'Claude' : 'ChatGPT'}
+            </button>
+          ))}
+        </div>
         <form
           className="byo-key"
           onSubmit={(e) => {
             e.preventDefault();
             if (!key.trim()) return;
-            setApiKey(key.trim());
+            (which === 'openai' ? setOpenAiKey : setApiKey)(key.trim());
+            setPreferredProvider(which);
             setKey('');
             onKey();
           }}
         >
-          <input type="password" autoComplete="off" placeholder="sk-ant-…" value={key} onChange={(e) => setKey(e.target.value)} aria-label="Anthropic API key" />
+          <input
+            type="password"
+            autoComplete="off"
+            placeholder={which === 'openai' ? 'OpenAI key, sk-…' : 'Anthropic key, sk-ant-…'}
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            aria-label={which === 'openai' ? 'OpenAI API key' : 'Anthropic API key'}
+          />
           <button className="primary" disabled={!key.trim()}>
             Save
           </button>
         </form>
         <p className="dim">
           Kept only in this browser. Get one at{' '}
-          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
-            console.anthropic.com
-          </a>
+          {which === 'openai' ? (
+            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">
+              platform.openai.com
+            </a>
+          ) : (
+            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
+              console.anthropic.com
+            </a>
+          )}
           .{' '}
           <button className="link-button" onClick={onSettings}>
             More AI settings

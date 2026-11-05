@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { client, MODEL } from './claude';
+import { activeProvider, client, MODEL } from './claude';
+import { openAiChatTurn, type OpenAiMessage } from './openai';
 import { TOOL_DEFS, type ToolResult } from '../mcp/tools';
 
 /**
@@ -7,7 +8,8 @@ import { TOOL_DEFS, type ToolResult } from '../mcp/tools';
  * it connects), run here against the open project, with the user's API key.
  */
 
-export type ChatMessage = Anthropic.Beta.BetaMessageParam;
+/** Claude or ChatGPT messages; a conversation stays with the provider it started on. */
+export type ChatMessage = Anthropic.Beta.BetaMessageParam | OpenAiMessage;
 
 /** Tools that make no sense from inside the app (reading a file by path on disk). */
 const LEFT_OUT = new Set(['add_drawings']);
@@ -49,7 +51,8 @@ export async function chatTurn(
   on: ChatEvents,
   signal?: AbortSignal,
 ): Promise<ChatMessage[]> {
-  const messages = [...history];
+  if (activeProvider() === 'openai') return openAiChatTurn(history as OpenAiMessage[], system, run, on, signal);
+  const messages = [...history] as Anthropic.Beta.BetaMessageParam[];
   for (let step = 0; step < 16; step++) {
     const stream = client().beta.messages.stream(
       {

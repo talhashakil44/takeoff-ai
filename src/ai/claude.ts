@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { LEGEND_INSTRUCTIONS, legendRequest } from './prompt';
 import { ExtractionSchema, type Extraction } from './schema';
+import { getOpenAiKey, getPreferredProvider, OpenAiError, type Provider } from './openai';
 
 export const MODEL = 'claude-opus-5-5';
 
@@ -24,6 +25,19 @@ export function setApiKey(key: string | null): void {
     // Storage unavailable (private window); the key just won't be remembered.
   }
 }
+
+/** Which of the user's own keys answers: the one they chose last, else whichever is saved. */
+export function activeProvider(): Provider | null {
+  const a = !!getApiKey();
+  const o = !!getOpenAiKey();
+  const pref = getPreferredProvider();
+  if (pref === 'openai' && o) return 'openai';
+  if (pref === 'anthropic' && a) return 'anthropic';
+  return a ? 'anthropic' : o ? 'openai' : null;
+}
+
+/** Whether the user has saved any AI key (Anthropic or OpenAI). */
+export const hasAiKey = () => activeProvider() !== null;
 
 export function client(): Anthropic {
   const apiKey = getApiKey();
@@ -110,6 +124,7 @@ export async function askClaudeJson<T>(prompt: string, images: Blob[], signal?: 
 
 /** Turns an API failure into a message a user can act on. */
 export function describeError(error: unknown): string {
+  if (error instanceof OpenAiError) return error.message;
   if (error instanceof Anthropic.AuthenticationError) return 'The API key was rejected. Check it in AI settings.';
   if (error instanceof Anthropic.PermissionDeniedError) return 'This API key is not allowed to use this model.';
   if (error instanceof Anthropic.RateLimitError) return 'Rate limited by the API. Wait a minute and try again.';

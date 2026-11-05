@@ -334,21 +334,14 @@ the new building model.
   layers; see Next). Sheet naming has only been tested with the AI call
   intercepted.
 
-## Web app and AI service
+## Web app and AI
 
-`npm run build:web` (mode `web`, `.env.web`: `VITE_AI_SERVICE=1`) builds the version
-for subs. Its AI goes to `/api/ai` on the same site, a Cloudflare Pages Function
-(`functions/api/ai.ts` → `worker/aiProxy.ts`) that checks the access code
-(`ACCESS_CODES` secret), counts requests per code and in total per UTC day in KV
-(`USAGE`), and forwards to any OpenAI-compatible model (`AI_BASE_URL`, `AI_MODEL`,
-`AI_API_KEY` secret). Route order in `aiRoute()`: artifact account, then service
-(when built for web and a code is saved), then API key. The client (`src/ai/service.ts`)
-sends 2×2 tiles at 1600 px for legends and the two title-block strips for sheet names,
-and takes the first JSON object from the answer. The service worker skips `/api/`.
-Tested end to end with `wrangler pages dev` and a fake provider (Playwright: wrong
-code refused, status shown, legend read through the proxy). Setup: `docs/web-deploy.md`.
-Not done: picking the model (score candidates on Kelso A0.2/A0.3), and a per-code
-monthly cap if daily caps aren't enough.
+The web app is static (Cloudflare Pages, built from `main` with `npx vite build`). There is
+no AI service or shared key: each user brings their own Anthropic or OpenAI API key, kept in
+their browser, or connects their own Claude/ChatGPT app to the desktop app. The only
+server code is `functions/samples/[file].ts`, which passes the three sample `.takeoff`
+files through from the GitHub release. `public/_headers` sets a strict CSP and other
+security headers. See `docs/web-deploy.md`.
 
 ## Hosted version
 
