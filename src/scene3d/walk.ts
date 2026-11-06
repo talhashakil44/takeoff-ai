@@ -18,11 +18,25 @@ export interface Nav {
   look?(dx: number, dy: number): void;
 }
 
+/** Something riding along on a walk (fun mode): loaded only when switched on, gone when off. */
+export interface WalkAddOn {
+  /** Per frame; true when the picture changed. */
+  update(dt: number): boolean;
+  /** A click while walking, along the ray under the pointer; true when it was used (so it doesn't pick or open anything). */
+  click(ray?: THREE.Ray): boolean;
+  dispose(): void;
+}
+
 const UP = new THREE.Vector3(0, 1, 0);
 const RADIUS = 0.3;
 const STEP = 0.5;
-const WALK = 2.2;
-const RUN = 5.5;
+const WALK = 2.8;
+const RUN = 6.5;
+/** Radians per pixel of drag. */
+const LOOK = 0.0034;
+const GRAVITY = 12;
+/** Clears about 1.1 m: pipes, low walls, curbs and kerbs. */
+const JUMP = 5.2;
 /** What you can stand on. */
 const GROUND = new Set(['floor', 'stairs', 'site', 'paving', 'roof', 'foundation', 'civil']);
 
@@ -35,7 +49,19 @@ export class Walker implements Nav {
   run = false;
   level = 0;
   onLevel?: (i: number) => void;
-  private fall = 0;
+  /** Speed multiplier, for add-ons. */
+  speed = 1;
+  /** Where the view is turning to: drags and keys set it, the view eases there. */
+  private aimYaw = 0;
+  private aimPitch = 0;
+  /** Walking velocity (three coords), eased so starts and stops aren't jerky. */
+  private vel = new THREE.Vector3();
+  addOn: WalkAddOn | null = null;
+  private vy = 0;
+  private grounded = true;
+  /** Doors swung open, by element id: angle now and where it's going. */
+  private swung = new Map<string, { angle: number; to: number; hinge: THREE.Vector3; mesh: THREE.Mesh; alongX: boolean; centre: THREE.Vector3 }>();
+  private swungVersion = -1;
   private ray = new THREE.Raycaster();
   private lists: { version: number; walls: THREE.Mesh[]; floors: THREE.Object3D[]; decks: THREE.Object3D[]; doors: THREE.Box3[] } | null = null;
   private moved = true;
@@ -57,13 +83,13 @@ export class Walker implements Nav {
 
   face(target: THREE.Vector3, from = this.m.camera.position) {
     const d = target.clone().sub(from);
-    this.yaw = Math.atan2(-d.x, -d.z);
-    this.pitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
+    this.yaw = this.aimYaw = Math.atan2(-d.x, -d.z);
+    this.pitch = this.aimPitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
   }
 
   look(dx: number, dy: number) {
-    this.yaw -= dx * 0.0042;
-    this.pitch = Math.max(-1.4, Math.min(1.4, this.pitch - dy * 0.0042));
+    this.aimYaw -= dx * LOOK;
+    this.aimPitch = Math.max(-1.4, Math.min(1.4, this.aimPitch - dy * LOOK));
     this.moved = true;
   }
 
@@ -89,7 +115,7 @@ export class Walker implements Nav {
       if (g2 !== null) this.feet.y = g2;
       this.faceOpen();
     }
-    this.fall = 0;
+    this.vy = 0;
     this.level = i;
     this.onLevel?.(i);
     this.moved = true;
@@ -105,41 +131,127 @@ export class Walker implements Nav {
       this.level = lv;
       this.onLevel?.(lv);
     }
+    if (this.swingDoors(dt)) this.moved = true;
+    if (this.addOn?.update(dt)) this.moved = true;
     if (!this.moved) return false;
     this.moved = false;
     this.place();
     return true;
   }
 
+  /** Space: up and over pipes, curbs and low walls. */
+  jump() {
+    if (!this.grounded) return;
+    this.vy = JUMP;
+    this.grounded = false;
+    this.moved = true;
+  }
+
+  /** The door straight ahead within reach, or the one under a click (a ray in three coords). */
+  doorAt(ray?: THREE.Ray, reach = 3.5): { id: string; mesh: THREE.Mesh } | null {
+    const r = new THREE.Raycaster();
+    if (ray) r.ray.copy(ray);
+    else r.set(this.m.camera.position, this.m.camera.getWorldDirection(new THREE.Vector3()));
+    r.far = reach;
+    const doors = this.m.items.filter((i) => i.mesh.visible && i.el.category === 'doors');
+    const hit = r.intersectObjects(doors.map((i) => i.mesh), false)[0];
+    const it = hit ? doors.find((i) => i.mesh === hit.object) : null;
+    return it ? { id: it.el.id, mesh: it.mesh } : null;
+  }
+
+  /** Swings a door open (away from you) or shut. */
+  toggleDoor(d: { id: string; mesh: THREE.Mesh }) {
+    if (this.swungVersion !== this.m.version) {
+      this.swung.clear();
+      this.swungVersion = this.m.version;
+    }
+    let s = this.swung.get(d.id);
+    if (!s) {
+      const b = d.mesh.geometry.boundingBox ?? (d.mesh.geometry.computeBoundingBox(), d.mesh.geometry.boundingBox!);
+      const c = b.getCenter(new THREE.Vector3());
+      const alongX = b.max.x - b.min.x >= b.max.z - b.min.z;
+      s = { angle: 0, to: 0, hinge: alongX ? new THREE.Vector3(b.min.x, 0, c.z) : new THREE.Vector3(c.x, 0, b.min.z), mesh: d.mesh, alongX, centre: c };
+      this.swung.set(d.id, s);
+    }
+    if (s.to) s.to = 0;
+    else {
+      // Swing the free end away from whoever opens it.
+      const away = s.alongX ? (this.feet.z > s.centre.z ? 1 : -1) : this.feet.x < s.centre.x ? 1 : -1;
+      s.to = (away * Math.PI) / 2;
+    }
+    this.moved = true;
+  }
+
+  private swingDoors(dt: number) {
+    let any = false;
+    for (const s of this.swung.values()) {
+      if (s.angle === s.to) continue;
+      const step = 3.2 * dt;
+      s.angle = Math.abs(s.to - s.angle) <= step ? s.to : s.angle + Math.sign(s.to - s.angle) * step;
+      const [c, n, h] = [Math.cos(s.angle), Math.sin(s.angle), s.hinge];
+      s.mesh.rotation.set(0, s.angle, 0);
+      s.mesh.position.set(h.x - (h.x * c + h.z * n), 0, h.z - (-h.x * n + h.z * c));
+      s.mesh.updateMatrixWorld();
+      any = true;
+    }
+    if (any) this.m.shadowsChanged();
+    return any;
+  }
+
+  /** Floor height under a point near a height (three coords), for things placed on the floor. */
+  floorNear(x: number, z: number, y: number): number | null {
+    return this.groundBelow(new THREE.Vector3(x, y, z), 1.2);
+  }
+
+  /** What bullets stop at: the solid parts of the model. */
+  get solids(): THREE.Object3D[] {
+    return this.meshes.walls;
+  }
+
   private step(dt: number) {
     const k = this.keys;
     const turn = (k.has('ArrowRight') ? 1 : 0) - (k.has('ArrowLeft') ? 1 : 0);
     if (turn) {
-      this.yaw -= turn * 1.9 * dt;
+      this.aimYaw -= turn * 2.2 * dt;
+      this.moved = true;
+    }
+    // The view eases to where it's aimed: smooth, but quick enough to feel direct.
+    const ease = Math.min(1, dt * 22);
+    if (Math.abs(this.aimYaw - this.yaw) > 1e-4 || Math.abs(this.aimPitch - this.pitch) > 1e-4) {
+      this.yaw += (this.aimYaw - this.yaw) * ease;
+      this.pitch += (this.aimPitch - this.pitch) * ease;
       this.moved = true;
     }
     const fwd = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
     const side = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
+    const want = new THREE.Vector3();
     if (fwd || side) {
       const f = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
       const r = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-      const d = f.multiplyScalar(fwd).add(r.multiplyScalar(side)).normalize().multiplyScalar((this.run ? RUN : WALK) * dt);
-      this.move(d);
-      this.moved = true;
+      want.copy(f.multiplyScalar(fwd).add(r.multiplyScalar(side)).normalize().multiplyScalar((this.run ? RUN : WALK) * this.speed));
     }
-    // Stay on the floor: step up onto stairs, drop off edges.
-    const g = this.groundBelow(this.feet, STEP);
-    if (g !== null) {
-      if (g >= this.feet.y - 0.02) {
-        if (Math.abs(g - this.feet.y) > 1e-3) this.moved = true;
-        this.feet.y += (g - this.feet.y) * Math.min(1, dt * 14);
-        this.fall = 0;
-      } else {
-        this.fall -= 12 * dt;
-        this.feet.y = Math.max(g, this.feet.y + this.fall * dt);
-        if (this.feet.y === g) this.fall = 0;
-        this.moved = true;
-      }
+    // Speed up and slow down over a fraction of a second, not instantly.
+    this.vel.lerp(want, Math.min(1, dt * (want.lengthSq() ? 10 : 14)));
+    if (this.vel.lengthSq() > 1e-4) {
+      this.move(this.vel.clone().multiplyScalar(dt));
+      this.moved = true;
+    } else this.vel.set(0, 0, 0);
+    // Stay on the floor: step up onto stairs, drop off edges, come down from a jump.
+    const g = this.groundBelow(this.feet, this.vy > 0 ? 0.05 : STEP);
+    if (this.vy > 0 || (g !== null && g < this.feet.y - 0.02)) {
+      this.vy -= GRAVITY * dt;
+      this.feet.y += this.vy * dt;
+      if (g !== null && this.feet.y <= g && this.vy <= 0) {
+        this.feet.y = g;
+        this.vy = 0;
+        this.grounded = true;
+      } else this.grounded = false;
+      this.moved = true;
+    } else if (g !== null) {
+      if (Math.abs(g - this.feet.y) > 1e-3) this.moved = true;
+      this.feet.y += (g - this.feet.y) * Math.min(1, dt * 14);
+      this.vy = 0;
+      this.grounded = true;
     }
   }
 
@@ -199,8 +311,8 @@ export class Walker implements Nav {
       const run = this.blocked(new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)), 30)?.distance ?? 30;
       if (run > best.run) best = { yaw, run };
     }
-    this.yaw = best.yaw;
-    this.pitch = -0.06;
+    this.yaw = this.aimYaw = best.yaw;
+    this.pitch = this.aimPitch = -0.06;
   }
 
   /** The first wall hit along a direction within `far`, from knee, chest and eye height. */
