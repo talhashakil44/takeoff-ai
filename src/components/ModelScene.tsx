@@ -98,6 +98,29 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
   const plan = useRef<{ scene: Scene3D; plan: WalkPlan } | null>(null);
   const orbit = useRef<{ position: THREE.Vector3; target: THREE.Vector3 } | null>(null);
   const [walkLevel, setWalkLevel] = useState('');
+  // Fun mode (experimental, fun build only): a separate module, loaded only when switched on.
+  const [fun, setFun] = useState<'off' | 'loading' | 'on'>('off');
+  const [ghost, setGhost] = useState(false);
+  const toggleFun = async () => {
+    const w = walker.current;
+    if (!w || !host.current || !r.current) return;
+    if (w.addOn) {
+      w.addOn.dispose();
+      w.addOn = null;
+      setFun('off');
+      r.current.invalidate();
+      return;
+    }
+    setFun('loading');
+    try {
+      const { FunMode } = await import('../fun/funMode');
+      if (walker.current !== w) return setFun('off');
+      w.addOn = await FunMode.start(r.current.m, w, host.current);
+      setFun('on');
+    } catch {
+      setFun('off');
+    }
+  };
   const [shot, setShot] = useState<{ i: number; n: number; title: string; text: string } | null>(null);
   const [touring, setTouring] = useState(true);
   const navFailed = useRef<() => void>(() => {});
@@ -396,6 +419,8 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
   const dropAddOn = () => {
     walker.current?.addOn?.dispose();
     if (walker.current) walker.current.addOn = null;
+    setFun('off');
+    setGhost(false);
   };
   const takeCamera = () => {
     const x = r.current;
@@ -514,6 +539,10 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
           const d = w.doorAt();
           if (d) w.toggleDoor(d);
           e.preventDefault();
+        } else if (e.code === 'KeyG') {
+          w.ghost = !w.ghost;
+          setGhost(w.ghost);
+          e.preventDefault();
         } else if (e.code === 'KeyE' || e.code === 'PageUp') {
           w.changeLevel(1);
           e.preventDefault();
@@ -619,6 +648,11 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
           </button>
         </div>
       )}
+      {mode === 'walk' && (
+        <button className={`mdl-fun ${fun === 'on' ? 'on' : ''}`} onClick={toggleFun} disabled={fun === 'loading'} aria-pressed={fun === 'on'} title="Experimental: ninjas, a gun and a lot of mess. Switching it off removes it completely.">
+          {fun === 'loading' ? 'Loading fun mode…' : fun === 'on' ? 'Fun mode: on' : 'Fun mode'}
+        </button>
+      )}
       {!bare && <div className="mdl-views" role="group" aria-label="Views">
         {MODEL_VIEWS.map((v) => (
           <button key={v.id} className={mode === 'orbit' && view === v.id ? 'on' : ''} aria-pressed={mode === 'orbit' && view === v.id} onClick={() => go(v.id)} title={v.sub}>
@@ -657,7 +691,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
             </button>
           </div>
           <p>
-            <kbd>W A S D</kbd> or arrows to move · drag to look · <kbd>Shift</kbd> runs · <kbd>Space</kbd> jumps · <kbd>F</kbd> or click opens doors · <kbd>Q</kbd>/<kbd>E</kbd> change level · <kbd>Esc</kbd> exits
+            <kbd>W A S D</kbd> or arrows to move · drag to look · <kbd>Shift</kbd> runs · <kbd>Space</kbd> jumps · <kbd>F</kbd> or click opens doors · <kbd>G</kbd> walks through walls{ghost ? ' (on)' : ''} · <kbd>Q</kbd>/<kbd>E</kbd> change level · <kbd>Esc</kbd> exits
           </p>
           <div className="mdl-pad" aria-label="Move">
             <button {...hold('ArrowUp')} aria-label="Forward" className="up">

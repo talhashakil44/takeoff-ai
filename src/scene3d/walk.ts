@@ -51,6 +51,8 @@ export class Walker implements Nav {
   onLevel?: (i: number) => void;
   /** Speed multiplier, for add-ons. */
   speed = 1;
+  /** Walk through walls (G; fun build). */
+  ghost = false;
   /** Where the view is turning to: drags and keys set it, the view eases there. */
   private aimYaw = 0;
   private aimPitch = 0;
@@ -336,6 +338,10 @@ export class Walker implements Nav {
 
   /** Moves by d, sliding along whatever is in the way. */
   private move(d: THREE.Vector3) {
+    if (this.ghost) {
+      this.feet.add(d);
+      return;
+    }
     for (let tries = 0; tries < 3; tries++) {
       const len = d.length();
       if (len < 1e-5) return;
