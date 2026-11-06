@@ -402,7 +402,10 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
     if (!x) return;
     // The Explorer says what shows while orbiting; walking and the tour set their own cut.
     const orbiting = mode === 'orbit';
-    x.m.view = bare ? { layers: shown ?? layers, cut: orbiting ? cutTo ?? null : cut, focus: orbiting ? focusOn ?? null : focus, only: only ?? null } : { layers, cut, focus };
+    // Indoors (walking, the tour) the ceilings show, as they would; from outside they hide the rooms.
+    const base = bare ? shown ?? layers : layers;
+    const lay = orbiting || base.has('ceiling') ? base : new Set([...base, 'ceiling']);
+    x.m.view = bare ? { layers: lay, cut: orbiting ? cutTo ?? null : cut, focus: orbiting ? focusOn ?? null : focus, only: only ?? null } : { layers: lay, cut, focus };
     x.m.apply();
     x.invalidate();
   }, [layers, cut, focus, bare, shown, cutTo, focusOn, only, mode, scene]);
