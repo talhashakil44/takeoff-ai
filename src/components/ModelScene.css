@@ -599,3 +599,27 @@
     transition: none;
   }
 }
+
+/* Fun mode switch (experimental add-on, loaded on demand). */
+.mdl-fun {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 6;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(20, 20, 24, 0.72);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.mdl-fun.on {
+  background: #b3121b;
+  border-color: #ff5a5a;
+}
+.mdl-fun:disabled {
+  opacity: 0.7;
+}
