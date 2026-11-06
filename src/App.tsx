@@ -52,6 +52,8 @@ import { isCombined, pageKinds, pagesOf, splitPdf } from './splitPdf';
 import { ocrTitleBlock, pageOcr, tidySetNumbers } from './ocr';
 import { withOcrText, type OcrTextOptions } from './ocrText';
 import { buildProjectMap } from './spec/links';
+import { hasSheet, keepSheet, renderSheet as renderSheetBitmap } from './sheetBitmaps';
+import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { buildGraph, definitionsOf, type DrawingGraph, type Link, type Place } from './graph/graph';
 import { entries, norm, type Entry } from './smart/index';
 import { defaultTypes, filesOf, newId, newProject, type SpecDoc, type Kind, type Measurement, type Project, type Pt, type Sheet, type TakeoffType, type Units } from './model';
@@ -133,6 +135,13 @@ let mcpWired = false;
 
 /** Sample downloads that weren't there this session (not published yet): open their 3D copy instead. */
 const MISSING_SAMPLES = new Set<string>();
+/** Bump when the drawing graph's reading changes, so graphs kept on this computer are read again. */
+const GRAPH_VERSION = 1;
+const hashKey = (k: string) => {
+  let h = 5381;
+  for (let i = 0; i < k.length; i++) h = ((h << 5) + h + k.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + k.length.toString(36);
+};
 
 export function App() {
   const [project, setProject] = useState<Project | null>(null);
@@ -453,6 +462,19 @@ export function App() {
     if (linkedView && graphKey && !graphBuilding.current && graphRef.current?.key !== graphKey) void openLinks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, graphKey]);
+  // A sample opens with its links on (they're the point of it), read in the background.
+  const sampleLinked = useRef<string | null>(null);
+  useEffect(() => {
+    const p = projectRef.current;
+    if (!p?.sample || view !== 'drawings' || !graphKey || !page || sampleLinked.current === p.id) return;
+    // After the first sheet is up, so the reading doesn't hold it back.
+    const timer = window.setTimeout(() => {
+      sampleLinked.current = p.id ?? null;
+      void openLinks(false, true);
+    }, 1500);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, graphKey, project?.id, page]);
   // Drawings added or removed while links are on: read the set again.
   useEffect(() => {
     if (linksOn && !graphBuilding.current && graphRef.current?.key !== graphKey && graphKey) void openLinks();
@@ -529,6 +551,37 @@ export function App() {
       cancelled = true;
     };
   }, [sheet?.id, sheet?.docId, sheet?.page, pdfs]);
+
+  // Once the sheet is up, the next sheets in the list are rendered ahead, one at a time while
+  // the computer is idle, so paging through a set doesn't wait on each sheet.
+  useEffect(() => {
+    if (!page || !sheet || !project || view !== 'drawings') return;
+    const live = project.sheets.filter((s) => !s.superseded);
+    const at = live.findIndex((s) => s.id === sheet.id);
+    const ahead = [live[at + 1], live[at + 2], live[at - 1]].filter((s): s is Sheet => !!s);
+    let gone = false;
+    let task: { cancel(): void } | null = null;
+    const timer = window.setTimeout(async () => {
+      for (const s of ahead) {
+        if (gone) return;
+        const doc = pdfsRef.current.get(s.docId);
+        if (!doc || (await hasSheet(s.docId, s.page))) continue;
+        const pg = await doc.getPage(s.page).catch(() => null);
+        if (!pg || gone) return;
+        const r = renderSheetBitmap(pg, s.width, s.height);
+        task = r.task;
+        const ok = await r.task.promise.then(() => true, () => false);
+        if (!ok || gone) return;
+        keepSheet(s.docId, s.page, r.canvas);
+      }
+    }, 1200);
+    return () => {
+      gone = true;
+      window.clearTimeout(timer);
+      task?.cancel();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, view]);
 
   useEffect(() => {
     if (!toast || toast.sticky) return;
@@ -2081,7 +2134,7 @@ export function App() {
   }
 
   /** Turns the links on, reading the set into its graph first when it is not read yet. */
-  async function openLinks(rebuild = false): Promise<DrawingGraph | null> {
+  async function openLinks(rebuild = false, quiet = false): Promise<DrawingGraph | null> {
     const p = projectRef.current;
     if (!p?.sheets.length) return null;
     setLinksOn(true);
@@ -2090,7 +2143,18 @@ export function App() {
     if (!rebuild && had?.key === key) return had.graph;
     if (graphBuilding.current) return had?.graph ?? null;
     graphBuilding.current = true;
-    setBusy('Linking the drawings: reading the set…');
+    // Read once per set on this computer: the links come straight back the next time.
+    const stored = `graph:${GRAPH_VERSION}:${p.id}:${hashKey(key)}`;
+    if (!rebuild) {
+      const kept = await idbGet<DrawingGraph>(stored).catch(() => undefined);
+      if (kept && projectRef.current?.id === p.id) {
+        setGraphState({ graph: kept, key });
+        graphRef.current = { graph: kept, key };
+        graphBuilding.current = false;
+        return kept;
+      }
+    }
+    if (!quiet) setBusy('Linking the drawings: reading the set…');
     try {
       let g = await buildGraph(p.sheets, setAccess());
       let at = key;
@@ -2104,19 +2168,20 @@ export function App() {
       }
       setGraphState({ graph: g, key: at });
       graphRef.current = { graph: g, key: at };
+      if (at === key) void idbSet(stored, g).catch(() => undefined);
       const n = Object.values(g.links).reduce((k, ls) => k + ls.filter((l) => l.kind !== 'definition').length, 0);
-      setToast({
+      if (!quiet) setToast({
         text: n ? `Linked ${n} references across ${g.sheets.length} sheets. Click a bubble, a note, a tag or a schedule row to follow it.` : 'No references found in this set’s text. A scanned set has no text to read.',
         undo: false,
       });
       return g;
     } catch (e) {
       setLinksOn(false);
-      setToast({ text: `Could not link the drawings: ${e instanceof Error ? e.message : String(e)}`, undo: false });
+      if (!quiet) setToast({ text: `Could not link the drawings: ${e instanceof Error ? e.message : String(e)}`, undo: false });
       return null;
     } finally {
       graphBuilding.current = false;
-      setBusy(null);
+      if (!quiet) setBusy(null);
     }
   }
 
