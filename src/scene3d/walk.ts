@@ -49,6 +49,8 @@ export class Walker implements Nav {
   onLevel?: (i: number) => void;
   /** Walk through walls (G). */
   ghost = false;
+  /** Speed multiplier (fun mode runs faster). */
+  speed = 1;
   addOn: WalkAddOn | null = null;
   private vy = 0;
   private grounded = true;
@@ -213,7 +215,7 @@ export class Walker implements Nav {
     if (fwd || side) {
       const f = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
       const r = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-      const d = f.multiplyScalar(fwd).add(r.multiplyScalar(side)).normalize().multiplyScalar((this.run ? RUN : WALK) * dt);
+      const d = f.multiplyScalar(fwd).add(r.multiplyScalar(side)).normalize().multiplyScalar((this.run ? RUN : WALK) * this.speed * dt);
       this.move(d);
       this.moved = true;
     }

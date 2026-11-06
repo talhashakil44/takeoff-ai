@@ -62,6 +62,24 @@ export class FunMode implements WalkAddOn {
   private splatNext = 0;
   private dummy = new THREE.Object3D();
   private ray = new THREE.Raycaster();
+  // Mouse look (pointer lock, like a shooter) and the announcer.
+  private canvas: HTMLCanvasElement | null;
+  private sens = 0.0022;
+  private streak = 0;
+  private lastKill = -99;
+  private multi = 0;
+  private clock = 0;
+  private shoutFor = 0;
+  private onMouse = (e: MouseEvent) => {
+    if (document.pointerLockElement !== this.canvas) return;
+    this.w.look(e.movementX * (this.sens / 0.0042), e.movementY * (this.sens / 0.0042));
+  };
+  private onKey = (e: KeyboardEvent) => {
+    if (e.code === 'BracketRight' || e.code === 'Equal') this.sens = Math.min(0.01, this.sens * 1.2);
+    else if (e.code === 'BracketLeft' || e.code === 'Minus') this.sens = Math.max(0.0005, this.sens / 1.2);
+    else return;
+    this.note(`Mouse ${Math.round(this.sens * 10000) / 10}`);
+  };
 
   private constructor(private m: ModelRenderer, private w: Walker, host: HTMLElement) {
     const std = (color: number, rough = 0.7, metal = 0) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
@@ -146,10 +164,51 @@ export class FunMode implements WalkAddOn {
       .fun-hud .stat{position:absolute;right:14px;bottom:14px;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:10px;text-shadow:0 1px 2px #000}
       .fun-hud .bar{width:150px;height:8px;background:#400;border-radius:4px;margin-top:6px;overflow:hidden}.fun-hud .bar i{display:block;height:100%;background:#e3222c}
       .fun-hud .hurt{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(190,0,0,.75));opacity:0;transition:opacity .15s}
+      .fun-hud .count{position:absolute;left:50%;top:14px;transform:translateX(-50%);font:900 30px/1 Impact,system-ui,sans-serif;letter-spacing:2px;color:#fff;text-shadow:0 2px 0 #000,0 0 12px rgba(200,0,0,.7)}
+      .fun-hud .count small{display:block;text-align:center;font:700 11px/1.4 system-ui,sans-serif;letter-spacing:3px;color:#ffb3b3}
+      .fun-hud .shout{position:absolute;left:0;right:0;top:24%;text-align:center;font:900 54px/1 Impact,system-ui,sans-serif;letter-spacing:3px;color:#ffcf33;text-shadow:0 3px 0 #7a0000,0 0 18px rgba(255,60,0,.8);opacity:0}
+      .fun-hud .shout.go{animation:funshout 1.6s ease-out forwards}
+      @keyframes funshout{0%{opacity:0;transform:scale(2.4)}12%{opacity:1;transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(1.05)}}
+      .fun-hud .note{position:absolute;left:0;right:0;top:calc(50% + 26px);text-align:center;font-size:12px;opacity:0;transition:opacity .3s;text-shadow:0 1px 2px #000}
+      .fun-hud .lock{position:absolute;left:0;right:0;top:calc(50% + 44px);text-align:center;font-size:13px;text-shadow:0 1px 3px #000}
       .fun-hud .big{position:absolute;left:0;right:0;top:38%;text-align:center;font:900 64px/1 Impact,system-ui,sans-serif;color:#d10f1a;letter-spacing:4px;text-shadow:0 3px 0 #000;display:none}
     </style><div class="hurt"></div><div class="x"></div><div class="big">WASTED</div>
-    <div class="stat">FUN MODE · experimental<br><span class="k">Ninjas down: 0</span><div class="bar"><i style="width:100%"></i></div><small>Click to shoot · Space jumps</small></div>`;
+    <div class="count"><span class="n">0</span><small>KILLS</small></div><div class="shout"></div><div class="note"></div>
+    <div class="lock">Click to aim with the mouse · Esc lets go</div>
+    <div class="stat">FUN MODE · experimental<br><span class="k">Ninjas down: 0</span><div class="bar"><i style="width:100%"></i></div><small>Click to shoot · Space jumps · Shift runs · [ ] mouse speed</small></div>`;
     host.appendChild(this.hud);
+    this.canvas = host.querySelector('canvas');
+    document.addEventListener('mousemove', this.onMouse);
+    window.addEventListener('keydown', this.onKey);
+    w.speed = 1.6;
+  }
+
+  /** A line under the crosshair for a moment. */
+  private note(text: string) {
+    const n = this.hud.querySelector('.note') as HTMLElement;
+    n.textContent = text;
+    n.style.opacity = '1';
+    clearTimeout((this as unknown as { nt?: number }).nt);
+    (this as unknown as { nt?: number }).nt = window.setTimeout(() => (n.style.opacity = '0'), 1200);
+  }
+
+  private shout(text: string) {
+    const s = this.hud.querySelector('.shout') as HTMLElement;
+    s.textContent = text;
+    s.classList.remove('go');
+    void s.offsetWidth;
+    s.classList.add('go');
+    this.shoutFor = 1.6;
+    try {
+      const u = new SpeechSynthesisUtterance(text.toLowerCase());
+      u.pitch = 0.3;
+      u.rate = 0.85;
+      u.volume = 0.9;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    } catch {
+      // No voice; the words still show.
+    }
   }
 
   /** Loads fun mode: compiles its look first so switching it on doesn't stall the picture. */
@@ -266,6 +325,16 @@ export class FunMode implements WalkAddOn {
   }
 
   click(aim?: THREE.Ray) {
+    // First click takes the mouse (aim like a shooter); after that, clicks fire dead centre.
+    const locked = document.pointerLockElement === this.canvas;
+    if (!locked && this.canvas) {
+      try {
+        void (this.canvas.requestPointerLock() as unknown as Promise<void> | undefined)?.catch?.(() => undefined);
+      } catch {
+        // No pointer lock: keep shooting where you click.
+      }
+    }
+    if (locked) aim = undefined;
     if (this.wasted > 0) return true;
     this.recoil = 1;
     this.flashFor = 0.06;
@@ -292,6 +361,13 @@ export class FunMode implements WalkAddOn {
     n.alive = false;
     n.dead = 0;
     this.kills++;
+    this.streak++;
+    this.multi = this.clock - this.lastKill < 4 ? this.multi + 1 : 1;
+    this.lastKill = this.clock;
+    const MULTI = ['', '', 'DOUBLE KILL', 'MULTI KILL', 'MEGA KILL', 'ULTRA KILL', 'MONSTER KILL', 'LUDICROUS KILL', 'HOLY SHIT'];
+    const SPREE: Record<number, string> = { 5: 'KILLING SPREE', 10: 'RAMPAGE', 15: 'DOMINATING', 20: 'UNSTOPPABLE', 25: 'GODLIKE', 30: 'WICKED SICK' };
+    const say = this.multi >= 2 ? MULTI[Math.min(this.multi, MULTI.length - 1)] : SPREE[this.streak] ?? (headshot ? 'HEADSHOT' : '');
+    if (say) this.shout(say);
     this.sound('splat');
     this.spray(at, dir, n.floor, headshot ? 140 : 90, 4);
     // Off comes the head, and the neck keeps going for a bit.
@@ -308,6 +384,9 @@ export class FunMode implements WalkAddOn {
 
   update(dt: number) {
     dt = Math.min(dt, 0.05);
+    this.clock += dt;
+    this.shoutFor = Math.max(0, this.shoutFor - dt);
+    (this.hud.querySelector('.lock') as HTMLElement).style.display = document.pointerLockElement === this.canvas ? 'none' : 'block';
     const feet = this.w.feet;
     // Spawning, unless you just died.
     if (this.wasted > 0) {
@@ -406,12 +485,15 @@ export class FunMode implements WalkAddOn {
     this.hurt = Math.max(0, this.hurt - dt);
     (this.hud.querySelector('.hurt') as HTMLElement).style.opacity = String(Math.min(1, this.hurt * 3));
     (this.hud.querySelector('.k') as HTMLElement).textContent = `Ninjas down: ${this.kills}`;
+    (this.hud.querySelector('.count .n') as HTMLElement).textContent = String(this.kills);
     (this.hud.querySelector('.bar i') as HTMLElement).style.width = `${this.health}%`;
     return true;
   }
 
   private die() {
     this.wasted = 2.5;
+    this.streak = 0;
+    this.multi = 0;
     (this.hud.querySelector('.big') as HTMLElement).style.display = 'block';
     for (const n of this.ninjas) if (n.alive) {
       this.root.remove(n.root);
@@ -421,6 +503,15 @@ export class FunMode implements WalkAddOn {
   }
 
   dispose() {
+    document.removeEventListener('mousemove', this.onMouse);
+    window.removeEventListener('keydown', this.onKey);
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    try {
+      speechSynthesis.cancel();
+    } catch {
+      // Nothing to stop.
+    }
+    this.w.speed = 1;
     this.m.camera.remove(this.gun);
     if (this.addedCamera) this.m.scene.remove(this.m.camera);
     this.m.scene.remove(this.root);

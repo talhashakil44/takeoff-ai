@@ -512,8 +512,15 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
     if (mode === 'orbit') return;
     const typing = (e: KeyboardEvent) => e.target instanceof HTMLElement && (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable);
     const MOVE = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+    // Esc that lets go of the mouse (fun mode's aiming) shouldn't also end the walk.
+    let unlockedAt = 0;
+    const onLock = () => {
+      if (!document.pointerLockElement) unlockedAt = performance.now();
+    };
+    document.addEventListener('pointerlockchange', onLock);
     const onDown = (e: KeyboardEvent) => {
       if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Escape' && (document.pointerLockElement || performance.now() - unlockedAt < 400)) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         leave();
@@ -562,6 +569,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
     window.addEventListener('keyup', onUp);
     window.addEventListener('blur', onBlur);
     return () => {
+      document.removeEventListener('pointerlockchange', onLock);
       window.removeEventListener('keydown', onDown);
       window.removeEventListener('keyup', onUp);
       window.removeEventListener('blur', onBlur);
