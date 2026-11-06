@@ -1723,9 +1723,10 @@ export function App() {
     { name: 'Sample project #1: ski lodge', file: 'sample-1-ski-lodge.takeoff', was: [] as string[], load: () => import('./scene3d/sampleLodge') },
     { name: 'Sample project #2: maintenance shop', file: 'sample-2-maintenance-shop.takeoff', was: ['Sample project: maintenance shop'], load: () => import('./scene3d/sample') },
     { name: 'Sample project #3: waterfront restaurant repaint', file: 'sample-3-waterfront-restaurant.takeoff', was: [] as string[], load: () => import('./scene3d/sampleHarbour') },
+    { name: 'Sample project #4: residential units', file: 'sample-4-residential-units.takeoff', was: [] as string[], load: () => import('./scene3d/sampleResidential') },
   ];
   /** Opens a sample project: the full one (drawings, takeoffs, 3D) in the desktop app, else just its 3D model. */
-  async function openSampleModel(n: 1 | 2 | 3 = 1) {
+  async function openSampleModel(n: 1 | 2 | 3 | 4 = 1) {
     const sample = SAMPLES[n - 1];
     setBusy('Opening the sample project…');
     try {
@@ -1765,13 +1766,14 @@ export function App() {
         const got = await fetchSample(sample.file).catch(() => null);
         if (got) {
           let last: Project | null = null;
+          // Not a project file (a page in its place, say): treated as not published.
           await readProjectFiles(got, async (o) => {
             o.project = { ...o.project, name: sample.name, sample: true };
             for (const [id, data] of o.pdfs) await savePdf(id, data);
             await saveProject(o.project);
             if (o.project.id) await saveActivity(o.project.id, o.activity);
             last = o.project;
-          });
+          }).catch(() => undefined);
           // A 3D-only copy from an older version steps aside for the full one.
           for (const p of opened) if (!p.docs.length && !p.measurements.length) await saveProject({ ...p, name: `${sample.name} (3D only)` });
           if (last) {
@@ -3589,6 +3591,10 @@ export function App() {
                 ·{' '}
                 <button className="link-button" onClick={() => void openSampleModel(3)}>
                   #3 restaurant repaint
+                </button>{' '}
+                ·{' '}
+                <button className="link-button" onClick={() => void openSampleModel(4)}>
+                  #4 residential units
                 </button>
               </span>
               <div className="welcome-units">
