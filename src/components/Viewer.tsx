@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { baseScale, cachedSheet, keepSheet, renderSheet } from '../sheetBitmaps';
 import { centroid, orthoSnap, polylineLength, ringArea, ringToPath } from '../geometry';
 import type { Measurement, Pt, Sheet, TakeoffType, Units } from '../model';
 import type { PDFPageProxy } from '../pdf';
@@ -76,7 +77,6 @@ interface Props {
 }
 
 /** Longest edge of the low-resolution page bitmap used for instant pan and zoom. */
-const BASE_MAX_PX = 4096;
 
 const sameView = (a: View, b: View) => a.zoom === b.zoom && a.x === b.x && a.y === b.y;
 
@@ -100,7 +100,7 @@ export function Viewer(props: Props) {
   /** While a line or area is being drawn, the cursor near an edge scrolls the drawing that way. */
   const edge = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
   const [status, setStatus] = useState<string | null>(null);
-  const base = useRef<{ canvas: HTMLCanvasElement; pageRef: PDFPageProxy } | null>(null);
+  const base = useRef<{ canvas: CanvasImageSource; pageRef: PDFPageProxy } | null>(null);
   const hi = useRef<{ canvas: HTMLCanvasElement; view: View; dpr: number } | null>(null);
   /** A pan under way; `slack` is how far it can wander before it counts as one (a click in a measuring tool can wobble). */
   const pan = useRef<{ sx: number; sy: number; vx: number; vy: number; moved: boolean; slack: number } | null>(null);
@@ -217,30 +217,44 @@ export function Viewer(props: Props) {
     }
   }, [size.w, size.h, dpr, page, sheet]);
 
-  // Render the low-resolution page bitmap once per page.
+  // The page's base bitmap: kept from an earlier opening when there is one, else rendered once
+  // (and kept for next time).
   useEffect(() => {
     base.current = null;
     hi.current = null;
     paint();
     if (!page || !sheet) return;
-    const scale = Math.min(BASE_MAX_PX / Math.max(sheet.width, sheet.height), 2);
-    const viewport = page.getViewport({ scale });
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.ceil(viewport.width);
-    canvas.height = Math.ceil(viewport.height);
+    let gone = false;
+    let task: ReturnType<PDFPageProxy['render']> | null = null;
     setStatus('Rendering sheet…');
-    const task = page.render({ canvas, viewport });
-    task.promise.then(
-      () => {
-        base.current = { canvas, pageRef: page };
+    void (async () => {
+      const kept = await cachedSheet(sheet.docId, sheet.page);
+      if (gone) return;
+      if (kept) {
+        base.current = { canvas: kept, pageRef: page };
         setStatus(null);
         paint();
-      },
-      (err: Error) => {
-        if (err?.name !== 'RenderingCancelledException') setStatus(`Could not render sheet: ${err.message}`);
-      },
-    );
-    return () => task.cancel();
+        return;
+      }
+      const r = renderSheet(page, sheet.width, sheet.height);
+      task = r.task;
+      r.task.promise.then(
+        () => {
+          if (gone) return;
+          base.current = { canvas: r.canvas, pageRef: page };
+          keepSheet(sheet.docId, sheet.page, r.canvas);
+          setStatus(null);
+          paint();
+        },
+        (err: Error) => {
+          if (!gone && err?.name !== 'RenderingCancelledException') setStatus(`Could not render sheet: ${err.message}`);
+        },
+      );
+    })();
+    return () => {
+      gone = true;
+      task?.cancel();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
@@ -248,8 +262,7 @@ export function Viewer(props: Props) {
   useEffect(() => {
     paint();
     if (!page || !sheet || !size.w) return;
-    const baseScale = Math.min(BASE_MAX_PX / Math.max(sheet.width, sheet.height), 2);
-    if (view.zoom * dpr <= baseScale * 1.05) return;
+    if (view.zoom * dpr <= baseScale(sheet.width, sheet.height) * 1.05) return;
     let task: ReturnType<PDFPageProxy['render']> | null = null;
     const target = { ...view };
     const timer = window.setTimeout(() => {
