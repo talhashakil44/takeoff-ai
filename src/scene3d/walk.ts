@@ -22,8 +22,8 @@ export interface Nav {
 export interface WalkAddOn {
   /** Per frame; true when the picture changed. */
   update(dt: number): boolean;
-  /** A click while walking; true when it was used (so it doesn't pick or open anything). */
-  click(): boolean;
+  /** A click while walking, along the ray under the pointer; true when it was used (so it doesn't pick or open anything). */
+  click(ray?: THREE.Ray): boolean;
   dispose(): void;
 }
 

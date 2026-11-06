@@ -253,7 +253,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
       ray.setFromCamera(new THREE.Vector2(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), m.camera);
       const w = walker.current;
       if (w && nav === w) {
-        if (w.addOn?.click()) return;
+        if (w.addOn?.click(ray.ray)) return;
         const d = w.doorAt(ray.ray, 4);
         if (d) {
           w.toggleDoor(d);

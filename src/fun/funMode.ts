@@ -75,6 +75,7 @@ export class FunMode implements WalkAddOn {
       gunBarrel: std(0x1b1d22, 0.3, 0.9),
       gore: std(0x7a0008, 0.4),
       flash: new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.95, depthWrite: false }),
+      hit: new THREE.MeshBasicMaterial({ visible: false }),
       drop: new THREE.MeshBasicMaterial({ color: 0x9a0010 }),
       splat: new THREE.MeshBasicMaterial({ color: 0x5e0009, transparent: true, opacity: 0.92, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
     };
@@ -91,6 +92,7 @@ export class FunMode implements WalkAddOn {
       drop: new THREE.IcosahedronGeometry(0.025, 0),
       splat: new THREE.CircleGeometry(1, 12).rotateX(-Math.PI / 2),
       stump: new THREE.CylinderGeometry(0.06, 0.07, 0.05, 8),
+      hit: new THREE.BoxGeometry(0.7, 1.8, 0.6).translate(0, 0.9, 0),
     };
 
     // The gun, held at the bottom right of the view.
@@ -141,7 +143,7 @@ export class FunMode implements WalkAddOn {
       .fun-hud .x{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px}
       .fun-hud .x:before,.fun-hud .x:after{content:'';position:absolute;background:#fff;box-shadow:0 0 2px #000}
       .fun-hud .x:before{left:10px;top:0;width:2px;height:22px}.fun-hud .x:after{top:10px;left:0;height:2px;width:22px}
-      .fun-hud .stat{position:absolute;left:14px;bottom:14px;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:10px;text-shadow:0 1px 2px #000}
+      .fun-hud .stat{position:absolute;right:14px;bottom:14px;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:10px;text-shadow:0 1px 2px #000}
       .fun-hud .bar{width:150px;height:8px;background:#400;border-radius:4px;margin-top:6px;overflow:hidden}.fun-hud .bar i{display:block;height:100%;background:#e3222c}
       .fun-hud .hurt{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(190,0,0,.75));opacity:0;transition:opacity .15s}
       .fun-hud .big{position:absolute;left:0;right:0;top:38%;text-align:center;font:900 64px/1 Impact,system-ui,sans-serif;color:#d10f1a;letter-spacing:4px;text-shadow:0 3px 0 #000;display:none}
@@ -184,8 +186,9 @@ export class FunMode implements WalkAddOn {
     const arms = [mesh(g.arm, mt.cloth, -0.28, 1.4), mesh(g.arm, mt.cloth, 0.28, 1.4)];
     const sword = mesh(g.sword, mt.steel, 0.28, 1.0, -0.25);
     sword.rotation.x = -1.1;
-    root.add(torso, head, ...legs, ...arms, sword);
-    return { root, head, legs, arms, hitboxes: [torso, head, ...legs, ...arms], floor: 0, alive: true, t: Math.random() * 10, attackIn: 0.6, dead: 0, headVel: null, bleed: 0 };
+    const body = new THREE.Mesh(g.hit, mt.hit);
+    root.add(torso, head, ...legs, ...arms, sword, body);
+    return { root, head, legs, arms, hitboxes: [head, body], floor: 0, alive: true, t: Math.random() * 10, attackIn: 0.6, dead: 0, headVel: null, bleed: 0 };
   }
 
   private spawn() {
@@ -262,21 +265,22 @@ export class FunMode implements WalkAddOn {
     }
   }
 
-  click() {
+  click(aim?: THREE.Ray) {
     if (this.wasted > 0) return true;
     this.recoil = 1;
     this.flashFor = 0.06;
     this.sound('shot');
+    // Shoots where you click (or dead ahead from the keyboard).
     const cam = this.m.camera;
-    const dir = cam.getWorldDirection(new THREE.Vector3());
-    this.ray.set(cam.getWorldPosition(new THREE.Vector3()), dir);
+    const dir = aim ? aim.direction.clone() : cam.getWorldDirection(new THREE.Vector3());
+    this.ray.set(aim ? aim.origin.clone() : cam.getWorldPosition(new THREE.Vector3()), dir);
     this.ray.far = 120;
     const live = this.ninjas.filter((n) => n.alive);
     const nh = this.ray.intersectObjects(live.flatMap((n) => n.hitboxes), false)[0];
     const wh = this.ray.intersectObjects(this.w.solids, false)[0];
     if (nh && (!wh || nh.distance < wh.distance)) {
       const n = live.find((x) => x.hitboxes.includes(nh.object as THREE.Mesh))!;
-      this.kill(n, nh.point, dir, nh.object === n.head);
+      this.kill(n, nh.point, dir, nh.point.y - n.floor > 1.42);
     } else if (wh) {
       // A puff of dust where it hits.
       for (let i = 0; i < 5; i++) this.drop(wh.point, new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2), wh.point.y - 3, 0.3, true);
