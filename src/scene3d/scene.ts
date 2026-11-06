@@ -374,6 +374,8 @@ export function cutOpenings(elements: Element3D[]): Map<string, Shape3D[]> {
         if (c1 < mid - half || c0 > mid + half || c1 - c0 > s.thickness + 0.45) continue;
         const [start, end] = [Math.max(0, a0), Math.min(L, a1)];
         if (end - start < 0.3) continue;
+        // Already drawn with this opening: leave it.
+        if ((s.openings ?? []).some((o) => Math.min(o.end, end) - Math.max(o.start, start) > 0.6 * (end - start))) continue;
         add.push({ start, end, sill: h.z0 <= s.z0 + 0.05 ? s.z0 : h.z0, head: Math.min(s.z1, h.z1) });
       }
       if (!add.length) return s;
