@@ -255,6 +255,9 @@ export default function BuildView({ project, sections, specText, sheetText, shee
   useEffect(() => {
     let gone = false;
     void (async () => {
+      // A model already here (a sample, say): the 3D view comes first, the reading after it.
+      if (project.scene3d) await new Promise((r) => setTimeout(r, 4000));
+      if (gone) return;
       const src = await loadDrawingSources({
         project,
         sheetText,
