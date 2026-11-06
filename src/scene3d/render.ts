@@ -6,7 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
-import { CATEGORIES, MATERIALS, bounds, meshOf, type Element3D, type Scene3D } from './scene';
+import { CATEGORIES, MATERIALS, bounds, meshOf, type Element3D, type Scene3D, cutOpenings } from './scene';
 import { TextureLibrary, tintFor, type TextureSet } from './textures';
 import { SiteEnvironment, type GroundSource, type ModelTree, type SiteStage } from './environment';
 
@@ -491,10 +491,13 @@ export class ModelRenderer {
     this.all.makeEmpty();
     const sources: GroundSource[] = [];
     const trees: ModelTree[] = [];
+    // Walls drawn through their doors and windows get the openings cut, so rooms open up.
+    const opened = cutOpenings(model.elements);
     for (const el of model.elements) {
       let geo: THREE.BufferGeometry;
       try {
-        geo = elementGeometry(el, this.finishes.textureSize(el.material), this.finishes.grain(el.material));
+        const cut = opened.get(el.id);
+        geo = elementGeometry(cut ? { ...el, shapes: cut } : el, this.finishes.textureSize(el.material), this.finishes.grain(el.material));
       } catch {
         continue;
       }

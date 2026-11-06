@@ -591,7 +591,7 @@ export function Explorer({ scene, projectName, schedule, extra, onSave }: Props)
         />
         <div className="x4d-hud">
           <span className="x4d-pill">{mode.mode === 'walk' ? (mode.level || 'Walking').toUpperCase() : building.toUpperCase()}</span>
-          <span className="x4d-pill">{mode.mode === 'walk' ? 'WALK · WASD / DRAG TO LOOK' : mode.mode === 'tour' ? 'FLY-THROUGH' : 'ORBIT · DRAG / SCROLL'}</span>
+          <span className="x4d-pill">{mode.mode === 'walk' ? 'WALK · WASD · DRAG TO LOOK · SPACE JUMPS · F OR CLICK OPENS DOORS' : mode.mode === 'tour' ? 'FLY-THROUGH' : 'ORBIT · DRAG / SCROLL'}</span>
           {mode.mode !== 'orbit' && <button onClick={() => api?.leave()}>Exit {mode.mode === 'walk' ? 'walking' : 'fly-through'} · Esc</button>}
           {finish && <button onClick={() => setFinish(null)}>Show other finishes</button>}
         </div>
