@@ -228,6 +228,15 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
       const b = cv.getBoundingClientRect();
       ray.setFromCamera(new THREE.Vector2(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), m.camera);
+      const w = walker.current;
+      if (w && nav === w) {
+        if (w.addOn?.click(ray.ray)) return;
+        const d = w.doorAt(ray.ray, 4);
+        if (d) {
+          w.toggleDoor(d);
+          return;
+        }
+      }
       const live = m.items.filter((i) => i.mesh.visible && i.mesh.material !== m.finishes.ghost);
       const hit = ray.intersectObjects(live.map((i) => i.mesh), false).find((h) => m.finishes.clip.distanceToPoint(h.point) >= -0.01);
       const it = hit ? live.find((i) => i.mesh === hit.object) ?? null : null;
@@ -384,9 +393,14 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
     return plan.current.plan;
   };
   /** Takes the camera from the orbit controls, remembering where it was. */
+  const dropAddOn = () => {
+    walker.current?.addOn?.dispose();
+    if (walker.current) walker.current.addOn = null;
+  };
   const takeCamera = () => {
     const x = r.current;
     if (!x) return null;
+    dropAddOn();
     if (mode === 'orbit') orbit.current = { position: x.m.camera.position.clone(), target: x.controls.target.clone() };
     walker.current = null;
     player.current = null;
@@ -403,6 +417,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
   /** Back to orbiting: from where the estimator left it, unless a view is about to fly somewhere. */
   const leave = (flyBack = true) => {
     const x = r.current;
+    dropAddOn();
     walker.current = null;
     player.current = null;
     setShot(null);
@@ -472,8 +487,15 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
     if (mode === 'orbit') return;
     const typing = (e: KeyboardEvent) => e.target instanceof HTMLElement && (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable);
     const MOVE = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+    // Esc that lets go of the mouse (fun mode's aiming) shouldn't also end the walk.
+    let unlockedAt = 0;
+    const onLock = () => {
+      if (!document.pointerLockElement) unlockedAt = performance.now();
+    };
+    document.addEventListener('pointerlockchange', onLock);
     const onDown = (e: KeyboardEvent) => {
       if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Escape' && (document.pointerLockElement || performance.now() - unlockedAt < 400)) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         leave();
@@ -484,6 +506,13 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
         w.run = e.shiftKey;
         if (MOVE.has(e.code)) {
           w.keys.add(e.code);
+          e.preventDefault();
+        } else if (e.code === 'Space') {
+          w.jump();
+          e.preventDefault();
+        } else if (e.code === 'KeyF') {
+          const d = w.doorAt();
+          if (d) w.toggleDoor(d);
           e.preventDefault();
         } else if (e.code === 'KeyE' || e.code === 'PageUp') {
           w.changeLevel(1);
@@ -511,6 +540,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
     window.addEventListener('keyup', onUp);
     window.addEventListener('blur', onBlur);
     return () => {
+      document.removeEventListener('pointerlockchange', onLock);
       window.removeEventListener('keydown', onDown);
       window.removeEventListener('keyup', onUp);
       window.removeEventListener('blur', onBlur);
@@ -627,7 +657,7 @@ export function ModelScene({ scene, stateOf, stateKey, tour, onTourEnd, bare, bu
             </button>
           </div>
           <p>
-            <kbd>W A S D</kbd> or arrows to move · drag to look · <kbd>Shift</kbd> runs · <kbd>Q</kbd>/<kbd>E</kbd> change level · <kbd>Esc</kbd> exits
+            <kbd>W A S D</kbd> or arrows to move · drag to look · <kbd>Shift</kbd> runs · <kbd>Space</kbd> jumps · <kbd>F</kbd> or click opens doors · <kbd>Q</kbd>/<kbd>E</kbd> change level · <kbd>Esc</kbd> exits
           </p>
           <div className="mdl-pad" aria-label="Move">
             <button {...hold('ArrowUp')} aria-label="Forward" className="up">
