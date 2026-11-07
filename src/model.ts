@@ -207,6 +207,8 @@ export interface Project {
   scene3d?: import('./scene3d/scene').Scene3D;
   /** The app's sample project (Build It opens it on the guided tour). */
   sample?: boolean;
+  /** Which edition of a sample project this copy is: a newer one published is downloaded in its place. */
+  sampleEdition?: number;
 }
 
 /** A specification file: its PDF is kept like a drawing's, its reading with the project. */
