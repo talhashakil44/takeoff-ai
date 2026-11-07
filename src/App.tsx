@@ -1773,10 +1773,10 @@ export function App() {
 
   /** The sample projects: drawings (names taken off), their takeoffs and the 3D model Claude built. */
   const SAMPLES = [
-    { name: 'Sample project #1: ski lodge', file: 'sample-1-ski-lodge.takeoff', was: [] as string[], load: () => import('./scene3d/sampleLodge') },
-    { name: 'Sample project #2: maintenance shop', file: 'sample-2-maintenance-shop.takeoff', was: ['Sample project: maintenance shop'], load: () => import('./scene3d/sample') },
-    { name: 'Sample project #3: waterfront restaurant repaint', file: 'sample-3-waterfront-restaurant.takeoff', was: [] as string[], load: () => import('./scene3d/sampleHarbour') },
-    { name: 'Sample project #4: residential units', file: 'sample-4-residential-units.takeoff', was: [] as string[], load: () => import('./scene3d/sampleResidential') },
+    { name: 'Sample project #1: ski lodge', file: 'sample-1-ski-lodge.takeoff', edition: 2, was: [] as string[], load: () => import('./scene3d/sampleLodge') },
+    { name: 'Sample project #2: maintenance shop', file: 'sample-2-maintenance-shop.takeoff', edition: 1, was: ['Sample project: maintenance shop'], load: () => import('./scene3d/sample') },
+    { name: 'Sample project #3: waterfront restaurant repaint', file: 'sample-3-waterfront-restaurant.takeoff', edition: 1, was: [] as string[], load: () => import('./scene3d/sampleHarbour') },
+    { name: 'Sample project #4: residential units', file: 'sample-4-residential-units.takeoff', edition: 1, was: [] as string[], load: () => import('./scene3d/sampleResidential') },
   ];
   /** Opens a sample project: the full one (drawings, takeoffs, 3D) in the desktop app, else just its 3D model. */
   async function openSampleModel(n: 1 | 2 | 3 | 4 = 1) {
@@ -1801,7 +1801,9 @@ export function App() {
           : null;
       // A sample that isn't published as a download: its 3D copy, opened again rather than made anew.
       const missing = MISSING_SAMPLES.has(sample.file);
-      const existing = full ?? (fetchSample && !missing ? undefined : opened.find((p) => p.scene3d));
+      // A newer edition published (the addenda added, say): downloaded in place of the copy kept.
+      const stale = full && fetchSample && !missing && (full.sampleEdition ?? 1) < sample.edition ? full : undefined;
+      const existing = (stale ? undefined : full) ?? (fetchSample && !missing ? undefined : opened.find((p) => p.scene3d));
       // The app's own copy of the sample's 3D model, when newer than the one saved (site works added, say).
       const freshen = async (p: Project) => {
         const { default: model } = await sample.load();
@@ -1821,7 +1823,7 @@ export function App() {
           let last: Project | null = null;
           // Not a project file (a page in its place, say): treated as not published.
           await readProjectFiles(got, async (o) => {
-            o.project = { ...o.project, name: sample.name, sample: true };
+            o.project = { ...o.project, name: sample.name, sample: true, sampleEdition: sample.edition };
             for (const [id, data] of o.pdfs) await savePdf(id, data);
             await saveProject(o.project);
             if (o.project.id) await saveActivity(o.project.id, o.activity);
@@ -1829,6 +1831,8 @@ export function App() {
           }).catch(() => undefined);
           // A 3D-only copy from an older version steps aside for the full one.
           for (const p of opened) if (!p.docs.length && !p.measurements.length) await saveProject({ ...p, name: `${sample.name} (3D only)` });
+          // The older edition is kept, renamed, so nothing done in it is lost.
+          if (last && stale) await saveProject({ ...stale, name: `${sample.name} (previous edition)` });
           if (last) {
             await openProjectState(last);
             await freshen(last);
